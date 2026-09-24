@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "sender",
+    "receiver",
+]
+resolver = "2"
