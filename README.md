@@ -121,27 +121,38 @@ O `ext-sender` foi desacoplado em arquitetura modular via `EncoderApi`.
 
 ---
 
-## ⚡ Ajuste de Framerate (60 FPS vs 27 FPS Broadcast)
+## ⚡ Ajuste de Framerate e HUD de Diagnóstico
 
-O sistema suporta ajuste dinâmico da taxa de quadros diretamente na linha de comando:
+O sistema suporta ajuste dinâmico da taxa de quadros e sobreposição de HUD de diagnóstico diretamente na linha de comando:
 
 ```bash
-# Modo 27 FPS (Recomendado para trabalho contínuo, leitura e economia de banda):
+# Modo 12 FPS com HUD de Diagnóstico (Latência ultra-baixa, quase realtime!):
+./scripts/start.sh extend auto 12 hud
+
+# Modo 5 FPS com HUD de Diagnóstico (Economia extrema de CPU e barramento):
+./scripts/start.sh extend auto 5 hud
+
+# Modo 27 FPS (Padrão balanceado fluido):
 ./scripts/start.sh extend auto 27
 
-# Modo 60 FPS (Máxima fluidez para vídeos e animações rápidas):
+# Modo 60 FPS (Máxima fluidez para vídeos):
 ./scripts/start.sh extend auto 60
-
-# Modo 45 FPS / 30 FPS:
-./scripts/start.sh extend auto 45
-./scripts/start.sh extend auto 30
 ```
 
-### Por que 27 FPS?
-A taxa de 27 FPS foi historicamente utilizada em mídias broadcast e videocassete. No contexto de monitor secundário:
-- Garante **37 ms por quadro**, oferecendo folga de processamento astronômica para o hardware decodificador do Pi Zero.
-- Reduz a vazão de rede para apenas **~3.6 Mbps** (contra 8 Mbps em 60 FPS).
-- Mantém o cursor e digitação responsivos sem consumir banda desnecessária do barramento USB.
+### O Descoberta Empírica de Latência: Por que 12 e 5 FPS reduzem a latência a quase zero?
+- **A 60 FPS:** O decodificador VideoCore IV tem apenas 16.6 ms por quadro. Pequenas variações de tráfego USB criam enfileiramento (buffer bloat).
+- **A 12 FPS (83.3 ms/quadro) e 5 FPS (200 ms/quadro):** O decodificador processa a fatia em ~9 ms e a fila fica **100% VAZIA por mais de 70 a 190 ms**!
+- Sem enfileiramento de frames, a resposta de movimento de janelas (como Thunderbird e editores) e mouse é **instantânea e em tempo real**.
+
+### 🖥️ HUD de Diagnóstico On-Screen (Vidro Fumê Translúcido)
+Ao passar o parâmetro `hud`, o sistema injeta no vídeo:
+- **Canto Superior Direito:** Caixa semi-transparente estilo vidro fumê (`shading-value=60`) com múltiplas linhas mostrando:
+  - GPU e Encoder ativo (VA-API / NVENC / QSV)
+  - Taxa de FPS real
+  - Bitrate configurado
+  - Link de rede USB e porta UDP
+  - Motor decodificador KMS
+- **Canto Superior Esquerdo:** Relógio de alta precisão com milissegundos para medição visual de latência entre as telas a olho nu.
 
 ---
 
