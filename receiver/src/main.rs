@@ -34,7 +34,7 @@ fn main() {
             .arg("-v")
             .arg("udpsrc")
             .arg(format!("port={}", port))
-            .arg("buffer-size=1048576")
+            .arg("buffer-size=262144") // 256KB: comporta burst de pacotes do Full Refresh (IDR) sem truncar
             .arg(&caps_arg)
             .arg("!")
             .arg("rtph264depay")
@@ -44,9 +44,19 @@ fn main() {
             .arg("!")
             .arg("v4l2h264dec")
             .arg("capture-io-mode=dmabuf")
+            .arg("output-io-mode=dmabuf")
+            .arg("qos=true")
+            .arg("!")
+            .arg("queue")
+            .arg("max-size-buffers=1")
+            .arg("max-size-bytes=0")
+            .arg("max-size-time=0")
+            .arg("leaky=downstream") // Corte por Latência (Drop-on-Late): descarta quadros atrasados pós-decodificação
             .arg("!")
             .arg("kmssink")
             .arg("sync=false")
+            .arg("qos=true")
+            .arg("skip-vsync=true") // Renderização imediata sem travar esperando VSYNC
             .spawn()
         {
             Ok(c) => c,
