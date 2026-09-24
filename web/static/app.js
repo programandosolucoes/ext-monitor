@@ -45,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     const cmdCurl = document.getElementById('cmd-curl');
-    const cmdPreview = document.getElementById('cmd-preview');
 
     // Update Command Boxes
     function updateCommandPreview() {
@@ -130,6 +129,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Helper to format bitrate label cleanly without causing line breaks
+    function updateBitrateLabel(val) {
+        let tag = '';
+        if (val <= 400) {
+            tag = ' (Ultra Leve • Sub-10ms)';
+        } else if (val <= 1000) {
+            tag = ' (Realtime • 15ms)';
+        } else if (val <= 2000) {
+            tag = ' (Equilibrado)';
+        } else {
+            tag = ' (Alta Fidelidade)';
+        }
+        if (bitrateVal) bitrateVal.textContent = `${val} kbps${tag}`;
+    }
+
     // Button Selection Listeners (FPS)
     fpsButtons.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -141,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (suggestedBitrates[state.fps]) {
                 state.bitrate = suggestedBitrates[state.fps];
                 bitrateSlider.value = state.bitrate;
-                bitrateVal.textContent = `${state.bitrate} kbps (Auto)`;
+                updateBitrateLabel(state.bitrate);
             }
 
             updateCommandPreview();
@@ -161,15 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Bitrate Slider
     bitrateSlider.addEventListener('input', (e) => {
         state.bitrate = parseInt(e.target.value, 10);
-        let tag = '';
-        if (state.bitrate <= 1000) {
-            tag = ' (Ultra Realtime • Sub-15ms)';
-        } else if (state.bitrate <= 2000) {
-            tag = ' (Equilibrado • Baixa Latência)';
-        } else {
-            tag = ' (Alta Fidelidade)';
-        }
-        bitrateVal.textContent = `${state.bitrate} kbps${tag}`;
+        updateBitrateLabel(state.bitrate);
         updateCommandPreview();
     });
 

@@ -279,7 +279,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let new_bitrate_opt = v.get("bitrate").and_then(|x| x.as_u64()).map(|x| x as u32);
 
                         if let Some(new_bitrate) = new_bitrate_opt {
-                            if new_bitrate != bitrate && new_bitrate >= 400 && new_bitrate <= 15000 {
+                            if new_bitrate != bitrate && new_bitrate >= 150 && new_bitrate <= 15000 {
                                 println!("\x1b[1;34m[*] Mudança de Bitrate via Web: {} -> {} kbps (Ultra-Low Latency)\x1b[0m", bitrate, new_bitrate);
                                 bitrate = new_bitrate;
                                 restart_pipeline = true;
