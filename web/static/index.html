@@ -140,13 +140,13 @@
                 <div class="control-group">
                     <div class="slider-header">
                         <label class="group-label" for="bitrate-slider">Bitrate Teto (Cap):</label>
-                        <span class="slider-val" id="bitrate-val">2500 kbps (Auto)</span>
+                        <span class="slider-val" id="bitrate-val">1200 kbps (Ultra Realtime)</span>
                     </div>
-                    <input type="range" id="bitrate-slider" min="1000" max="10000" step="500" value="2500">
+                    <input type="range" id="bitrate-slider" min="400" max="6000" step="100" value="1200">
                     <div class="slider-hints">
-                        <span>1000 kbps</span>
-                        <span>Auto (pelo FPS)</span>
-                        <span>10000 kbps</span>
+                        <span>400 kbps (Sub-15ms)</span>
+                        <span>1200 kbps (Recomendado)</span>
+                        <span>6000 kbps (Máx)</span>
                     </div>
                 </div>
 
@@ -202,21 +202,59 @@
                     <div class="step-item">
                         <span class="step-badge">3</span>
                         <div>
-                            <strong>Comando Gerado para o seu Terminal:</strong>
+                            <strong>Escolha o Método de Conexão no seu PC:</strong>
                         </div>
                     </div>
                 </div>
 
-                <div class="code-box">
-                    <pre><code id="cmd-preview">./scripts/start.sh extend auto 12 hud 256</code></pre>
-                    <button type="button" class="btn-copy" id="btn-copy-cmd" title="Copiar comando">
-                        Copiar
-                    </button>
+                <!-- Método 1: One-liner com curl (Zero Instalação Prévia) -->
+                <div class="connect-method">
+                    <div class="method-header">
+                        <span class="method-tag tag-cyan">Método 1 • Automático (Recomendado)</span>
+                        <p class="method-desc">Baixa o cliente nativo do Pi para o seu PC e conecta imediatamente:</p>
+                    </div>
+                    <div class="code-box">
+                        <pre><code id="cmd-curl">curl -sSL http://192.168.7.2:8080/connect.sh | bash</code></pre>
+                        <button type="button" class="btn-copy" id="btn-copy-curl" data-target="cmd-curl" title="Copiar comando">
+                            Copiar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Método 2: Download do Pacote Completo (Offline / Portátil) -->
+                <div class="connect-method">
+                    <div class="method-header">
+                        <span class="method-tag tag-emerald">Método 2 • Pacote Pré-Compilado (Download)</span>
+                        <p class="method-desc">Baixe o pacote compactado pronto para uso no seu computador:</p>
+                    </div>
+                    <div class="download-box">
+                        <a href="/download/client.tar.gz" class="btn-download" download="ext-monitor-client.tar.gz">
+                            <span class="download-icon">📦</span>
+                            <div class="download-text">
+                                <strong>Baixar Pacote do Cliente (x86_64)</strong>
+                                <small>Binário nativo Linux + script start.sh (1.2 MB)</small>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Método 3: Script Local (Repositório Clonado) -->
+                <div class="connect-method">
+                    <div class="method-header">
+                        <span class="method-tag tag-purple">Método 3 • Repositório Local (Git)</span>
+                        <p class="method-desc">Se você já clonou o código-fonte na sua máquina:</p>
+                    </div>
+                    <div class="code-box">
+                        <pre><code id="cmd-preview">./scripts/start.sh extend auto 12 hud 256</code></pre>
+                        <button type="button" class="btn-copy" id="btn-copy-cmd" data-target="cmd-preview" title="Copiar comando">
+                            Copiar
+                        </button>
+                    </div>
                 </div>
 
                 <div class="guide-footer">
                     <div class="pill-info">
-                        💡 <strong>Dica Pro:</strong> Ao mudar qualquer opção na esquerda, o comando acima se atualiza sozinho e você pode copiar diretamente!
+                        💡 <strong>Dica Pro:</strong> Ao mudar qualquer opção na esquerda, os comandos acima se atualizam sozinhos e você pode copiar diretamente!
                     </div>
                     <div class="shortcut-actions">
                         <button type="button" class="btn-secondary" id="btn-show-splash">

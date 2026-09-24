@@ -639,6 +639,102 @@ input:checked + .slider.round:before {
     border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* Connection Methods & Downloads */
+.connect-method {
+    margin-bottom: 1.4rem;
+    padding-bottom: 1.2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.connect-method:last-of-type {
+    border-bottom: none;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0;
+}
+
+.method-header {
+    margin-bottom: 0.6rem;
+}
+
+.method-tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    margin-bottom: 0.35rem;
+}
+
+.tag-cyan {
+    background: rgba(0, 229, 255, 0.15);
+    color: var(--accent-cyan);
+    border: 1px solid rgba(0, 229, 255, 0.35);
+}
+
+.tag-emerald {
+    background: rgba(0, 255, 102, 0.15);
+    color: var(--accent-emerald);
+    border: 1px solid rgba(0, 255, 102, 0.35);
+}
+
+.tag-purple {
+    background: rgba(179, 136, 255, 0.15);
+    color: var(--accent-purple);
+    border: 1px solid rgba(179, 136, 255, 0.35);
+}
+
+.method-desc {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.download-box {
+    margin: 0.6rem 0 0.8rem 0;
+}
+
+.btn-download {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: linear-gradient(135deg, rgba(0, 255, 102, 0.12) 0%, rgba(0, 229, 255, 0.08) 100%);
+    border: 1px solid rgba(0, 255, 102, 0.35);
+    border-radius: var(--radius-sm);
+    padding: 0.85rem 1.2rem;
+    text-decoration: none;
+    color: #ffffff;
+    transition: var(--transition);
+}
+
+.btn-download:hover {
+    background: linear-gradient(135deg, rgba(0, 255, 102, 0.22) 0%, rgba(0, 229, 255, 0.18) 100%);
+    border-color: var(--accent-emerald);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 255, 102, 0.2);
+}
+
+.download-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+}
+
+.download-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.download-text strong {
+    font-size: 0.92rem;
+    color: #ffffff;
+}
+
+.download-text small {
+    font-size: 0.78rem;
+    color: var(--accent-emerald);
+}
+
 /* Footer */
 .footer {
     text-align: center;

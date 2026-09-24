@@ -26,6 +26,7 @@ def create_splash():
     font_body = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
     font_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 15)
     font_code = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 15)
+    font_code_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 12)
     font_footer = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 13)
 
     # Top Badge
@@ -101,17 +102,18 @@ def create_splash():
             "title": "Conectar sua Sessão",
             "accent": (180, 100, 255),
             "lines": [
-                ("1. No terminal do seu computador:", font_bold, (255, 255, 255)),
-                ("   cd ~/ide/ext-monitor", font_code, (180, 200, 220)),
+                ("1. No PC, execute no terminal (Auto):", font_bold, (255, 255, 255)),
+                ("   curl -sSL http://192.168.7.2:8080/connect.sh | bash", font_code_sm, (0, 255, 180)),
                 ("", font_body, (0, 0, 0)),
-                ("2. Execute o comando de conexão:", font_bold, (255, 255, 255)),
-                ("   ./scripts/start.sh extend auto 12 hud", font_code, (0, 255, 180)),
+                ("2. Ou baixe o pacote pronto no navegador:", font_bold, (255, 255, 255)),
+                ("   Acesse http://192.168.7.2:8080 e baixe", font_body, (180, 200, 220)),
+                ("   ext-monitor-client.tar.gz (1.2 MB)", font_code_sm, (0, 229, 255)),
                 ("", font_body, (0, 0, 0)),
-                ("3. Ou modo 256 cores econômico:", font_bold, (255, 255, 255)),
-                ("   ./scripts/start.sh extend auto 12 hud 256", font_code, (180, 100, 255)),
+                ("3. Se já tiver o código clonado no PC:", font_bold, (255, 255, 255)),
+                ("   ./scripts/start.sh extend auto 12 hud 256", font_code_sm, (180, 100, 255)),
                 ("", font_body, (0, 0, 0)),
                 ("4. O monitor assumirá a sessão:", font_bold, (255, 255, 255)),
-                ("   Exibe Boas-Vindas, telemetria,", font_body, (180, 200, 220)),
+                ("   Exibe boas-vindas e telemetria,", font_body, (180, 200, 220)),
                 ("   e oculta o HUD após 1 minuto.", font_body, (180, 200, 220)),
             ]
         }

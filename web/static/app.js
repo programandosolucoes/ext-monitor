@@ -34,24 +34,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvasCpu = document.getElementById('chart-cpu');
     const ctxCpu = canvasCpu ? canvasCpu.getContext('2d') : null;
 
-    // Suggested bitrates per framerate
+    // Suggested bitrates per framerate (Ultra-Low Latency / Realtime tuned)
     const suggestedBitrates = {
-        12: 2500,
-        15: 3500,
-        24: 5000,
-        30: 6000,
-        60: 8000,
+        12: 1200,
+        15: 1500,
+        24: 2500,
+        30: 3000,
+        60: 5000,
     };
 
-    // Update Command Box
+
+    const cmdCurl = document.getElementById('cmd-curl');
+    const cmdPreview = document.getElementById('cmd-preview');
+
+    // Update Command Boxes
     function updateCommandPreview() {
-        let cmd = `./scripts/start.sh extend auto ${state.fps} hud`;
+        let localCmd = `./scripts/start.sh extend auto ${state.fps} hud`;
         if (state.color === '256') {
-            cmd += ' 256';
+            localCmd += ' 256';
         } else if (state.color === 'gray') {
-            cmd += ' gray';
+            localCmd += ' gray';
         }
-        cmdPreview.textContent = cmd;
+        if (cmdPreview) cmdPreview.textContent = localCmd;
+
+        let curlCmd = `curl -sSL http://192.168.7.2:8080/connect.sh | bash`;
+        if (state.fps !== 12 || state.color !== '256') {
+            curlCmd = `curl -sSL http://192.168.7.2:8080/connect.sh | bash -s -- extend ${state.fps} ${state.color} hud`;
+        }
+        if (cmdCurl) cmdCurl.textContent = curlCmd;
     }
 
     // Canvas Sparkline Chart
@@ -151,9 +161,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Bitrate Slider
     bitrateSlider.addEventListener('input', (e) => {
         state.bitrate = parseInt(e.target.value, 10);
-        bitrateVal.textContent = `${state.bitrate} kbps`;
+        let tag = '';
+        if (state.bitrate <= 1000) {
+            tag = ' (Ultra Realtime • Sub-15ms)';
+        } else if (state.bitrate <= 2000) {
+            tag = ' (Equilibrado • Baixa Latência)';
+        } else {
+            tag = ' (Alta Fidelidade)';
+        }
+        bitrateVal.textContent = `${state.bitrate} kbps${tag}`;
         updateCommandPreview();
     });
+
 
     // Trigger HUD on display
     btnTriggerHud.addEventListener('click', async () => {
@@ -211,21 +230,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Copy Command to Clipboard
-    btnCopyCmd.addEventListener('click', () => {
-        const text = cmdPreview.textContent;
-        navigator.clipboard.writeText(text).then(() => {
-            const original = btnCopyCmd.textContent;
-            btnCopyCmd.textContent = '✓ Copiado!';
-            btnCopyCmd.style.background = 'var(--accent-emerald)';
-            btnCopyCmd.style.color = '#000';
-            setTimeout(() => {
-                btnCopyCmd.textContent = original;
-                btnCopyCmd.style.background = '';
-                btnCopyCmd.style.color = '';
-            }, 2500);
+    // Copy Commands to Clipboard
+    document.querySelectorAll('.btn-copy').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target') || 'cmd-preview';
+            const targetEl = document.getElementById(targetId);
+            if (!targetEl) return;
+            const text = targetEl.textContent.trim();
+            navigator.clipboard.writeText(text).then(() => {
+                const original = btn.textContent;
+                btn.textContent = '✓ Copiado!';
+                btn.style.background = 'var(--accent-emerald)';
+                btn.style.color = '#000';
+                setTimeout(() => {
+                    btn.textContent = original;
+                    btn.style.background = '';
+                    btn.style.color = '';
+                }, 2500);
+            });
         });
     });
+
 
     // Initial setups
     updateCommandPreview();

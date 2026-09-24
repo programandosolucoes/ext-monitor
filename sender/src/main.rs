@@ -48,13 +48,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let encoder = EncoderApi::from_str(encoder_arg);
     let mut fps = args.get(6).and_then(|p| p.parse::<u32>().ok()).unwrap_or(30);
 
-    // Auto-scale bitrate based on framerate if not explicitly set (or if 0 / 8000 default)
+    // Auto-scale bitrate based on framerate with Ultra-Low Latency presets (sub-15ms)
     let auto_bitrate = match fps {
-        f if f >= 50 => 8000,
-        f if f >= 25 => 6000,
-        f if f >= 15 => 3500,
-        f if f >= 10 => 2500,
-        _ => 1200,
+        f if f >= 50 => 6000,
+        f if f >= 25 => 3000,
+        f if f >= 15 => 1800,
+        f if f >= 10 => 1200,
+        _ => 800,
     };
     let mut bitrate = if raw_bitrate == 0 || raw_bitrate == 8000 {
         auto_bitrate
@@ -270,18 +270,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 restart_pipeline = true;
                             }
                         }
-                        if let Some(new_fps) = v.get("fps").and_then(|x| x.as_u64()) {
-                            let new_fps = new_fps as u32;
+                        let new_fps_opt = v.get("fps").and_then(|x| x.as_u64()).map(|x| x as u32);
+                        let new_bitrate_opt = v.get("bitrate").and_then(|x| x.as_u64()).map(|x| x as u32);
+
+                        if let Some(new_bitrate) = new_bitrate_opt {
+                            if new_bitrate != bitrate && new_bitrate >= 400 && new_bitrate <= 15000 {
+                                println!("\x1b[1;34m[*] Mudança de Bitrate via Web: {} -> {} kbps (Ultra-Low Latency)\x1b[0m", bitrate, new_bitrate);
+                                bitrate = new_bitrate;
+                                restart_pipeline = true;
+                            }
+                        }
+
+                        if let Some(new_fps) = new_fps_opt {
                             if new_fps != fps && new_fps >= 10 && new_fps <= 60 {
                                 println!("\x1b[1;34m[*] Mudança de FPS via Web: {} -> {} FPS\x1b[0m", fps, new_fps);
                                 fps = new_fps;
-                                bitrate = match fps {
-                                    f if f >= 50 => 8000,
-                                    f if f >= 25 => 6000,
-                                    f if f >= 15 => 3500,
-                                    f if f >= 10 => 2500,
-                                    _ => 1200,
-                                };
+                                if new_bitrate_opt.is_none() {
+                                    bitrate = match fps {
+                                        f if f >= 50 => 6000,
+                                        f if f >= 25 => 3000,
+                                        f if f >= 15 => 1800,
+                                        f if f >= 10 => 1200,
+                                        _ => 800,
+                                    };
+                                }
                                 restart_pipeline = true;
                             }
                         }
