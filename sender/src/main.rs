@@ -435,13 +435,14 @@ fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
 
                     if let Some(p) = out_port {
                         println!("\x1b[1;34m[*] Found {} Output Port: {}\x1b[0m", monitor_name, p);
-                        let status = Command::new("pw-link")
+                        let output = Command::new("pw-link")
                             .arg(p.to_string())
                             .arg("ext-hdmi-sender:input_1")
-                            .status();
+                            .output();
 
-                        if let Ok(s) = status {
-                            if s.success() {
+                        if let Ok(out) = output {
+                            let err_str = String::from_utf8_lossy(&out.stderr);
+                            if out.status.success() || err_str.contains("Arquivo existe") || err_str.contains("File exists") {
                                 println!("\x1b[1;32m[+] Successfully linked {} (port {}) -> ext-hdmi-sender!\x1b[0m", monitor_name, p);
                                 return;
                             }

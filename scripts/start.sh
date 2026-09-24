@@ -39,8 +39,9 @@ fi
 
 echo -e "\x1b[1;32m[*] Iniciando ext-sender (Modo: $MODE, Encoder: $ENCODER, FPS: $FPS, HUD: $HUD, Cor: ${COLOR_FLAG:-padrão}, Destino: $TARGET_IP:$TARGET_PORT)...\x1b[0m"
 
-# Mata instâncias anteriores se existirem
+# Mata instâncias anteriores se existirem (inclusive pipelines gst-launch órfãos)
 pkill -f "ext-sender" 2>/dev/null || true
+killall -9 gst-launch-1.0 2>/dev/null || true
 sleep 0.5
 
 # Executa o binário do sender com bitrate dinâmico (0 = auto-calculado pelo FPS)
