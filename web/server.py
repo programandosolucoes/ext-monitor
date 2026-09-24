@@ -22,7 +22,7 @@ WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 DEFAULT_CONFIG = {
     "fps": 12,
     "color": "256",
-    "bitrate": 2500,
+    "bitrate": 1200,
     "hud": True,
     "hud_auto_hide": True,
     "hud_timer_secs": 60,
@@ -162,6 +162,40 @@ class WebControlHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(CURRENT_CONFIG).encode("utf-8"))
             return
 
+        elif parsed.path == "/connect.sh":
+            filepath = os.path.join(WEB_DIR, "connect.sh")
+            if os.path.exists(filepath):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                with open(filepath, "rb") as f:
+                    self.wfile.write(f.read())
+                return
+
+        elif parsed.path == "/download/client.tar.gz":
+            filepath = os.path.join(WEB_DIR, "download", "client.tar.gz")
+            if os.path.exists(filepath):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/gzip")
+                self.send_header("Content-Disposition", 'attachment; filename="ext-monitor-client.tar.gz"')
+                self.send_header("Content-Length", str(os.path.getsize(filepath)))
+                self.end_headers()
+                with open(filepath, "rb") as f:
+                    self.wfile.write(f.read())
+                return
+
+        elif parsed.path == "/download/ext-sender":
+            filepath = os.path.join(WEB_DIR, "download", "ext-sender")
+            if os.path.exists(filepath):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(os.path.getsize(filepath)))
+                self.end_headers()
+                with open(filepath, "rb") as f:
+                    self.wfile.write(f.read())
+                return
+
         return super().do_GET()
 
     def do_POST(self):
@@ -219,11 +253,14 @@ def notify_control_change(payload):
     except Exception:
         pass
 
+class ReusableThreadingServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
 def run():
     os.makedirs(WEB_DIR, exist_ok=True)
     server_address = ("", PORT)
-    with socketserver.ThreadingTCPServer(server_address, WebControlHandler) as httpd:
-        httpd.allow_reuse_address = True
+    with ReusableThreadingServer(server_address, WebControlHandler) as httpd:
         print(f"[*] Pi Zero Web Control Server running on port {PORT}...")
         httpd.serve_forever()
 
