@@ -10,6 +10,23 @@ use zbus::zvariant::{OwnedObjectPath, Value};
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorProfile {
+    TrueColor,    // Standard 24-bit color (VBR 75% avg, dynamic QP)
+    Economy256,   // Emulated 256-color coarse quantization (min-qp 30, max-qp 44, VBR 50%)
+    Grayscale,    // Monochrome terminal mode (saturation=0.0)
+}
+
+impl ColorProfile {
+    pub fn name(&self) -> &'static str {
+        match self {
+            ColorProfile::TrueColor => "24-bit TrueColor (Full)",
+            ColorProfile::Economy256 => "256-Color (Coarse QP 30-44)",
+            ColorProfile::Grayscale => "Monochrome (Grayscale)",
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;32m=====================================================\x1b[0m");
     println!("\x1b[1;32m  ext-sender: AMD GPU Offload Second Monitor Sender   \x1b[0m");
@@ -21,21 +38,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get(2)
         .and_then(|p| p.parse::<u16>().ok())
         .unwrap_or(5000);
-    let bitrate = args
+    let raw_bitrate = args
         .get(3)
         .and_then(|p| p.parse::<u32>().ok())
-        .unwrap_or(8000);
+        .unwrap_or(0);
     let mode = args.get(4).map(|s| s.to_lowercase()).unwrap_or_else(|| "extend".to_string());
     let encoder_arg = args.get(5).map(|s| s.as_str()).unwrap_or("auto");
     let encoder = EncoderApi::from_str(encoder_arg);
-    let fps = args.get(6).and_then(|p| p.parse::<u32>().ok()).unwrap_or(60);
+    let fps = args.get(6).and_then(|p| p.parse::<u32>().ok()).unwrap_or(30);
+
+    // Auto-scale bitrate based on framerate if not explicitly set (or if 0 / 8000 default)
+    let auto_bitrate = match fps {
+        f if f >= 50 => 8000,
+        f if f >= 25 => 6000,
+        f if f >= 15 => 3500,
+        f if f >= 10 => 2500,
+        _ => 1200,
+    };
+    let bitrate = if raw_bitrate == 0 || raw_bitrate == 8000 {
+        auto_bitrate
+    } else {
+        raw_bitrate
+    };
+
     let hud = args.iter().any(|a| {
         let s = a.to_lowercase();
         s == "hud" || s == "--hud" || s == "true" || s == "1"
     });
 
+    let color_profile = if args.iter().any(|a| {
+        let s = a.to_lowercase();
+        s == "256" || s == "--256" || s == "--colors=256" || s == "economy" || s == "--economy"
+    }) {
+        ColorProfile::Economy256
+    } else if args.iter().any(|a| {
+        let s = a.to_lowercase();
+        s == "gray" || s == "--gray" || s == "bw" || s == "--bw" || s == "mono"
+    }) {
+        ColorProfile::Grayscale
+    } else {
+        ColorProfile::TrueColor
+    };
+
     println!("\x1b[1;34m[*] Target:\x1b[0m {}:{}", target_ip, target_port);
-    println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps ({} FPS CBR)", bitrate, fps);
+    println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps (Adaptive VBR, {} FPS)", bitrate, fps);
+    println!("\x1b[1;34m[*] Color Profile:\x1b[0m {}", color_profile.name());
     println!("\x1b[1;34m[*] Display Mode:\x1b[0m {} (options: 'extend' or 'clone')", mode);
     println!("\x1b[1;34m[*] Encoder Engine:\x1b[0m {:?} (arg: '{}')", encoder, encoder_arg);
     println!("\x1b[1;34m[*] Target Framerate:\x1b[0m {} FPS", fps);
@@ -167,8 +214,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\x1b[1;32m[+] PipeWire Node ID for {}:\x1b[0m {}", monitor_to_record, node_id);
 
         // Spawn GStreamer pipeline with autoconnect=false
-        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS, HUD: {})...\x1b[0m", encoder, fps, hud);
-        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud) {
+        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS, HUD: {}, Color: {:?})...\x1b[0m", encoder, fps, hud, color_profile);
+        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud, color_profile) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -183,7 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Find the exact output port for node_id and link it to ext-hdmi-sender
         link_monitor_port_to_sender(node_id, monitor_to_record);
 
-        println!("\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at {} FPS!\x1b[0m", monitor_to_record, fps);
+        println!("\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at {} FPS ({})!\x1b[0m", monitor_to_record, fps, color_profile.name());
 
         // Supervise streaming process
         while running.load(Ordering::SeqCst) {
@@ -315,6 +362,7 @@ fn spawn_streamer(
     encoder: EncoderApi,
     fps: u32,
     hud: bool,
+    color_profile: ColorProfile,
 ) -> Result<Child, std::io::Error> {
     let mut cmd = Command::new("gst-launch-1.0");
     cmd.arg("-v");
@@ -343,9 +391,10 @@ fn spawn_streamer(
     // 3. Diagnostic HUD (On-Screen Display) if requested
     if hud {
         println!("\x1b[1;35m[+] Injecting Advanced On-Screen Diagnostic Telemetry HUD with Glass Transparency...\x1b[0m");
+        let avg_pct = if color_profile == ColorProfile::Economy256 { 50 } else { 75 };
         let hud_text = format!(
-            "text=\"[ EXT-MONITOR TELEMETRY ]\nPanel:  1600x900@59.95Hz (Native 1:1)\nStream: {} FPS | Drop-on-Late (3x LIFO)\nGPU:    AMD Radeon (VA-API DMA-BUF)\nCodec:  H.264 Baseline (CAVLC / 1 Slice)\nRate:   VBR Adaptativo ({}k cap / 75% avg)\nMBBRC:  Ativo (Anti-Spike Macrobloco)\nSync:   IDR Refresh 1.0s ({} frames)\nLink:   {}:{} (UDP/RTP)\nSink:   VideoCore IV KMS (skip-vsync: ON)\"",
-            fps, bitrate, fps, target_ip, target_port
+            "text=\"[ EXT-MONITOR TELEMETRY ]\nPanel:  1600x900@59.95Hz (Native 1:1)\nStream: {} FPS | Drop-on-Late (3x LIFO)\nColor:  {}\nGPU:    AMD Radeon (VA-API DMA-BUF)\nCodec:  H.264 Baseline (CAVLC / 1 Slice)\nRate:   VBR Adaptativo ({}k cap / {}% avg)\nMBBRC:  Ativo (Anti-Spike Macrobloco)\nSync:   IDR Refresh 1.0s ({} frames)\nLink:   {}:{} (UDP/RTP)\nSink:   VideoCore IV KMS (skip-vsync: ON)\"",
+            fps, color_profile.name(), bitrate, avg_pct, fps, target_ip, target_port
         );
         cmd.arg("textoverlay")
             .arg(hud_text)
@@ -400,21 +449,34 @@ fn spawn_streamer(
     // 5. Hardware / Software encoder selection
     match encoder {
         EncoderApi::Vaapi => {
-            println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline (Adaptive VBR, Smooth MBBRC Full-Motion)...\x1b[0m");
+            println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline (Adaptive VBR, Smooth MBBRC Full-Motion, Profile: {:?})...\x1b[0m", color_profile);
+            
+            if color_profile == ColorProfile::Grayscale {
+                cmd.arg("videobalance").arg("saturation=0.0").arg("!");
+            }
+
             cmd.arg("vapostproc")
                 .arg("!")
                 .arg("vah264enc")
                 .arg(format!("bitrate={}", bitrate))
-                .arg("rate-control=vbr")             // Bitrate Adaptativo (Chiaki / Sunshine style)
-                .arg("target-percentage=75")         // 75% em média, escala até 100% sob movimento
-                .arg("mbbrc=enabled")                // Controle macrobloco a macrobloco (evita picos ao mover telas inteiras)
-                .arg("target-usage=7")               // AMD ultra-fast lowest latency mode
+                .arg("rate-control=vbr");
+
+            if color_profile == ColorProfile::Economy256 {
+                cmd.arg("target-percentage=50")
+                    .arg("min-qp=30")
+                    .arg("max-qp=44");
+            } else {
+                cmd.arg("target-percentage=75");
+            }
+
+            cmd.arg("mbbrc=enabled")             // Controle macrobloco a macrobloco (evita picos ao mover telas inteiras)
+                .arg("target-usage=7")           // AMD ultra-fast lowest latency mode
                 .arg("b-frames=0")
                 .arg("ref-frames=1")
-                .arg("aud=true")                     // Access Unit delimiter para integridade de frames
-                .arg("cabac=false")                  // CAVLC simple entropy coding (super leve para o Pi Zero)
-                .arg("dct8x8=false")                 // Simple 4x4 transforms
-                .arg("num-slices=1")                 // 1 fatia inteira atômica (elimina cortes/rasgos horizontais na tela)
+                .arg("aud=true")                 // Access Unit delimiter para integridade de frames
+                .arg("cabac=false")              // CAVLC simple entropy coding (super leve para o Pi Zero)
+                .arg("dct8x8=false")             // Simple 4x4 transforms
+                .arg("num-slices=1")             // 1 fatia inteira atômica (elimina cortes/rasgos horizontais na tela)
                 .arg(format!("key-int-max={}", fps.max(15))) // Full Refresh (IDR) a cada 1.0s (estabilidade total sem micro-congelamento)
                 .arg("!")
                 .arg("video/x-h264,profile=constrained-baseline") // Super optimized low-overhead profile
