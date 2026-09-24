@@ -25,17 +25,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get(3)
         .and_then(|p| p.parse::<u32>().ok())
         .unwrap_or(8000);
+    let mode = args.get(4).map(|s| s.to_lowercase()).unwrap_or_else(|| "extend".to_string());
+    let encoder_arg = args.get(5).map(|s| s.as_str()).unwrap_or("auto");
+    let encoder = EncoderApi::from_str(encoder_arg);
 
     println!("\x1b[1;34m[*] Target:\x1b[0m {}:{}", target_ip, target_port);
-    println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps (VA-API CBR, 60 FPS)", bitrate);
+    println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps (60 FPS CBR)", bitrate);
+    println!("\x1b[1;34m[*] Display Mode:\x1b[0m {} (options: 'extend' or 'clone')", mode);
+    println!("\x1b[1;34m[*] Encoder Engine:\x1b[0m {:?} (arg: '{}')", encoder, encoder_arg);
 
-    // 1. Ensure kernel HDMI-A-1 connector is forced connected
-    ensure_kernel_hdmi_connected();
+    let monitor_to_record = if mode == "clone" {
+        "eDP-1"
+    } else {
+        // In extended mode, ensure kernel HDMI-A-1 connector is forced and configured in GNOME
+        ensure_kernel_hdmi_connected();
+        ensure_gnome_displays();
+        "HDMI-1"
+    };
 
-    // 2. Ensure GNOME Mutter has HDMI-1 active in side-by-side extended layout
-    ensure_gnome_displays();
+    println!("\x1b[1;34m[*] Recording Monitor:\x1b[0m {}", monitor_to_record);
 
-    // 3. Setup signal handler
+    // Signal handler setup
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc_setup(r);
@@ -72,25 +82,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let session_path: OwnedObjectPath = session_reply.body().deserialize()?;
         println!("\x1b[1;32m[+] Mutter Session created:\x1b[0m {}", session_path);
 
-        // RecordMonitor for HDMI-1 (the dedicated extended second monitor)
-        let empty_props: HashMap<&str, Value> = HashMap::new();
+        // RecordMonitor for target monitor (HDMI-1 for extended, eDP-1 for clone)
+        // cursor-mode = 1: MUTTER_SCREEN_CAST_CURSOR_MODE_EMBEDDED (cursor drawn in framebuffer)
+        let mut monitor_props: HashMap<&str, Value> = HashMap::new();
+        monitor_props.insert("cursor-mode", Value::from(1u32));
+
         let stream_reply = match dbus_conn.call_method(
             Some("org.gnome.Mutter.ScreenCast"),
             session_path.as_str(),
             Some("org.gnome.Mutter.ScreenCast.Session"),
             "RecordMonitor",
-            &("HDMI-1", empty_props),
+            &(monitor_to_record, monitor_props),
         ) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("\x1b[1;31m[!] RecordMonitor('HDMI-1') failed: {}. Retrying in 2s...\x1b[0m", e);
+                eprintln!("\x1b[1;31m[!] RecordMonitor('{}') failed: {}. Retrying in 2s...\x1b[0m", monitor_to_record, e);
                 thread::sleep(Duration::from_secs(2));
                 continue;
             }
         };
 
         let stream_path: OwnedObjectPath = stream_reply.body().deserialize()?;
-        println!("\x1b[1;32m[+] HDMI-1 ScreenCast Stream created:\x1b[0m {}", stream_path);
+        println!("\x1b[1;32m[+] {} ScreenCast Stream created:\x1b[0m {}", monitor_to_record, stream_path);
 
         // Setup signal listener for PipeWireStreamAdded
         let stream_proxy = match Proxy::new(
@@ -144,11 +157,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        println!("\x1b[1;32m[+] PipeWire Node ID for HDMI-1:\x1b[0m {}", node_id);
+        println!("\x1b[1;32m[+] PipeWire Node ID for {}:\x1b[0m {}", monitor_to_record, node_id);
 
         // Spawn GStreamer pipeline with autoconnect=false
-        println!("\x1b[1;33m[*] Starting AMD GPU H.264 VA-API streaming pipeline...\x1b[0m");
-        let mut child = match spawn_streamer(target_ip, target_port, bitrate) {
+        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline...\x1b[0m", encoder);
+        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -160,10 +173,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Allow GStreamer pipewiresrc to register its input port
         thread::sleep(Duration::from_millis(800));
 
-        // Find the exact output port for HDMI-1 node_id and link it to ext-hdmi-sender
-        link_hdmi_port_to_sender(node_id);
+        // Find the exact output port for node_id and link it to ext-hdmi-sender
+        link_monitor_port_to_sender(node_id, monitor_to_record);
 
-        println!("\x1b[1;32m[+] Second monitor HDMI-1 is streaming LIVE to Pi Zero at 60 FPS!\x1b[0m");
+        println!("\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at 60 FPS!\x1b[0m", monitor_to_record);
 
         // Supervise streaming process
         while running.load(Ordering::SeqCst) {
@@ -205,33 +218,76 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn link_hdmi_port_to_sender(node_id: u32) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EncoderApi {
+    Vaapi,    // AMD & Intel hardware encoding via VA-API
+    Nvenc,    // NVIDIA hardware encoding via NVENC
+    Qsv,      // Intel QuickSync hardware encoding
+    Software, // CPU / x264 zerolatency
+}
+
+impl EncoderApi {
+    pub fn detect() -> Self {
+        // 1. Check for NVIDIA NVENC
+        if let Ok(out) = Command::new("gst-inspect-1.0").arg("nvh264enc").output() {
+            if out.status.success() {
+                return EncoderApi::Nvenc;
+            }
+        }
+        // 2. Check for VA-API (AMD / Intel)
+        if let Ok(out) = Command::new("gst-inspect-1.0").arg("vah264enc").output() {
+            if out.status.success() {
+                return EncoderApi::Vaapi;
+            }
+        }
+        // 3. Check for Intel QSV
+        if let Ok(out) = Command::new("gst-inspect-1.0").arg("qsvh264enc").output() {
+            if out.status.success() {
+                return EncoderApi::Qsv;
+            }
+        }
+        // 4. Fallback to CPU Software x264
+        EncoderApi::Software
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "nvenc" | "nvidia" => EncoderApi::Nvenc,
+            "vaapi" | "amd" | "intel" => EncoderApi::Vaapi,
+            "qsv" | "quicksync" => EncoderApi::Qsv,
+            "software" | "cpu" | "x264" => EncoderApi::Software,
+            _ => Self::detect(),
+        }
+    }
+}
+
+fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
     for _ in 0..10 {
         if let Ok(output) = Command::new("pw-dump").output() {
             if let Ok(dump) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
                 if let Some(items) = dump.as_array() {
-                    let mut hdmi_out_port = None;
+                    let mut out_port = None;
 
                     for item in items {
                         if item["type"] == "PipeWire:Interface:Port" {
                             let props = &item["info"]["props"];
                             if props["node.id"] == node_id && props["port.direction"] == "out" {
-                                hdmi_out_port = item["id"].as_u64();
+                                out_port = item["id"].as_u64();
                                 break;
                             }
                         }
                     }
 
-                    if let Some(out_port) = hdmi_out_port {
-                        println!("\x1b[1;34m[*] Found HDMI-1 Output Port: {}\x1b[0m", out_port);
+                    if let Some(p) = out_port {
+                        println!("\x1b[1;34m[*] Found {} Output Port: {}\x1b[0m", monitor_name, p);
                         let status = Command::new("pw-link")
-                            .arg(out_port.to_string())
+                            .arg(p.to_string())
                             .arg("ext-hdmi-sender:input_1")
                             .status();
 
                         if let Ok(s) = status {
                             if s.success() {
-                                println!("\x1b[1;32m[+] Successfully linked HDMI-1 (port {}) -> ext-hdmi-sender!\x1b[0m", out_port);
+                                println!("\x1b[1;32m[+] Successfully linked {} (port {}) -> ext-hdmi-sender!\x1b[0m", monitor_name, p);
                                 return;
                             }
                         }
@@ -242,30 +298,92 @@ fn link_hdmi_port_to_sender(node_id: u32) {
         thread::sleep(Duration::from_millis(300));
     }
 
-    eprintln!("\x1b[1;31m[!] Warning: Failed to link HDMI-1 port automatically after 3s.\x1b[0m");
+    eprintln!("\x1b[1;31m[!] Warning: Failed to link {} port automatically after 3s.\x1b[0m", monitor_name);
 }
 
-fn spawn_streamer(target_ip: &str, target_port: u16, bitrate: u32) -> Result<Child, std::io::Error> {
-    Command::new("gst-launch-1.0")
-        .arg("-v")
-        .arg("pipewiresrc")
+fn spawn_streamer(
+    target_ip: &str,
+    target_port: u16,
+    bitrate: u32,
+    encoder: EncoderApi,
+) -> Result<Child, std::io::Error> {
+    let mut cmd = Command::new("gst-launch-1.0");
+    cmd.arg("-v");
+
+    // 1. PipeWire source with strict minimal buffering to eliminate lag
+    cmd.arg("pipewiresrc")
         .arg("autoconnect=false")
         .arg("stream-properties=props,node.name=ext-hdmi-sender")
         .arg("do-timestamp=true")
-        .arg("!")
-        .arg("videoconvert")
-        .arg("!")
-        .arg("video/x-raw,format=NV12")
-        .arg("!")
-        .arg("vapostproc")
-        .arg("!")
-        .arg("vah264enc")
-        .arg(format!("bitrate={}", bitrate))
-        .arg("rate-control=cbr")
-        .arg("b-frames=0")
-        .arg("ref-frames=1")
-        .arg("!")
-        .arg("h264parse")
+        .arg("min-buffers=2")
+        .arg("max-buffers=2")
+        .arg("always-copy=false")
+        .arg("!");
+
+    // 2. Hardware / Software encoder selection
+    match encoder {
+        EncoderApi::Vaapi => {
+            println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline...\x1b[0m");
+            cmd.arg("vapostproc")
+                .arg("!")
+                .arg("vah264enc")
+                .arg(format!("bitrate={}", bitrate))
+                .arg("rate-control=cbr")
+                .arg("target-usage=7")      // AMD/Intel ultra-fast lowest latency mode
+                .arg("b-frames=0")
+                .arg("ref-frames=1")
+                .arg("cabac=false")         // CAVLC reduces decode complexity on Pi Zero
+                .arg("key-int-max=30")      // IDR every 0.5s for fast recovery
+                .arg("!");
+        }
+        EncoderApi::Nvenc => {
+            println!("\x1b[1;36m[+] Initializing NVIDIA NVENC Zero-Latency GPU Pipeline...\x1b[0m");
+            cmd.arg("videoconvert")
+                .arg("!")
+                .arg("video/x-raw,format=NV12")
+                .arg("!")
+                .arg("nvh264enc")
+                .arg(format!("bitrate={}", bitrate))
+                .arg("preset=low-latency-hq")
+                .arg("rc-mode=cbr-ld-hq")
+                .arg("zerolatency=true")
+                .arg("gop-size=30")
+                .arg("b-frames=0")
+                .arg("!");
+        }
+        EncoderApi::Qsv => {
+            println!("\x1b[1;36m[+] Initializing Intel QuickSync (QSV) GPU Pipeline...\x1b[0m");
+            cmd.arg("videoconvert")
+                .arg("!")
+                .arg("video/x-raw,format=NV12")
+                .arg("!")
+                .arg("qsvh264enc")
+                .arg(format!("bitrate={}", bitrate))
+                .arg("rate-control=cbr")
+                .arg("target-usage=7")
+                .arg("b-frames=0")
+                .arg("gop-size=30")
+                .arg("!");
+        }
+        EncoderApi::Software => {
+            println!("\x1b[1;36m[+] Initializing CPU Software x264 (Zero-Latency Ultrafast)...\x1b[0m");
+            cmd.arg("videoconvert")
+                .arg("!")
+                .arg("video/x-raw,format=I420")
+                .arg("!")
+                .arg("x264enc")
+                .arg(format!("bitrate={}", bitrate))
+                .arg("tune=zerolatency")
+                .arg("speed-preset=ultrafast")
+                .arg("b-frames=0")
+                .arg("ref-frames=1")
+                .arg("key-int-max=30")
+                .arg("!");
+        }
+    }
+
+    // 3. RTP packetization and high-throughput UDP socket transmission
+    cmd.arg("h264parse")
         .arg("!")
         .arg("rtph264pay")
         .arg("config-interval=1")
@@ -274,6 +392,7 @@ fn spawn_streamer(target_ip: &str, target_port: u16, bitrate: u32) -> Result<Chi
         .arg("udpsink")
         .arg(format!("host={}", target_ip))
         .arg(format!("port={}", target_port))
+        .arg("buffer-size=524288")
         .arg("sync=false")
         .spawn()
 }
@@ -311,17 +430,33 @@ fn ensure_gnome_displays() {
         ])
         .output();
 
-    if let Ok(out) = check {
+    let (serial, is_configured) = if let Ok(out) = check {
         let stdout = String::from_utf8_lossy(&out.stdout);
-        if stdout.contains("HDMI-1") {
-            println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1.\x1b[0m");
-            return;
-        }
+        let serial = if let Some(start) = stdout.find("(uint32 ") {
+            let rest = &stdout[start + 8..];
+            rest.find(',').and_then(|end| rest[..end].trim().parse::<u32>().ok()).unwrap_or(1)
+        } else {
+            1
+        };
+
+        // Check if HDMI-1 is in the active logical monitors array (3rd tuple element)
+        let is_logical = stdout.contains("('HDMI-1', 'LRX'") || stdout.contains("[('HDMI-1'");
+        (serial, is_logical)
+    } else {
+        (1, false)
+    };
+
+    if is_configured {
+        println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1 in extended mode.\x1b[0m");
+        return;
     }
 
-    println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side)...\x1b[0m");
-    let apply_cmd = r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig 4 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{sv} {})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '1280x720@60.000', @a{sv} {})])]" "@a{sv} {}""#;
-    let _ = Command::new("bash").arg("-c").arg(apply_cmd).status();
+    println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side, serial={})...\x1b[0m", serial);
+    let apply_cmd = format!(
+        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '1280x720@60.000', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+        serial
+    );
+    let _ = Command::new("bash").arg("-c").arg(&apply_cmd).status();
     thread::sleep(Duration::from_millis(500));
 }
 
