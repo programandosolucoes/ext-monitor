@@ -86,12 +86,30 @@ ext-monitor/
 ./scripts/start.sh extend software
 ```
 
-### 4. Verificar Status do Sistema:
+### 4. Transmissão por Placa de Rede (Ethernet / Wi-Fi para Outros Raspberry Pis):
+O sistema funciona de forma transparente tanto pelo cabo Micro-USB (USB Gadget) quanto através da **placa de rede física (Ethernet) ou Wi-Fi**, permitindo usar **qualquer outro Raspberry Pi (Pi 3, Pi 4, Pi 5, Pi Zero 2 W)** como monitor de rede:
+
 ```bash
-./scripts/status.sh
+# Transmitir para um Pi na rede local (ex: Pi 4 via cabo de rede Ethernet):
+./scripts/start.sh extend auto 30 hud 192.168.15.150
+
+# Ou via variável de ambiente:
+TARGET_IP=192.168.15.150 ./scripts/start.sh extend auto 30 hud
+
+# Descobrir automaticamente os Raspberry Pis ativos na sua rede:
+./scripts/scan-pis.sh
 ```
 
-### 5. Parar a Transmissão:
+### 5. Verificar Status e Telemetria:
+```bash
+# Status da conexão local e processos:
+./scripts/status.sh
+
+# Painel de Telemetria e Diagnóstico em Tempo Real do Pi Zero:
+./scripts/hud-pi.sh
+```
+
+### 6. Parar a Transmissão:
 ```bash
 ./scripts/stop.sh
 ```
