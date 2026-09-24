@@ -28,11 +28,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args.get(4).map(|s| s.to_lowercase()).unwrap_or_else(|| "extend".to_string());
     let encoder_arg = args.get(5).map(|s| s.as_str()).unwrap_or("auto");
     let encoder = EncoderApi::from_str(encoder_arg);
+    let fps = args.get(6).and_then(|p| p.parse::<u32>().ok()).unwrap_or(60);
 
     println!("\x1b[1;34m[*] Target:\x1b[0m {}:{}", target_ip, target_port);
-    println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps (60 FPS CBR)", bitrate);
+    println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps ({} FPS CBR)", bitrate, fps);
     println!("\x1b[1;34m[*] Display Mode:\x1b[0m {} (options: 'extend' or 'clone')", mode);
     println!("\x1b[1;34m[*] Encoder Engine:\x1b[0m {:?} (arg: '{}')", encoder, encoder_arg);
+    println!("\x1b[1;34m[*] Target Framerate:\x1b[0m {} FPS", fps);
 
     let monitor_to_record = if mode == "clone" {
         "eDP-1"
@@ -160,8 +162,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\x1b[1;32m[+] PipeWire Node ID for {}:\x1b[0m {}", monitor_to_record, node_id);
 
         // Spawn GStreamer pipeline with autoconnect=false
-        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline...\x1b[0m", encoder);
-        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder) {
+        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS)...\x1b[0m", encoder, fps);
+        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -176,7 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Find the exact output port for node_id and link it to ext-hdmi-sender
         link_monitor_port_to_sender(node_id, monitor_to_record);
 
-        println!("\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at 60 FPS!\x1b[0m", monitor_to_record);
+        println!("\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at {} FPS!\x1b[0m", monitor_to_record, fps);
 
         // Supervise streaming process
         while running.load(Ordering::SeqCst) {
@@ -306,6 +308,7 @@ fn spawn_streamer(
     target_port: u16,
     bitrate: u32,
     encoder: EncoderApi,
+    fps: u32,
 ) -> Result<Child, std::io::Error> {
     let mut cmd = Command::new("gst-launch-1.0");
     cmd.arg("-v");
@@ -320,7 +323,16 @@ fn spawn_streamer(
         .arg("always-copy=false")
         .arg("!");
 
-    // 2. Hardware / Software encoder selection
+    // 2. Framerate decimation if requested < 60 FPS (video cassete / 30 / 45 FPS)
+    if fps < 60 {
+        cmd.arg("videorate")
+            .arg("drop-only=true")
+            .arg("!")
+            .arg(format!("video/x-raw,framerate={}/1", fps))
+            .arg("!");
+    }
+
+    // 3. Hardware / Software encoder selection
     match encoder {
         EncoderApi::Vaapi => {
             println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline...\x1b[0m");
@@ -333,7 +345,8 @@ fn spawn_streamer(
                 .arg("b-frames=0")
                 .arg("ref-frames=1")
                 .arg("cabac=false")         // CAVLC reduces decode complexity on Pi Zero
-                .arg("key-int-max=30")      // IDR every 0.5s for fast recovery
+                .arg("num-slices=2")        // Slices for sub-frame latency (Chiaki-ng style)
+                .arg(format!("key-int-max={}", fps.max(10) / 2)) // IDR every 0.5s for fast recovery
                 .arg("!");
         }
         EncoderApi::Nvenc => {
