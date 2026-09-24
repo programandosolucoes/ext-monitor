@@ -29,12 +29,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let encoder_arg = args.get(5).map(|s| s.as_str()).unwrap_or("auto");
     let encoder = EncoderApi::from_str(encoder_arg);
     let fps = args.get(6).and_then(|p| p.parse::<u32>().ok()).unwrap_or(60);
+    let hud = args.iter().any(|a| {
+        let s = a.to_lowercase();
+        s == "hud" || s == "--hud" || s == "true" || s == "1"
+    });
 
     println!("\x1b[1;34m[*] Target:\x1b[0m {}:{}", target_ip, target_port);
     println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps ({} FPS CBR)", bitrate, fps);
     println!("\x1b[1;34m[*] Display Mode:\x1b[0m {} (options: 'extend' or 'clone')", mode);
     println!("\x1b[1;34m[*] Encoder Engine:\x1b[0m {:?} (arg: '{}')", encoder, encoder_arg);
     println!("\x1b[1;34m[*] Target Framerate:\x1b[0m {} FPS", fps);
+    println!("\x1b[1;34m[*] Diagnostic HUD:\x1b[0m {}", if hud { "\x1b[1;32mENABLED (On-Screen Display)\x1b[0m" } else { "\x1b[1;30mDISABLED\x1b[0m" });
 
     let monitor_to_record = if mode == "clone" {
         "eDP-1"
@@ -162,8 +167,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\x1b[1;32m[+] PipeWire Node ID for {}:\x1b[0m {}", monitor_to_record, node_id);
 
         // Spawn GStreamer pipeline with autoconnect=false
-        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS)...\x1b[0m", encoder, fps);
-        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps) {
+        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS, HUD: {})...\x1b[0m", encoder, fps, hud);
+        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -309,6 +314,7 @@ fn spawn_streamer(
     bitrate: u32,
     encoder: EncoderApi,
     fps: u32,
+    hud: bool,
 ) -> Result<Child, std::io::Error> {
     let mut cmd = Command::new("gst-launch-1.0");
     cmd.arg("-v");
@@ -332,7 +338,42 @@ fn spawn_streamer(
             .arg("!");
     }
 
-    // 3. Hardware / Software encoder selection
+    // 3. Diagnostic HUD (On-Screen Display) if requested
+    if hud {
+        println!("\x1b[1;35m[+] Injecting On-Screen Multi-Line Diagnostic HUD with Glass Transparency...\x1b[0m");
+        let hud_text = format!(
+            "text=\"[ EXT-MONITOR HUD ]\nGPU: {:?}\nSpeed: {} FPS\nBitrate: {} kbps\nLink: 192.168.7.2:5000\nDecoder: VideoCore IV KMS\"",
+            encoder, fps, bitrate
+        );
+        cmd.arg("textoverlay")
+            .arg(hud_text)
+            .arg("valignment=top")
+            .arg("halignment=right")
+            .arg("line-alignment=left")
+            .arg("font-desc=\"Monospace Bold 10\"")
+            .arg("color=0xFF00FF66")
+            .arg("outline-color=0x80000000")
+            .arg("draw-outline=true")
+            .arg("shaded-background=true")
+            .arg("shading-value=60")
+            .arg("xpad=14")
+            .arg("ypad=12")
+            .arg("!")
+            .arg("timeoverlay")
+            .arg("valignment=top")
+            .arg("halignment=left")
+            .arg("font-desc=\"Monospace Bold 11\"")
+            .arg("color=0xFFFFFFFF")
+            .arg("outline-color=0x80000000")
+            .arg("draw-outline=true")
+            .arg("shaded-background=true")
+            .arg("shading-value=60")
+            .arg("xpad=14")
+            .arg("ypad=12")
+            .arg("!");
+    }
+
+    // 4. Hardware / Software encoder selection
     match encoder {
         EncoderApi::Vaapi => {
             println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline...\x1b[0m");
