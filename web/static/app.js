@@ -184,14 +184,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnTriggerHud.textContent = '✓ HUD Ativo por 60s!';
                 setTimeout(() => {
                     btnTriggerHud.disabled = false;
-                    btnTriggerHud.textContent = '👁️ Reativar HUD na Tela (60 segundos)';
+                    btnTriggerHud.textContent = '👁️ Exibir HUD (60s)';
                 }, 3000);
             }
         } catch (err) {
             btnTriggerHud.disabled = false;
-            btnTriggerHud.textContent = '👁️ Reativar HUD na Tela (60 segundos)';
+            btnTriggerHud.textContent = '👁️ Exibir HUD (60s)';
         }
     });
+
+    // Hide HUD immediately on display
+    const btnHideHud = document.getElementById('btn-hide-hud');
+    if (btnHideHud) {
+        btnHideHud.addEventListener('click', async () => {
+            btnHideHud.disabled = true;
+            btnHideHud.textContent = '⏳ Desligando...';
+            try {
+                const res = await fetch('/api/hud/hide', { method: 'POST' });
+                if (res.ok) {
+                    btnHideHud.textContent = '✓ HUD Desligado!';
+                    setTimeout(() => {
+                        btnHideHud.disabled = false;
+                        btnHideHud.textContent = '✕ Desligar HUD';
+                    }, 2500);
+                }
+            } catch (err) {
+                btnHideHud.disabled = false;
+                btnHideHud.textContent = '✕ Desligar HUD';
+            }
+        });
+    }
+
 
     // Apply Config Button (Hot-Apply)
     btnApply.addEventListener('click', async () => {
