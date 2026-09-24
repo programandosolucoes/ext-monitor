@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi Zero Second Monitor Auto-Connector (UDEV Triggered)
+After=graphical-session.target pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/carlos/ide/ext-monitor
+ExecStart=/home/carlos/ide/ext-monitor/scripts/autoconnect.sh
+ExecStop=/usr/bin/pkill -f ext-sender
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical-session.target

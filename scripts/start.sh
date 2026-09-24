@@ -4,6 +4,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Auto-inclusão da automação udev / watcher na primeira execução (com ou sem sudo)
+"$SCRIPT_DIR/setup-autoconnect.sh" 2>/dev/null || true
+
 MODE="${1:-extend}"
 ENCODER="${2:-auto}"
 FPS="${3:-30}"

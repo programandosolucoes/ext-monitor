@@ -1,0 +1,9 @@
+# ==============================================================================
+# 99-ext-monitor.rules
+# Dispara o auto-connector quando o Raspberry Pi Zero (USB Gadget) for conectado
+# ID 1d6b:0104 (Linux Foundation Multifunction Composite Gadget)
+# ==============================================================================
+
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d6b", ATTR{idProduct}=="0104", TAG+="systemd", RUN+="/usr/bin/systemctl --no-block --machine=carlos@.host --user restart ext-monitor-autoconnect.service"
+
+ACTION=="remove", SUBSYSTEM=="usb", ENV{PRODUCT}=="1d6b/104/*", RUN+="/usr/bin/systemctl --no-block --machine=carlos@.host --user stop ext-monitor-autoconnect.service"
