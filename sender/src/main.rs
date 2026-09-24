@@ -329,10 +329,12 @@ fn spawn_streamer(
         .arg("always-copy=false")
         .arg("!");
 
-    // 2. Framerate decimation if requested < 60 FPS (video cassete / 30 / 45 FPS)
+    // 2. Framerate decimation if requested < 60 FPS with maximum preference for latest frames
     if fps < 60 {
         cmd.arg("videorate")
             .arg("drop-only=true")
+            .arg("new-pref=1.0")
+            .arg("skip-to-first=true")
             .arg("!")
             .arg(format!("video/x-raw,framerate={}/1", fps))
             .arg("!");
@@ -373,21 +375,34 @@ fn spawn_streamer(
             .arg("!");
     }
 
-    // 4. Hardware / Software encoder selection
+    // 4. Zero-Latency Pre-Encoder Queue: drop stale frames on the fly (Sunshine style)
+    cmd.arg("queue")
+        .arg("max-size-buffers=1")
+        .arg("max-size-bytes=0")
+        .arg("max-size-time=0")
+        .arg("leaky=downstream")
+        .arg("!");
+
+    // 5. Hardware / Software encoder selection
     match encoder {
         EncoderApi::Vaapi => {
-            println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline...\x1b[0m");
+            println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline (Constrained Baseline, Smooth MBBRC Full-Motion)...\x1b[0m");
             cmd.arg("vapostproc")
                 .arg("!")
                 .arg("vah264enc")
                 .arg(format!("bitrate={}", bitrate))
                 .arg("rate-control=cbr")
-                .arg("target-usage=7")      // AMD/Intel ultra-fast lowest latency mode
+                .arg("mbbrc=enabled")               // Controle macrobloco a macrobloco (evita picos ao mover telas inteiras)
+                .arg("target-usage=7")              // AMD ultra-fast lowest latency mode
                 .arg("b-frames=0")
                 .arg("ref-frames=1")
-                .arg("cabac=false")         // CAVLC reduces decode complexity on Pi Zero
-                .arg("num-slices=2")        // Slices for sub-frame latency (Chiaki-ng style)
-                .arg(format!("key-int-max={}", fps.max(10) / 2)) // IDR every 0.5s for fast recovery
+                .arg("aud=true")                    // Access Unit delimiter para integridade de frames
+                .arg("cabac=false")                 // CAVLC simple entropy coding (super leve para o Pi Zero)
+                .arg("dct8x8=false")                // Simple 4x4 transforms
+                .arg("num-slices=1")                // 1 fatia inteira atômica (elimina cortes/rasgos horizontais na tela)
+                .arg(format!("key-int-max={}", fps.max(15))) // Full Refresh (IDR) a cada 1.0s (estabilidade total sem micro-congelamento)
+                .arg("!")
+                .arg("video/x-h264,profile=constrained-baseline") // Super optimized low-overhead profile
                 .arg("!");
         }
         EncoderApi::Nvenc => {
@@ -436,8 +451,14 @@ fn spawn_streamer(
         }
     }
 
-    // 3. RTP packetization and high-throughput UDP socket transmission
+    // 6. Post-Encoder Leaky Queue & RTP UDP Transmission (Zero-Buffer-Bloat)
     cmd.arg("h264parse")
+        .arg("!")
+        .arg("queue")
+        .arg("max-size-buffers=1")
+        .arg("max-size-bytes=0")
+        .arg("max-size-time=0")
+        .arg("leaky=downstream")
         .arg("!")
         .arg("rtph264pay")
         .arg("config-interval=1")
@@ -446,7 +467,7 @@ fn spawn_streamer(
         .arg("udpsink")
         .arg(format!("host={}", target_ip))
         .arg(format!("port={}", target_port))
-        .arg("buffer-size=524288")
+        .arg("buffer-size=262144")
         .arg("sync=false")
         .spawn()
 }

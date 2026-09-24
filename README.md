@@ -17,21 +17,29 @@ Motor de alta performance em **Rust** para transformar um **Raspberry Pi Zero W*
   │     └── Zero-Copy DMA-BUF PipeWire stream
   └── Rust `ext-sender`:
         ├── Detecção automática de GPU / Encoder CLI (--encoder auto|vaapi|nvenc|qsv|software)
-        │     ├── AMD / Intel: VA-API Direct DMA-BUF -> `vapostproc` -> `vah264enc` (target-usage=7, cabac=false)
+        │     ├── AMD / Intel: VA-API Direct DMA-BUF -> `vapostproc` -> `vah264enc` (target-usage=7, cabac=false, constrained-baseline)
         │     ├── NVIDIA: NVENC Zero-Latency -> `nvh264enc` (preset=low-latency-hq, zerolatency=true)
         │     ├── Intel: QuickSync -> `qsvh264enc` (rate-control=cbr, target-usage=7)
         │     └── Software Fallback: CPU -> `x264enc` (tune=zerolatency, speed-preset=ultrafast)
-        └── Transmissão UDP de alta vazão via cabo Micro-USB para 192.168.7.2:5000 (0.4ms RTT)
+        ├── Drop-on-Late Multi-Camada (Corte por Latência Estilo Moonlight/Sunshine):
+        │     ├── Fila pré-encoder (`queue max-size-buffers=1 leaky=downstream`): descarta frames brutos defasados antes da GPU
+        │     ├── Decimação com `new-pref=1.0`: prioriza sempre o quadro mais recente da composição
+        │     └── Fila pós-encoder (`queue max-size-buffers=1 leaky=downstream`): elimina buffer bloat de rede
+        ├── Refresh Completo Periódico (Anti-Rasgo / Anti-Corte):
+        │     ├── `key-int-max=15` (IDR a cada 0.5s): garante recuperação instantânea e limpa artefatos
+        │     └── `num-slices=1`: fatia única atômica, eliminando emendas e cortes horizontais na tela
+        └── Transmissão UDP otimizada via cabo Micro-USB ou Placa de Rede para <TARGET_IP>:5000
               │
-              ▼ [ Cabo Micro-USB 2.0 / USB Gadget RNDIS & CDC-ACM ]
+              ▼ [ Cabo Micro-USB 2.0 / Wi-Fi / Ethernet ]
               │
 [ RECEIVER (Raspberry Pi Zero W / BCM2835 VideoCore IV) ]
   └── Rust `ext-receiver` (Daemon systemd `/usr/local/bin/ext-receiver 5000`):
-        ├── Recebe os pacotes UDP com buffer de soquete de 1MB (`udpsrc`)
-        ├── Decodifica direto na GPU Broadcom via `/dev/video10` (`v4l2h264dec` em DMA-BUF)
-        ├── Consumo de CPU no Pi Zero: ~0% (Hardware puro, CPU 100% livre)
-        └── Apresenta no HDMI via KMS/DRM com Double-Buffering (`kmssink` sync=false):
-              └── Sincronizado no pulso VBLANK: ZERO FLICK, ZERO TEARING!
+        ├── Recebe os pacotes UDP com buffer de soquete anti-burst de 256KB (`udpsrc`)
+        ├── Depayloader e decodificação na GPU Broadcom via `/dev/video10` (`v4l2h264dec` em DMA-BUF)
+        ├── Fila de Corte por Latência pós-decodificação (`queue max-size-buffers=1 leaky=downstream`):
+        │     └── Descarta quadros decodificados antigos se um mais novo já estiver pronto
+        └── Apresenta no HDMI via KMS/DRM com Double-Buffering (`kmssink` sync=false skip-vsync=true):
+              └── Apresentação imediata sem esperas, saltando direto para o instante atual!
 ```
 
 ---
