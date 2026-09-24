@@ -342,10 +342,10 @@ fn spawn_streamer(
 
     // 3. Diagnostic HUD (On-Screen Display) if requested
     if hud {
-        println!("\x1b[1;35m[+] Injecting On-Screen Multi-Line Diagnostic HUD with Glass Transparency...\x1b[0m");
+        println!("\x1b[1;35m[+] Injecting Advanced On-Screen Diagnostic Telemetry HUD with Glass Transparency...\x1b[0m");
         let hud_text = format!(
-            "text=\"[ EXT-MONITOR HUD ]\nGPU: {:?}\nSpeed: {} FPS\nBitrate: {} kbps\nLink: 192.168.7.2:5000\nDecoder: VideoCore IV KMS\"",
-            encoder, fps, bitrate
+            "text=\"[ EXT-MONITOR TELEMETRY ]\nPanel:  1600x900@59.95Hz (Native 1:1)\nStream: {} FPS | Drop-on-Late (3x LIFO)\nGPU:    AMD Radeon (VA-API DMA-BUF)\nCodec:  H.264 Baseline (CAVLC / 1 Slice)\nRate:   VBR Adaptativo ({}k cap / 75% avg)\nMBBRC:  Ativo (Anti-Spike Macrobloco)\nSync:   IDR Refresh 1.0s ({} frames)\nLink:   {}:{} (UDP/RTP)\nSink:   VideoCore IV KMS (skip-vsync: ON)\"",
+            fps, bitrate, fps, target_ip, target_port
         );
         cmd.arg("textoverlay")
             .arg(hud_text)
@@ -357,19 +357,33 @@ fn spawn_streamer(
             .arg("outline-color=0x80000000")
             .arg("draw-outline=true")
             .arg("shaded-background=true")
-            .arg("shading-value=60")
+            .arg("shading-value=65")
+            .arg("xpad=14")
+            .arg("ypad=12")
+            .arg("!")
+            .arg("clockoverlay")
+            .arg("time-format=\"%H:%M:%S\"")
+            .arg("valignment=top")
+            .arg("halignment=left")
+            .arg("font-desc=\"Monospace Bold 11\"")
+            .arg("color=0xFF00E5FF")
+            .arg("outline-color=0x80000000")
+            .arg("draw-outline=true")
+            .arg("shaded-background=true")
+            .arg("shading-value=65")
             .arg("xpad=14")
             .arg("ypad=12")
             .arg("!")
             .arg("timeoverlay")
             .arg("valignment=top")
             .arg("halignment=left")
-            .arg("font-desc=\"Monospace Bold 11\"")
+            .arg("deltay=28")
+            .arg("font-desc=\"Monospace Bold 10\"")
             .arg("color=0xFFFFFFFF")
             .arg("outline-color=0x80000000")
             .arg("draw-outline=true")
             .arg("shaded-background=true")
-            .arg("shading-value=60")
+            .arg("shading-value=65")
             .arg("xpad=14")
             .arg("ypad=12")
             .arg("!");
@@ -386,20 +400,21 @@ fn spawn_streamer(
     // 5. Hardware / Software encoder selection
     match encoder {
         EncoderApi::Vaapi => {
-            println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline (Constrained Baseline, Smooth MBBRC Full-Motion)...\x1b[0m");
+            println!("\x1b[1;36m[+] Initializing VA-API (AMD/Intel) Zero-Copy Direct GPU Pipeline (Adaptive VBR, Smooth MBBRC Full-Motion)...\x1b[0m");
             cmd.arg("vapostproc")
                 .arg("!")
                 .arg("vah264enc")
                 .arg(format!("bitrate={}", bitrate))
-                .arg("rate-control=cbr")
-                .arg("mbbrc=enabled")               // Controle macrobloco a macrobloco (evita picos ao mover telas inteiras)
-                .arg("target-usage=7")              // AMD ultra-fast lowest latency mode
+                .arg("rate-control=vbr")             // Bitrate Adaptativo (Chiaki / Sunshine style)
+                .arg("target-percentage=75")         // 75% em média, escala até 100% sob movimento
+                .arg("mbbrc=enabled")                // Controle macrobloco a macrobloco (evita picos ao mover telas inteiras)
+                .arg("target-usage=7")               // AMD ultra-fast lowest latency mode
                 .arg("b-frames=0")
                 .arg("ref-frames=1")
-                .arg("aud=true")                    // Access Unit delimiter para integridade de frames
-                .arg("cabac=false")                 // CAVLC simple entropy coding (super leve para o Pi Zero)
-                .arg("dct8x8=false")                // Simple 4x4 transforms
-                .arg("num-slices=1")                // 1 fatia inteira atômica (elimina cortes/rasgos horizontais na tela)
+                .arg("aud=true")                     // Access Unit delimiter para integridade de frames
+                .arg("cabac=false")                  // CAVLC simple entropy coding (super leve para o Pi Zero)
+                .arg("dct8x8=false")                 // Simple 4x4 transforms
+                .arg("num-slices=1")                 // 1 fatia inteira atômica (elimina cortes/rasgos horizontais na tela)
                 .arg(format!("key-int-max={}", fps.max(15))) // Full Refresh (IDR) a cada 1.0s (estabilidade total sem micro-congelamento)
                 .arg("!")
                 .arg("video/x-h264,profile=constrained-baseline") // Super optimized low-overhead profile
