@@ -268,6 +268,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 hud_showing = true;
                                 hud_hide_at = Some(Instant::now() + Duration::from_secs(60));
                                 restart_pipeline = true;
+                            } else if action == "hide_hud" || action == "kill_hud" {
+                                println!("\x1b[1;33m[*] Comando Web: Ocultando HUD imediatamente a pedido do usuário!\x1b[0m");
+                                hud_showing = false;
+                                hud_hide_at = None;
+                                restart_pipeline = true;
                             }
                         }
                         let new_fps_opt = v.get("fps").and_then(|x| x.as_u64()).map(|x| x as u32);

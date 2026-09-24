@@ -439,6 +439,26 @@ input[type="range"]::-webkit-slider-thumb:hover {
     box-shadow: 0 0 14px rgba(179, 136, 255, 0.35);
 }
 
+.btn-hud-hide {
+    background: rgba(255, 68, 68, 0.12);
+    border: 1px solid rgba(255, 68, 68, 0.35);
+    color: #ff6b6b;
+    padding: 0.65rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-hud-hide:hover {
+    background: rgba(255, 68, 68, 0.25);
+    border-color: #ff4444;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 0 12px rgba(255, 68, 68, 0.3);
+}
+
 .toggle-wrapper {
     display: flex;
     align-items: center;

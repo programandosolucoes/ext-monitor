@@ -238,6 +238,18 @@ class WebControlHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"success": True, "hud_visible": True, "duration": 60}).encode("utf-8"))
             return
 
+        elif parsed.path == "/api/hud/hide":
+            CURRENT_CONFIG["hud_visible"] = False
+            save_config(CURRENT_CONFIG)
+            notify_control_change({"action": "hide_hud"})
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": True, "hud_visible": False}).encode("utf-8"))
+            return
+
         self.send_response(404)
         self.end_headers()
 
