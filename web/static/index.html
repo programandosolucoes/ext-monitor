@@ -110,24 +110,39 @@
 
                 <div class="control-group">
                     <label class="group-label">Taxa de Quadros (Framerate):</label>
-                    <div class="btn-group" id="fps-group">
-                        <button type="button" class="btn-select active" data-fps="12">12 FPS <span class="tag">Econômico</span></button>
-                        <button type="button" class="btn-select" data-fps="15">15 FPS</button>
-                        <button type="button" class="btn-select" data-fps="24">24 FPS</button>
-                        <button type="button" class="btn-select" data-fps="30">30 FPS <span class="tag">Fluido</span></button>
-                        <button type="button" class="btn-select" data-fps="60">60 FPS</button>
+                    <div class="btn-grid-fps" id="fps-group">
+                        <button type="button" class="btn-select active" data-fps="12">
+                            <strong>12 FPS</strong>
+                            <span class="tag">Econômico</span>
+                        </button>
+                        <button type="button" class="btn-select" data-fps="15">
+                            <strong>15 FPS</strong>
+                            <span class="tag">Leve</span>
+                        </button>
+                        <button type="button" class="btn-select" data-fps="24">
+                            <strong>24 FPS</strong>
+                            <span class="tag">Padrão</span>
+                        </button>
+                        <button type="button" class="btn-select" data-fps="30">
+                            <strong>30 FPS</strong>
+                            <span class="tag">Fluido</span>
+                        </button>
+                        <button type="button" class="btn-select" data-fps="60">
+                            <strong>60 FPS</strong>
+                            <span class="tag">Máximo</span>
+                        </button>
                     </div>
                 </div>
 
                 <div class="control-group">
                     <label class="group-label">Perfil de Cores & Quantização:</label>
-                    <div class="btn-group" id="color-group">
+                    <div class="btn-grid-colors" id="color-group">
                         <button type="button" class="btn-select" data-color="truecolor">
                             <strong>24-bit TrueColor</strong>
                             <small>Fidelidade total de cores</small>
                         </button>
                         <button type="button" class="btn-select active" data-color="256">
-                            <strong>Modo 256 Cores (TeamViewer)</strong>
+                            <strong>256 Cores (Otimizado)</strong>
                             <small>Coarse QP 30-44 • Ultra Leve</small>
                         </button>
                         <button type="button" class="btn-select" data-color="gray">
@@ -140,12 +155,12 @@
                 <div class="control-group">
                     <div class="slider-header">
                         <label class="group-label" for="bitrate-slider">Bitrate Teto (Cap):</label>
-                        <span class="slider-val" id="bitrate-val">1200 kbps (Ultra Realtime)</span>
+                        <span class="slider-val" id="bitrate-val">1000 kbps (Ultra Realtime)</span>
                     </div>
-                    <input type="range" id="bitrate-slider" min="400" max="6000" step="100" value="1200">
+                    <input type="range" id="bitrate-slider" min="150" max="6000" step="50" value="1000">
                     <div class="slider-hints">
-                        <span>400 kbps (Sub-15ms)</span>
-                        <span>1200 kbps (Recomendado)</span>
+                        <span>150 kbps (Extremo)</span>
+                        <span>1000 kbps (Realtime)</span>
                         <span>6000 kbps (Máx)</span>
                     </div>
                 </div>
