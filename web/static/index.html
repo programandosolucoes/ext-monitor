@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Zero GPU Display Engine • Painel de Controle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glow-bg"></div>
+    
+    <header class="navbar">
+        <div class="brand">
+            <div class="logo-icon">
+                <span class="pulse-ring"></span>
+                <span class="dot"></span>
+            </div>
+            <div class="brand-text">
+                <h1>Pi Zero GPU Display Engine</h1>
+                <p>Extended Monitor Controller & Hardware Telemetry</p>
+            </div>
+        </div>
+        <div class="header-badges">
+            <span class="badge badge-resolution">1600×900 @ 59.95Hz (Nativo)</span>
+            <span class="badge badge-status" id="badge-status">
+                <span class="status-indicator"></span> CONECTADO
+            </span>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Live Hardware Telemetry Cards -->
+        <section class="section-telemetry">
+            <div class="metric-card" id="card-vpu">
+                <div class="metric-header">
+                    <span class="metric-title">VPU Broadcom (VideoCore IV)</span>
+                    <span class="metric-chip chip-cyan">Hardware H.264</span>
+                </div>
+                <div class="metric-main">
+                    <span class="metric-value" id="val-vpu">500</span>
+                    <span class="metric-unit">MHz (+25% OC)</span>
+                </div>
+                <div class="metric-footer">
+                    <span>Throttling: <strong id="val-throttled">0x0 (OK)</strong></span>
+                    <span>V4L2 DMA-BUF M2M</span>
+                </div>
+            </div>
+
+            <div class="metric-card" id="card-cpu">
+                <div class="metric-header">
+                    <span class="metric-title">CPU ARM1176</span>
+                    <span class="metric-chip chip-emerald" id="chip-cpu">22% Carga</span>
+                </div>
+                <div class="metric-main">
+                    <span class="metric-value" id="val-cpu">22.2</span>
+                    <span class="metric-unit">%</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chart-cpu" width="220" height="40"></canvas>
+                </div>
+            </div>
+
+            <div class="metric-card" id="card-temp">
+                <div class="metric-header">
+                    <span class="metric-title">Temperatura SoC</span>
+                    <span class="metric-chip chip-green" id="chip-temp">Seguro</span>
+                </div>
+                <div class="metric-main">
+                    <span class="metric-value" id="val-temp">49.2</span>
+                    <span class="metric-unit">°C</span>
+                </div>
+                <div class="metric-footer">
+                    <div class="temp-bar">
+                        <div class="temp-fill" id="temp-fill" style="width: 58%;"></div>
+                    </div>
+                    <span>Teto térmico: 85°C</span>
+                </div>
+            </div>
+
+            <div class="metric-card" id="card-ram">
+                <div class="metric-header">
+                    <span class="metric-title">Memória RAM</span>
+                    <span class="metric-chip chip-purple" id="chip-ram">Estável</span>
+                </div>
+                <div class="metric-main">
+                    <span class="metric-value" id="val-ram-used">141</span>
+                    <span class="metric-unit">/ 363 MiB</span>
+                </div>
+                <div class="metric-footer">
+                    <span>Livre: <strong id="val-ram-free">222 MiB</strong></span>
+                    <span>Link RTT: <strong>0.34 ms</strong></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Configuration Grid -->
+        <section class="config-grid">
+            <!-- Left: Settings & Hot Apply -->
+            <div class="glass-card config-panel">
+                <div class="card-header">
+                    <div class="card-icon">⚡</div>
+                    <div>
+                        <h2>Configurações de Exibição & Protocolo</h2>
+                        <p>Altere os parâmetros e aplique a quente sem reiniciar o monitor</p>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label class="group-label">Taxa de Quadros (Framerate):</label>
+                    <div class="btn-group" id="fps-group">
+                        <button type="button" class="btn-select active" data-fps="12">12 FPS <span class="tag">Econômico</span></button>
+                        <button type="button" class="btn-select" data-fps="15">15 FPS</button>
+                        <button type="button" class="btn-select" data-fps="24">24 FPS</button>
+                        <button type="button" class="btn-select" data-fps="30">30 FPS <span class="tag">Fluido</span></button>
+                        <button type="button" class="btn-select" data-fps="60">60 FPS</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label class="group-label">Perfil de Cores & Quantização:</label>
+                    <div class="btn-group" id="color-group">
+                        <button type="button" class="btn-select" data-color="truecolor">
+                            <strong>24-bit TrueColor</strong>
+                            <small>Fidelidade total de cores</small>
+                        </button>
+                        <button type="button" class="btn-select active" data-color="256">
+                            <strong>Modo 256 Cores (TeamViewer)</strong>
+                            <small>Coarse QP 30-44 • Ultra Leve</small>
+                        </button>
+                        <button type="button" class="btn-select" data-color="gray">
+                            <strong>Grayscale (P&B)</strong>
+                            <small>Modo terminal sem croma</small>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="slider-header">
+                        <label class="group-label" for="bitrate-slider">Bitrate Teto (Cap):</label>
+                        <span class="slider-val" id="bitrate-val">2500 kbps (Auto)</span>
+                    </div>
+                    <input type="range" id="bitrate-slider" min="1000" max="10000" step="500" value="2500">
+                    <div class="slider-hints">
+                        <span>1000 kbps</span>
+                        <span>Auto (pelo FPS)</span>
+                        <span>10000 kbps</span>
+                    </div>
+                </div>
+
+                <div class="control-group hud-settings">
+                    <label class="group-label">On-Screen Diagnostic HUD (Na tela secundária):</label>
+                    <div class="hud-action-row">
+                        <button type="button" class="btn-hud-action" id="btn-trigger-hud">
+                            👁️ Reativar HUD na Tela (60 segundos)
+                        </button>
+                        <div class="toggle-wrapper">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="check-auto-hide" checked>
+                                <span class="slider round"></span>
+                            </label>
+                            <span class="toggle-label">Auto-hide após 1 minuto</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-actions">
+                    <button type="button" class="btn-primary" id="btn-apply-config">
+                        <span class="btn-icon">✓</span> Aplicar Configuração a Quente
+                    </button>
+                    <span class="apply-status" id="apply-status"></span>
+                </div>
+            </div>
+
+            <!-- Right: Interactive Connection Guide & One-Click Copy -->
+            <div class="glass-card guide-panel">
+                <div class="card-header">
+                    <div class="card-icon">🚀</div>
+                    <div>
+                        <h2>Comando de Conexão Rápida</h2>
+                        <p>Execute no terminal do seu PC para conectar a sua sessão</p>
+                    </div>
+                </div>
+
+                <div class="quick-steps">
+                    <div class="step-item">
+                        <span class="step-badge">1</span>
+                        <div>
+                            <strong>IP Estático no seu PC:</strong>
+                            <code>192.168.7.1</code> (Máscara 255.255.255.0)
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <span class="step-badge">2</span>
+                        <div>
+                            <strong>IP do Raspberry Pi:</strong>
+                            <code>192.168.7.2</code> (Porta UDP 5000)
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <span class="step-badge">3</span>
+                        <div>
+                            <strong>Comando Gerado para o seu Terminal:</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="code-box">
+                    <pre><code id="cmd-preview">./scripts/start.sh extend auto 12 hud 256</code></pre>
+                    <button type="button" class="btn-copy" id="btn-copy-cmd" title="Copiar comando">
+                        Copiar
+                    </button>
+                </div>
+
+                <div class="guide-footer">
+                    <div class="pill-info">
+                        💡 <strong>Dica Pro:</strong> Ao mudar qualquer opção na esquerda, o comando acima se atualiza sozinho e você pode copiar diretamente!
+                    </div>
+                    <div class="shortcut-actions">
+                        <button type="button" class="btn-secondary" id="btn-show-splash">
+                            🖼️ Exibir Tela de Boas-Vindas
+                        </button>
+                        <button type="button" class="btn-secondary" id="btn-restart-receiver">
+                            🔄 Reiniciar Receptor (ext-receiver)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>Pi Zero GPU Display Offload Architecture • Desenvolvido para Ubuntu 24.04 Wayland & Raspberry Pi OS Bookworm</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

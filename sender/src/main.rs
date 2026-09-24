@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::fs;
+use std::net::UdpSocket;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{env, thread};
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{OwnedObjectPath, Value};
@@ -45,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args.get(4).map(|s| s.to_lowercase()).unwrap_or_else(|| "extend".to_string());
     let encoder_arg = args.get(5).map(|s| s.as_str()).unwrap_or("auto");
     let encoder = EncoderApi::from_str(encoder_arg);
-    let fps = args.get(6).and_then(|p| p.parse::<u32>().ok()).unwrap_or(30);
+    let mut fps = args.get(6).and_then(|p| p.parse::<u32>().ok()).unwrap_or(30);
 
     // Auto-scale bitrate based on framerate if not explicitly set (or if 0 / 8000 default)
     let auto_bitrate = match fps {
@@ -55,18 +56,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         f if f >= 10 => 2500,
         _ => 1200,
     };
-    let bitrate = if raw_bitrate == 0 || raw_bitrate == 8000 {
+    let mut bitrate = if raw_bitrate == 0 || raw_bitrate == 8000 {
         auto_bitrate
     } else {
         raw_bitrate
     };
 
-    let hud = args.iter().any(|a| {
+    let hud_arg = args.iter().any(|a| {
         let s = a.to_lowercase();
         s == "hud" || s == "--hud" || s == "true" || s == "1"
     });
+    let mut hud_showing = hud_arg;
+    let mut hud_hide_at = if hud_arg {
+        Some(Instant::now() + Duration::from_secs(60))
+    } else {
+        None
+    };
 
-    let color_profile = if args.iter().any(|a| {
+    let mut color_profile = if args.iter().any(|a| {
         let s = a.to_lowercase();
         s == "256" || s == "--256" || s == "--colors=256" || s == "economy" || s == "--economy"
     }) {
@@ -86,7 +93,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;34m[*] Display Mode:\x1b[0m {} (options: 'extend' or 'clone')", mode);
     println!("\x1b[1;34m[*] Encoder Engine:\x1b[0m {:?} (arg: '{}')", encoder, encoder_arg);
     println!("\x1b[1;34m[*] Target Framerate:\x1b[0m {} FPS", fps);
-    println!("\x1b[1;34m[*] Diagnostic HUD:\x1b[0m {}", if hud { "\x1b[1;32mENABLED (On-Screen Display)\x1b[0m" } else { "\x1b[1;30mDISABLED\x1b[0m" });
+    println!("\x1b[1;34m[*] Diagnostic HUD:\x1b[0m {}", if hud_arg { "\x1b[1;32mENABLED (Auto-hide in 60s)\x1b[0m" } else { "\x1b[1;30mDISABLED\x1b[0m" });
+
+    // Open UDP control socket for Web Dashboard Hot-Apply
+    let ctrl_sock = UdpSocket::bind("0.0.0.0:5001").ok();
+    if let Some(ref s) = ctrl_sock {
+        let _ = s.set_nonblocking(true);
+        println!("\x1b[1;32m[+] Control Listener ativo na porta UDP 5001 (Web Hot-Apply & HUD Trigger)\x1b[0m");
+    }
 
     let monitor_to_record = if mode == "clone" {
         "eDP-1"
@@ -136,8 +150,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let session_path: OwnedObjectPath = session_reply.body().deserialize()?;
         println!("\x1b[1;32m[+] Mutter Session created:\x1b[0m {}", session_path);
 
-        // RecordMonitor for target monitor (HDMI-1 for extended, eDP-1 for clone)
-        // cursor-mode = 1: MUTTER_SCREEN_CAST_CURSOR_MODE_EMBEDDED (cursor drawn in framebuffer)
         let mut monitor_props: HashMap<&str, Value> = HashMap::new();
         monitor_props.insert("cursor-mode", Value::from(1u32));
 
@@ -159,7 +171,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let stream_path: OwnedObjectPath = stream_reply.body().deserialize()?;
         println!("\x1b[1;32m[+] {} ScreenCast Stream created:\x1b[0m {}", monitor_to_record, stream_path);
 
-        // Setup signal listener for PipeWireStreamAdded
         let stream_proxy = match Proxy::new(
             &dbus_conn,
             "org.gnome.Mutter.ScreenCast",
@@ -214,8 +225,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\x1b[1;32m[+] PipeWire Node ID for {}:\x1b[0m {}", monitor_to_record, node_id);
 
         // Spawn GStreamer pipeline with autoconnect=false
-        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS, HUD: {}, Color: {:?})...\x1b[0m", encoder, fps, hud, color_profile);
-        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud, color_profile) {
+        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS, HUD: {}, Color: {:?})...\x1b[0m", encoder, fps, hud_showing, color_profile);
+        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -232,18 +243,91 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at {} FPS ({})!\x1b[0m", monitor_to_record, fps, color_profile.name());
 
-        // Supervise streaming process
+        // Supervise streaming process & listen for Web Hot-Apply changes
         while running.load(Ordering::SeqCst) {
+            let mut restart_pipeline = false;
+
+            // 1. Check if HUD 60s timeout expired (auto-hide)
+            if let Some(hide_at) = hud_hide_at {
+                if Instant::now() >= hide_at && hud_showing {
+                    println!("\x1b[1;33m[*] HUD auto-hide (60s): Ocultando HUD para liberar tela 100% limpa...\x1b[0m");
+                    hud_showing = false;
+                    hud_hide_at = None;
+                    restart_pipeline = true;
+                }
+            }
+
+            // 2. Poll UDP control socket for commands from Web Dashboard
+            if let Some(ref s) = ctrl_sock {
+                let mut buf = [0u8; 2048];
+                while let Ok((n, _src)) = s.recv_from(&mut buf) {
+                    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&buf[..n]) {
+                        if let Some(action) = v.get("action").and_then(|x| x.as_str()) {
+                            if action == "trigger_hud" {
+                                println!("\x1b[1;32m[+] Comando Web: Reativando HUD na tela por 60 segundos!\x1b[0m");
+                                hud_showing = true;
+                                hud_hide_at = Some(Instant::now() + Duration::from_secs(60));
+                                restart_pipeline = true;
+                            }
+                        }
+                        if let Some(new_fps) = v.get("fps").and_then(|x| x.as_u64()) {
+                            let new_fps = new_fps as u32;
+                            if new_fps != fps && new_fps >= 10 && new_fps <= 60 {
+                                println!("\x1b[1;34m[*] Mudança de FPS via Web: {} -> {} FPS\x1b[0m", fps, new_fps);
+                                fps = new_fps;
+                                bitrate = match fps {
+                                    f if f >= 50 => 8000,
+                                    f if f >= 25 => 6000,
+                                    f if f >= 15 => 3500,
+                                    f if f >= 10 => 2500,
+                                    _ => 1200,
+                                };
+                                restart_pipeline = true;
+                            }
+                        }
+                        if let Some(new_color) = v.get("color").and_then(|x| x.as_str()) {
+                            let cp = match new_color {
+                                "256" => ColorProfile::Economy256,
+                                "gray" => ColorProfile::Grayscale,
+                                _ => ColorProfile::TrueColor,
+                            };
+                            if cp != color_profile {
+                                println!("\x1b[1;34m[*] Mudança de Cor via Web: {:?} -> {:?}\x1b[0m", color_profile, cp);
+                                color_profile = cp;
+                                restart_pipeline = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if restart_pipeline {
+                println!("\x1b[1;36m[*] Aplicando a quente (FPS: {}, Cor: {:?}, HUD: {})...\x1b[0m", fps, color_profile, hud_showing);
+                let _ = child.kill();
+                let _ = child.wait();
+                child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("\x1b[1;31m[!] Falha ao reiniciar streamer: {}\x1b[0m", e);
+                        break;
+                    }
+                };
+                thread::sleep(Duration::from_millis(600));
+                link_monitor_port_to_sender(node_id, monitor_to_record);
+                println!("\x1b[1;32m[+] Configuração reaplicada na tela com sucesso!\x1b[0m");
+                continue;
+            }
+
             match child.try_wait() {
                 Ok(Some(status)) => {
-                    println!("\x1b[1;33m[*] Streamer exited with status: {}. Restarting...\x1b[0m", status);
+                    println!("\x1b[1;33m[*] Streamer saiu com status: {}. Reiniciando...\x1b[0m", status);
                     break;
                 }
                 Ok(None) => {
-                    thread::sleep(Duration::from_millis(250));
+                    thread::sleep(Duration::from_millis(200));
                 }
                 Err(e) => {
-                    eprintln!("\x1b[1;31m[!] Error monitoring streamer: {}\x1b[0m", e);
+                    eprintln!("\x1b[1;31m[!] Erro monitorando streamer: {}\x1b[0m", e);
                     break;
                 }
             }
@@ -393,8 +477,8 @@ fn spawn_streamer(
         println!("\x1b[1;35m[+] Injecting Advanced On-Screen Diagnostic Telemetry HUD with Glass Transparency...\x1b[0m");
         let avg_pct = if color_profile == ColorProfile::Economy256 { 50 } else { 75 };
         let hud_text = format!(
-            "text=\"[ EXT-MONITOR TELEMETRY ]\nPanel:  1600x900@59.95Hz (Native 1:1)\nStream: {} FPS | Drop-on-Late (3x LIFO)\nColor:  {}\nGPU:    AMD Radeon (VA-API DMA-BUF)\nCodec:  H.264 Baseline (CAVLC / 1 Slice)\nRate:   VBR Adaptativo ({}k cap / {}% avg)\nMBBRC:  Ativo (Anti-Spike Macrobloco)\nSync:   IDR Refresh 1.0s ({} frames)\nLink:   {}:{} (UDP/RTP)\nSink:   VideoCore IV KMS (skip-vsync: ON)\"",
-            fps, color_profile.name(), bitrate, avg_pct, fps, target_ip, target_port
+            "text=\"[ PI ZERO EXTENDED MONITOR • ACTIVE ]\nPanel:    1600x900@59.95Hz (Nativo 1:1)\nStream:   {} FPS | Drop-on-Late (3x LIFO)\nColor:    {}\nRate:     VBR Adaptativo ({}k cap / {}% avg)\nVPU:      Broadcom VideoCore IV @ 500MHz (+25% OC)\nCPU:      ARM1176 Carga ~22% | RAM: ~141 MiB\nRede:     USB OTG (RTT 0.34ms, txq: 100)\nSync:     IDR Refresh 1.0s ({} frames)\nWeb:      http://{}:8080 (Auto-hide em 60s)\"",
+            fps, color_profile.name(), bitrate, avg_pct, fps, target_ip
         );
         cmd.arg("textoverlay")
             .arg(hud_text)
