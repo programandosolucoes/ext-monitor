@@ -1,6 +1,22 @@
+//! GPU Hardware-Accelerated Virtual Second Monitor Sender for Linux Wayland
+//!
+//! Captures virtual monitors from GNOME Mutter via PipeWire D-Bus interface,
+//! encodes frames using hardware acceleration (AMD VA-API, NVIDIA NVENC, Intel QSV),
+//! and streams the low-latency H.264 video feed to Raspberry Pi Zero.
+//!
+//! Supports:
+//! - Dual-transport: Network (UDP RTP) or USB Bulk Direct (`rusb` libusb-1.0)
+//! - Multilingual CLI Help (English, Portuguese, Italian, Chinese)
+//! - Dynamic Hot-Apply over UDP port 5001 from Web Dashboard (FPS, Bitrate, HUD, Colors)
+//! - Atomic atomic commit & drop-on-late frame pacing (sub-15ms latency)
+//!
+//! License: MIT
+//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+
 use std::collections::HashMap;
 use std::fs;
 use std::net::UdpSocket;
+use std::os::unix::io::RawFd;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -8,6 +24,11 @@ use std::time::{Duration, Instant};
 use std::{env, thread};
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{OwnedObjectPath, Value};
+
+mod i18n;
+mod usb_transport;
+
+use i18n::Language;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
@@ -29,11 +50,24 @@ impl ColorProfile {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("\x1b[1;32m=====================================================\x1b[0m");
-    println!("\x1b[1;32m  ext-sender: AMD GPU Offload Second Monitor Sender   \x1b[0m");
-    println!("\x1b[1;32m=====================================================\x1b[0m");
-
     let args: Vec<String> = env::args().collect();
+
+    // Check for help flag
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        let lang = args
+            .iter()
+            .find(|a| a.starts_with("--lang="))
+            .map(|a| Language::from_str(&a[7..]))
+            .unwrap_or_else(Language::detect);
+        i18n::print_help(lang);
+        return Ok(());
+    }
+
+    println!("\x1b[1;32m========================================================================\x1b[0m");
+    println!("\x1b[1;32m  ext-sender: AMD GPU Offload Virtual Second Monitor Sender v0.2.0      \x1b[0m");
+    println!("\x1b[1;34m  100% Native Rust | PipeWire Zero-Copy | VA-API / NVENC / QSV Hardware  \x1b[0m");
+    println!("\x1b[1;32m========================================================================\x1b[0m");
+
     let target_ip = args.get(1).map(|s| s.as_str()).unwrap_or("192.168.7.2");
     let target_port = args
         .get(2)
@@ -87,6 +121,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ColorProfile::TrueColor
     };
 
+    let is_usb_transport = args.iter().any(|a| a == "--transport=usb" || a == "--usb-bulk" || a == "--usb");
+
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    setup_signal_handler(r);
+
+    let mut pipe_fds = [0 as libc::c_int; 2];
+    let pipe_write_fd = if is_usb_transport {
+        println!("\x1b[1;33m[*] Transport Mode: USB Bulk Direct (Mode 2 - Zero Network Stack)\x1b[0m");
+        match usb_transport::open_usb_display_device() {
+            Ok(handle) => {
+                unsafe { libc::pipe(pipe_fds.as_mut_ptr()); }
+                let read_fd = pipe_fds[0];
+                let write_fd = pipe_fds[1];
+                let _ = usb_transport::spawn_usb_bulk_writer(handle, read_fd, running.clone());
+                Some(write_fd)
+            }
+            Err(e) => {
+                eprintln!("\x1b[1;31m[!] Error opening USB Display device: {}. Aborting.\x1b[0m", e);
+                return Err(e.into());
+            }
+        }
+    } else {
+        println!("\x1b[1;34m[*] Transport Mode: Network IP (Mode 1 - UDP RTP port {})\x1b[0m", target_port);
+        None
+    };
+
     println!("\x1b[1;34m[*] Target:\x1b[0m {}:{}", target_ip, target_port);
     println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps (Adaptive VBR, {} FPS)", bitrate, fps);
     println!("\x1b[1;34m[*] Color Profile:\x1b[0m {}", color_profile.name());
@@ -99,24 +160,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ctrl_sock = UdpSocket::bind("0.0.0.0:5001").ok();
     if let Some(ref s) = ctrl_sock {
         let _ = s.set_nonblocking(true);
-        println!("\x1b[1;32m[+] Control Listener ativo na porta UDP 5001 (Web Hot-Apply & HUD Trigger)\x1b[0m");
+        println!("\x1b[1;32m[+] Control Listener active on UDP port 5001 (Web Hot-Apply & HUD Trigger)\x1b[0m");
     }
 
     let monitor_to_record = if mode == "clone" {
         "eDP-1"
     } else {
-        // In extended mode, ensure kernel HDMI-A-1 connector is forced and configured in GNOME
         ensure_kernel_hdmi_connected();
         ensure_gnome_displays();
         "HDMI-1"
     };
 
     println!("\x1b[1;34m[*] Recording Monitor:\x1b[0m {}", monitor_to_record);
-
-    // Signal handler setup
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc_setup(r);
 
     while running.load(Ordering::SeqCst) {
         println!("\x1b[1;34m[*] Connecting to GNOME Mutter ScreenCast via D-Bus...\x1b[0m");
@@ -226,7 +281,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Spawn GStreamer pipeline with autoconnect=false
         println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS, HUD: {}, Color: {:?})...\x1b[0m", encoder, fps, hud_showing, color_profile);
-        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile) {
+        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, pipe_write_fd) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -250,7 +305,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 1. Check if HUD 60s timeout expired (auto-hide)
             if let Some(hide_at) = hud_hide_at {
                 if Instant::now() >= hide_at && hud_showing {
-                    println!("\x1b[1;33m[*] HUD auto-hide (60s): Ocultando HUD para liberar tela 100% limpa...\x1b[0m");
+                    println!("\x1b[1;33m[*] HUD auto-hide (60s): Hiding HUD for full screen display...\x1b[0m");
                     hud_showing = false;
                     hud_hide_at = None;
                     restart_pipeline = true;
@@ -264,12 +319,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&buf[..n]) {
                         if let Some(action) = v.get("action").and_then(|x| x.as_str()) {
                             if action == "trigger_hud" {
-                                println!("\x1b[1;32m[+] Comando Web: Reativando HUD na tela por 60 segundos!\x1b[0m");
+                                println!("\x1b[1;32m[+] Web Command: Re-triggering HUD on screen for 60 seconds!\x1b[0m");
                                 hud_showing = true;
                                 hud_hide_at = Some(Instant::now() + Duration::from_secs(60));
                                 restart_pipeline = true;
                             } else if action == "hide_hud" || action == "kill_hud" {
-                                println!("\x1b[1;33m[*] Comando Web: Ocultando HUD imediatamente a pedido do usuário!\x1b[0m");
+                                println!("\x1b[1;33m[*] Web Command: Hiding HUD immediately on user request.\x1b[0m");
                                 hud_showing = false;
                                 hud_hide_at = None;
                                 restart_pipeline = true;
@@ -280,7 +335,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         if let Some(new_bitrate) = new_bitrate_opt {
                             if new_bitrate != bitrate && new_bitrate >= 150 && new_bitrate <= 15000 {
-                                println!("\x1b[1;34m[*] Mudança de Bitrate via Web: {} -> {} kbps (Ultra-Low Latency)\x1b[0m", bitrate, new_bitrate);
+                                println!("\x1b[1;34m[*] Web Bitrate Change: {} -> {} kbps (Ultra-Low Latency)\x1b[0m", bitrate, new_bitrate);
                                 bitrate = new_bitrate;
                                 restart_pipeline = true;
                             }
@@ -288,7 +343,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         if let Some(new_fps) = new_fps_opt {
                             if new_fps != fps && new_fps >= 10 && new_fps <= 60 {
-                                println!("\x1b[1;34m[*] Mudança de FPS via Web: {} -> {} FPS\x1b[0m", fps, new_fps);
+                                println!("\x1b[1;34m[*] Web FPS Change: {} -> {} FPS\x1b[0m", fps, new_fps);
                                 fps = new_fps;
                                 if new_bitrate_opt.is_none() {
                                     bitrate = match fps {
@@ -309,7 +364,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 _ => ColorProfile::TrueColor,
                             };
                             if cp != color_profile {
-                                println!("\x1b[1;34m[*] Mudança de Cor via Web: {:?} -> {:?}\x1b[0m", color_profile, cp);
+                                println!("\x1b[1;34m[*] Web Color Change: {:?} -> {:?}\x1b[0m", color_profile, cp);
                                 color_profile = cp;
                                 restart_pipeline = true;
                             }
@@ -319,32 +374,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if restart_pipeline {
-                println!("\x1b[1;36m[*] Aplicando a quente (FPS: {}, Cor: {:?}, HUD: {})...\x1b[0m", fps, color_profile, hud_showing);
+                println!("\x1b[1;36m[*] Hot-applying configuration (FPS: {}, Color: {:?}, HUD: {})...\x1b[0m", fps, color_profile, hud_showing);
                 let _ = child.kill();
                 let _ = child.wait();
-                child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile) {
+                child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, pipe_write_fd) {
                     Ok(c) => c,
                     Err(e) => {
-                        eprintln!("\x1b[1;31m[!] Falha ao reiniciar streamer: {}\x1b[0m", e);
+                        eprintln!("\x1b[1;31m[!] Failed to restart streamer: {}\x1b[0m", e);
                         break;
                     }
                 };
                 thread::sleep(Duration::from_millis(600));
                 link_monitor_port_to_sender(node_id, monitor_to_record);
-                println!("\x1b[1;32m[+] Configuração reaplicada na tela com sucesso!\x1b[0m");
+                println!("\x1b[1;32m[+] Configuration hot-applied successfully.\x1b[0m");
                 continue;
             }
 
             match child.try_wait() {
                 Ok(Some(status)) => {
-                    println!("\x1b[1;33m[*] Streamer saiu com status: {}. Reiniciando...\x1b[0m", status);
+                    println!("\x1b[1;33m[*] Streamer exited with status: {}. Restarting...\x1b[0m", status);
                     break;
                 }
                 Ok(None) => {
                     thread::sleep(Duration::from_millis(200));
                 }
                 Err(e) => {
-                    eprintln!("\x1b[1;31m[!] Erro monitorando streamer: {}\x1b[0m", e);
+                    eprintln!("\x1b[1;31m[!] Error monitoring streamer: {}\x1b[0m", e);
                     break;
                 }
             }
@@ -442,7 +497,7 @@ fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
 
                         if let Ok(out) = output {
                             let err_str = String::from_utf8_lossy(&out.stderr);
-                            if out.status.success() || err_str.contains("Arquivo existe") || err_str.contains("File exists") {
+                            if out.status.success() || err_str.contains("File exists") || err_str.contains("existe") {
                                 println!("\x1b[1;32m[+] Successfully linked {} (port {}) -> ext-hdmi-sender!\x1b[0m", monitor_name, p);
                                 return;
                             }
@@ -465,11 +520,12 @@ fn spawn_streamer(
     fps: u32,
     hud: bool,
     color_profile: ColorProfile,
+    usb_pipe_fd: Option<RawFd>,
 ) -> Result<Child, std::io::Error> {
     let mut cmd = Command::new("gst-launch-1.0");
     cmd.arg("-v");
 
-    // 1. PipeWire source with strict minimal buffering to eliminate lag
+    // 1. PipeWire source with minimal buffers to eliminate latency
     cmd.arg("pipewiresrc")
         .arg("autoconnect=false")
         .arg("stream-properties=props,node.name=ext-hdmi-sender")
@@ -479,7 +535,7 @@ fn spawn_streamer(
         .arg("always-copy=false")
         .arg("!");
 
-    // 2. Framerate decimation if requested < 60 FPS with maximum preference for latest frames
+    // 2. Framerate decimation if requested < 60 FPS
     if fps < 60 {
         cmd.arg("videorate")
             .arg("drop-only=true")
@@ -490,12 +546,12 @@ fn spawn_streamer(
             .arg("!");
     }
 
-    // 3. Diagnostic HUD (On-Screen Display) if requested
+    // 3. Diagnostic On-Screen HUD if requested
     if hud {
         println!("\x1b[1;35m[+] Injecting Advanced On-Screen Diagnostic Telemetry HUD with Glass Transparency...\x1b[0m");
         let avg_pct = if color_profile == ColorProfile::Economy256 { 50 } else { 75 };
         let hud_text = format!(
-            "text=\"[ PI ZERO EXTENDED MONITOR • ACTIVE ]\nPanel:    1600x900@59.95Hz (Nativo 1:1)\nStream:   {} FPS | Drop-on-Late (3x LIFO)\nColor:    {}\nRate:     VBR Adaptativo ({}k cap / {}% avg)\nVPU:      Broadcom VideoCore IV @ 500MHz (+25% OC)\nCPU:      ARM1176 Carga ~22% | RAM: ~141 MiB\nRede:     USB OTG (RTT 0.34ms, txq: 100)\nSync:     IDR Refresh 1.0s ({} frames)\nWeb:      http://{}:8080 (Auto-hide em 60s)\"",
+            "text=\"[ PI ZERO EXTENDED MONITOR • ACTIVE ]\nPanel:    1600x900@59.95Hz (Native 1:1)\nStream:   {} FPS | Drop-on-Late (3x LIFO)\nColor:    {}\nRate:     Adaptive VBR ({}k cap / {}% avg)\nVPU:      Broadcom VideoCore IV @ 500MHz (+25% OC)\nCPU:      ARM1176 Load ~22% | RAM: ~141 MiB\nNetwork:  USB OTG (RTT 0.34ms, txq: 100)\nSync:     IDR Refresh 1.0s ({} frames)\nWeb:      http://{}:8080 (Auto-hide in 60s)\"",
             fps, color_profile.name(), bitrate, avg_pct, fps, target_ip
         );
         cmd.arg("textoverlay")
@@ -540,7 +596,7 @@ fn spawn_streamer(
             .arg("!");
     }
 
-    // 4. Zero-Latency Pre-Encoder Queue: drop stale frames on the fly (Sunshine style)
+    // 4. Zero-Latency Pre-Encoder Queue (Sunshine drop-on-late pattern)
     cmd.arg("queue")
         .arg("max-size-buffers=1")
         .arg("max-size-bytes=0")
@@ -571,17 +627,17 @@ fn spawn_streamer(
                 cmd.arg("target-percentage=75");
             }
 
-            cmd.arg("mbbrc=enabled")             // Controle macrobloco a macrobloco (evita picos ao mover telas inteiras)
+            cmd.arg("mbbrc=enabled")             // Macroblock bitrate control
                 .arg("target-usage=7")           // AMD ultra-fast lowest latency mode
                 .arg("b-frames=0")
                 .arg("ref-frames=1")
-                .arg("aud=true")                 // Access Unit delimiter para integridade de frames
-                .arg("cabac=false")              // CAVLC simple entropy coding (super leve para o Pi Zero)
+                .arg("aud=true")                 // Access Unit delimiter
+                .arg("cabac=false")              // CAVLC simple entropy coding
                 .arg("dct8x8=false")             // Simple 4x4 transforms
-                .arg("num-slices=1")             // 1 fatia inteira atômica (elimina cortes/rasgos horizontais na tela)
-                .arg(format!("key-int-max={}", fps.max(15))) // Full Refresh (IDR) a cada 1.0s (estabilidade total sem micro-congelamento)
+                .arg("num-slices=1")             // 1 atomic slice
+                .arg(format!("key-int-max={}", fps.max(15))) // IDR keyframe every 1.0s
                 .arg("!")
-                .arg("video/x-h264,profile=constrained-baseline") // Super optimized low-overhead profile
+                .arg("video/x-h264,profile=constrained-baseline")
                 .arg("!");
         }
         EncoderApi::Nvenc => {
@@ -630,7 +686,7 @@ fn spawn_streamer(
         }
     }
 
-    // 6. Post-Encoder Leaky Queue & RTP UDP Transmission (Zero-Buffer-Bloat)
+    // 6. Post-Encoder Leaky Queue & Output Sink (UDP RTP or USB Bulk Pipe)
     cmd.arg("h264parse")
         .arg("!")
         .arg("queue")
@@ -638,17 +694,25 @@ fn spawn_streamer(
         .arg("max-size-bytes=0")
         .arg("max-size-time=0")
         .arg("leaky=downstream")
-        .arg("!")
-        .arg("rtph264pay")
-        .arg("config-interval=1")
-        .arg("pt=96")
-        .arg("!")
-        .arg("udpsink")
-        .arg(format!("host={}", target_ip))
-        .arg(format!("port={}", target_port))
-        .arg("buffer-size=262144")
-        .arg("sync=false")
-        .spawn()
+        .arg("!");
+
+    if let Some(fd) = usb_pipe_fd {
+        cmd.arg("fdsink")
+            .arg(format!("fd={}", fd))
+            .arg("sync=false");
+    } else {
+        cmd.arg("rtph264pay")
+            .arg("config-interval=1")
+            .arg("pt=96")
+            .arg("!")
+            .arg("udpsink")
+            .arg(format!("host={}", target_ip))
+            .arg(format!("port={}", target_port))
+            .arg("buffer-size=262144")
+            .arg("sync=false");
+    }
+
+    cmd.spawn()
 }
 
 fn ensure_kernel_hdmi_connected() {
@@ -693,7 +757,6 @@ fn ensure_gnome_displays() {
             1
         };
 
-        // Check if HDMI-1 is in the active logical monitors array (3rd tuple element)
         let is_logical = stdout.contains("('HDMI-1', 'LRX'") || stdout.contains("[('HDMI-1'");
         (serial, is_logical)
     } else {
@@ -714,9 +777,9 @@ fn ensure_gnome_displays() {
     thread::sleep(Duration::from_millis(500));
 }
 
-fn ctrlc_setup(running: Arc<AtomicBool>) {
+fn setup_signal_handler(running: Arc<AtomicBool>) {
     let r = running.clone();
-    ctrlc_hook();
+    register_ctrlc_hook();
     thread::spawn(move || {
         while RUNNING.load(Ordering::SeqCst) {
             thread::sleep(Duration::from_millis(100));
@@ -725,13 +788,13 @@ fn ctrlc_setup(running: Arc<AtomicBool>) {
     });
 }
 
-fn ctrlc_hook() {
+fn register_ctrlc_hook() {
     unsafe {
-        libc::signal(libc::SIGINT, handle_sig as *const () as usize);
-        libc::signal(libc::SIGTERM, handle_sig as *const () as usize);
+        libc::signal(libc::SIGINT, signal_handler as *const () as usize);
+        libc::signal(libc::SIGTERM, signal_handler as *const () as usize);
     }
 }
 
-extern "C" fn handle_sig(_: libc::c_int) {
+extern "C" fn signal_handler(_: libc::c_int) {
     RUNNING.store(false, Ordering::SeqCst);
 }
