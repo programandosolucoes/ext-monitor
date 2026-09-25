@@ -94,26 +94,40 @@ Durante a evolução do projeto, cada solicitação de Carlos direcionou a arqui
 * **ChromeOS / cros-libva:** Padrão de bindings seguros e diretos em Rust sobre a biblioteca `libva`, provando que é viável dispensar camadas pesadas de C++.
 * **Wi-Fi Display (Miracast) Technical Specification v1.1.0:** Especificação oficial da Wi-Fi Alliance para a máquina de estados RTSP M1 a M7, permitindo que o Windows projete tela nativamente sem softwares de terceiros.
 * **Linux USB Gadget Configfs:** Documentação oficial do kernel Linux (`Documentation/usb/gadget_configfs.rst`) para criação de dispositivos multifunção USB.
+* **RFC 2131 (Dynamic Host Configuration Protocol):** Especificação do protocolo DHCP, adaptada para criar nosso servidor nativo embutido em Rust sem rota de gateway.
 * **Cisco OpenH264:** Implementação padrão ouro de encoder H.264 para fallback seguro em CPU.
 
 ---
 
-## 6. Artigo para Publicação no LinkedIn
+## 6. Galeria Visual & Demonstração de Desempenho
 
-Abaixo está o rascunho completo, estruturado com narrativa técnica de alto impacto para atrair engenheiros de sistemas, desenvolvedores Rust e entusiastas de hardware embarcado:
+### A. Montagem Completa do Setup (Laptop + Pi Zero + Segunda Tela)
+![Setup Completo com Pi Zero e Monitor Secundário](../docs/assets/hero-setup.jpg)
+
+### B. Demonstração em Tempo Real: Latência Sub-20ms e 60 FPS
+![Demonstração de Baixa Latência em GIF](../docs/assets/demo-fast.gif)
+
+### C. Detalhe do Hardware Raspberry Pi Zero no Case Acrílico com Link 480 Mbps
+![Macro Hardware Raspberry Pi Zero BCM2835](../docs/assets/hardware-macro.jpg)
+
+---
+
+## 7. Artigo para Publicação no LinkedIn
+
+Abaixo está o texto completo pronto para publicação no LinkedIn, formatado para máximo engajamento de engenheiros de sistemas, desenvolvedores Rust, entusiastas de hardware e líderes de tecnologia:
 
 ***
 
 ### 🚀 Transformando um Raspberry Pi Zero de R$ 50 em uma Segunda Tela 60 FPS com 100% Rust e Zero Latência
 
-Você já tentou usar um Raspberry Pi ou tablet antigo como segundo monitor? Se já tentou soluções como VNC, RDP ou o driver GUD tradicional, provavelmente se deparou com a mesma decepção: **latência de mais de 200 ms, taxa de quadros travada em 10 a 15 FPS, imagens borradas e a CPU do pequeno computador fervendo a 100%.**
+Você já tentou usar um Raspberry Pi ou tablet antigo como segundo monitor? Se já tentou soluções como VNC, RDP, Deskreen ou o driver GUD tradicional, provavelmente se deparou com a mesma decepção: **latência de mais de 200 ms, taxa de quadros travada em 10 a 15 FPS, imagens com artefatos borrados e a CPU do pequeno computador fervendo a 100%.**
 
 Nós decidimos encarar esse desafio do zero. A pergunta era:  
-**É possível fazer um humilde Raspberry Pi Zero v1.3 (processador ARM1176 de 1.0 GHz lançado em 2015, com míseros 512MB de RAM e porta micro-USB) funcionar como um monitor HDMI secundário real a 60 FPS e menos de 20 ms de latência?**
+**É possível fazer um humilde Raspberry Pi Zero v1.3 (processador ARM1176 de 1.0 GHz lançado em 2015, com míseros 512MB de RAM e conectado apenas por um cabo Micro-USB) funcionar como um monitor HDMI secundário real a 60 FPS e menos de 20 ms de latência?**
 
-A resposta é **SIM**. Mas para chegar lá, tivemos que rasgar o manual convencional e descer até o nível mais íntimo do kernel Linux e do hardware.
+A resposta é **SIM**. Mas para chegar lá, tivemos que rasgar o manual convencional e descer até o nível mais íntimo do kernel Linux, DMA-BUF e silício da GPU.
 
-Aqui estão os principais aprendizados técnicos dessa jornada de engenharia com o projeto **ext-monitor**:
+Aqui estão os 5 pilares técnicos dessa jornada de engenharia com o projeto **ext-monitor**:
 
 ---
 
@@ -128,36 +142,52 @@ Nossa diretriz foi clara: **zero processamento de pixels por CPU.**
 
 #### 2. Acelerando os dois lados no Hardware Puro
 * **No Computador Transmissor (Host):**  
-  Capturamos o monitor virtual diretamente do compositor GNOME Wayland via D-Bus ScreenCast com **zero-copy**. Em vez de usar processos pesados do GStreamer ou FFmpeg, criamos um encoder embutido em **Rust nativo** que conversa diretamente com o render node da GPU (`/dev/dri/renderD128` via VA-API na nossa AMD Radeon, ou NVENC na NVIDIA). O vídeo é comprimido em fatias H.264 em tempo real antes de sair da placa de vídeo.
+  Capturamos o monitor virtual diretamente do compositor GNOME Wayland via D-Bus ScreenCast com **zero-copy**. Em vez de usar processos pesados de GStreamer ou FFmpeg, criamos um encoder embutido em **Rust nativo** que conversa diretamente com o render node da GPU (`/dev/dri/renderD128` via VA-API na nossa AMD Radeon, ou NVENC na NVIDIA). O vídeo é comprimido em fatias H.264 em tempo real antes de sair da placa de vídeo.
 * **No Raspberry Pi Zero (Receptor):**  
   Construímos um decodificador puro em Rust que se comunica diretamente com o módulo de kernel **V4L2 M2M (`/dev/video10` do bcm2835-codec)**. As fatias H.264 são descompactadas pelo chip de hardware **VideoCore IV** e jogadas direto para a tela HDMI via **DRM KMS (`/dev/dri/card0`)**.  
-  **O uso de CPU no Pi Zero caiu de 100% para quase 0%!**
+  **O uso de CPU no Pi Zero caiu de 100% para menos de 1%!**
 
 ---
 
-#### 3. Compatibilidade Nativa com Windows: Miracast sem Instalar Nada
-Não queríamos forçar o usuário do Windows a instalar executáveis suspeitos. Desenvolvemos uma implementação leve em Rust da máquina de estados RTSP do protocolo **Miracast (Wi-Fi Display)**.  
+#### 3. O Segredo da Conectividade USB: Servidor DHCP Zero-Gateway em Puro Rust
+Conectar o Pi Zero via cabo USB cria um enlace Ethernet ponto-a-ponto (`usb0`). Se o PC não receber um IP automaticamente, não há comunicação. Porém, **se um servidor DHCP comum responder na porta USB, ele entrega um gateway padrão e derruba a internet do seu computador!**
+Para solucionar isso com perfeição:
+* Criamos um servidor DHCP RFC 2131 nativo em puro Rust dentro do binário `ext-receiver`.
+* Usamos `SO_BINDTODEVICE` para isolar o DHCP estritamente na interface `usb0`, impedindo qualquer vazamento para a rede local ou Wi-Fi.
+* **Omitimos intencionalmente o Default Gateway (Option 3):** O PC recebe `192.168.7.1` instantaneamente e cria a rota direta com o Pi, mantendo o Wi-Fi ou Ethernet da sua máquina navegando na internet normalmente sem interrupções!
+
+---
+
+#### 4. Compatibilidade Nativa com Windows: Miracast sem Instalar Nada
+Não queríamos forçar o usuário do Windows a instalar executáveis suspeitos. Desenvolvemos uma implementação nativa em Rust da máquina de estados RTSP do protocolo **Miracast (Wi-Fi Display)**.  
 Basta apertar o atalho nativo do Windows **`Win + K`**, selecionar o display na lista de conexões e a área de trabalho se expande automaticamente!
 
 ---
 
-#### 4. Appliance de 32MB em RAM: Boot em 1.8 Segundos
+#### 5. Appliance de 32MB em RAM: Boot em 1.8 Segundos
 O Raspberry Pi OS tradicional leva quase 2 minutos para inicializar e corre risco constante de corromper o cartão micro-SD ao ser desligado puxando o cabo USB.  
-Criamos uma imagem de sistema operacional minimalista de apenas **13MB** (composta pelo kernel oficial, firmware e nosso binário de 642KB):
-* O sistema sobe **100% em RAM (`initramfs / tmpfs`) em menos de 2 segundos**.
+Criamos uma imagem de sistema operacional minimalista de apenas **11MB compactada** (composta pelo kernel oficial, firmware e nosso binário de 670KB):
+* O sistema sobe **100% em RAM (`initramfs / tmpfs`) em apenas 1.8 segundos**.
 * O cartão SD fica em modo estritamente somente-leitura: **zero risco de corrupção**, pode puxar o cabo micro-USB a qualquer momento!
 
 ---
 
 #### 📊 Os Resultados Reais:
-* **Taxa de Quadros:** 60 FPS fluidos em 1600x900
+* **Taxa de Quadros:** 60 FPS fluidos em 1600x900 / 1080p
 * **Latência Fim-a-Fim:** Inferior a 20 ms (sensação idêntica a cabo físico)
-* **Carga de CPU no Pi Zero:** ~1%
+* **Carga de CPU no Pi Zero:** ~0.4%
 * **Consumo de Memória:** Apenas 18MB de RAM no Pi
-* **Tamanho do Binário:** Apenas 642 KB compilado para ARMv6
+* **Tamanho do Binário:** Apenas 670 KB compilado para ARMv6
+* **Tempo de Boot:** 1.8 segundos direto em RAM
 
 Esse projeto prova que, quando unimos a segurança e o desempenho de **Rust** com o respeito às capacidades de hardware do silício, até o hardware mais modesto de US$ 5 pode superar ferramentas comerciais consagradas.
 
-O projeto é código aberto sob licença MIT! 🦀🐧
+📦 **A imagem pronta para gravação no cartão e todo o código fonte estão disponíveis no GitHub:**  
+👉 https://github.com/programandosolucoes/ext-monitor
+
+Autor: Carlos Alberto (psncarlosalberto4ti@gmail.com)  
+Licença: MIT (Código Aberto) 🦀🐧
+
+#Rust #Embedded #Linux #RaspberryPi #Performance #HardwareAcceleration #OpenSource #SystemsEngineering
 
 \#RustLang #Linux #RaspberryPi #SistemasEmbarcados #HardwareAcceleration #OpenSource #EngenhariaDeSoftware #Wayland
