@@ -199,12 +199,15 @@ gpu_mem=128        # Alocação dedicada para buffers de frame duplo V4L2 M2M
 
 ---
 
-## 💾 Imagem em RAM (Estilo GUD - Boot em 4 a 6 Segundos)
+## 💾 Imagem Minimalista em RAM (Boot Instantâneo em 4 a 6 Segundos)
 
-Para eliminar o tempo de boot de 1min 50s do Debian e garantir proteção total contra desligamentos abruptos (puxar o cabo Micro-USB), a imagem é configurada como **Initramfs 100% em RAM**:
+Para eliminar o tempo de boot de 1min 50s do Debian e garantir proteção total contra desligamentos abruptos (puxar o cabo Micro-USB), a imagem Buildroot é configurada como **Initramfs 100% em RAM**:
 - **Partição Única FAT32:** Apenas 32MB contendo `bootcode.bin`, `start.elf`, `kernel.img`, `config.txt` e `initramfs.cpio.gz`.
 - **Boot Direto em RAM:** O kernel descompacta em `tmpfs`, inicia o gadget USB em 1 segundo e sobe o `ext-receiver`.
 - **Cartão SD Read-Only:** Zero risco de corrupção ao desligar ou desconectar o cabo.
+
+> [!NOTE]
+> **Protocolo Legado GUD Descartado:** O protocolo oficial GUD (`gud_set_buffer_req` + descompressão LZ4 em CPU) foi descartado do projeto por saturar a CPU ARM1176 do Pi Zero em 100% gerando estrangulamento térmico e limite de 10–15 FPS. Nossa arquitetura opera exclusivamente com fluxos H.264 comprimidos pelo hardware da GPU do host (VA-API/NVENC/OpenH264) e decodificados pelo chip VideoCore IV em hardware.
 
 ---
 

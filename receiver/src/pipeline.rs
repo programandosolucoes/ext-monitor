@@ -33,29 +33,30 @@ pub enum PipelineBackend {
 
 impl PipelineBackend {
     pub fn detect() -> Self {
-        if Command::new("gst-launch-1.0").arg("--version").output().is_ok() {
-            PipelineBackend::GStreamer
-        } else if NativeV4l2Decoder::is_supported() {
+        // 100% Pure Rust Native V4L2 M2M Kernel Decoder is DEFAULT
+        if NativeV4l2Decoder::is_supported() {
             PipelineBackend::NativeV4L2
+        } else if Command::new("gst-launch-1.0").arg("--version").output().is_ok() {
+            PipelineBackend::GStreamer
         } else if Command::new("ffplay").arg("-version").output().is_ok() {
             PipelineBackend::FFmpeg
         } else {
-            PipelineBackend::GStreamer
+            PipelineBackend::NativeV4L2
         }
     }
 
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
-            "v4l2" | "native" | "kernel" => PipelineBackend::NativeV4L2,
+            "gst" | "gstreamer" => PipelineBackend::GStreamer,
             "ffmpeg" | "ffplay" => PipelineBackend::FFmpeg,
-            _ => PipelineBackend::GStreamer,
+            _ => PipelineBackend::NativeV4L2,
         }
     }
 
     pub fn name(&self) -> &'static str {
         match self {
+            PipelineBackend::NativeV4L2 => "100% Native Linux V4L2 M2M (Pure Rust - DEFAULT)",
             PipelineBackend::GStreamer => "GStreamer 1.0 (v4l2h264dec + kmssink)",
-            PipelineBackend::NativeV4L2 => "Native Linux V4L2 M2M (Pure Rust Zero-Dependency)",
             PipelineBackend::FFmpeg => "FFmpeg Lean (h264_v4l2m2m)",
         }
     }
