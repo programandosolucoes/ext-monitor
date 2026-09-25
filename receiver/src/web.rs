@@ -256,13 +256,14 @@ fn get_network_status_json() -> String {
     let eth0_detected = fs::metadata("/sys/class/net/eth0").is_ok();
     let wlan0_detected = fs::metadata("/sys/class/net/wlan0").is_ok();
 
-    let dhcp_running = fs::metadata("/var/run/udhcpd.pid").is_ok()
-        || fs::metadata("/var/lib/misc/udhcpd.leases").is_ok();
+    let lease = crate::dhcp::get_active_lease();
+    let host_mac = lease.as_ref().map(|l| l.mac.as_str()).unwrap_or("pending");
+    let dhcp_running = true; // Native pure-Rust DHCP server active in-process
 
     format!(
         concat!(
             "{{",
-            "\"usb0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\",\"dhcp_server\":{},\"host_ip\":\"192.168.7.1\",\"gateway\":\"none\"}},",
+            "\"usb0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\",\"dhcp_server\":{},\"host_ip\":\"192.168.7.1\",\"host_mac\":\"{}\",\"gateway\":\"none\"}},",
             "\"eth0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\"}},",
             "\"wlan0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\"}}",
             "}}"
@@ -271,6 +272,7 @@ fn get_network_status_json() -> String {
         usb0_ipv4.unwrap_or_else(|| "192.168.7.2".to_string()),
         usb0_ipv6.unwrap_or_else(|| "none".to_string()),
         dhcp_running,
+        host_mac,
         eth0_detected,
         eth0_ipv4.unwrap_or_else(|| "disconnected".to_string()),
         eth0_ipv6.unwrap_or_else(|| "none".to_string()),
