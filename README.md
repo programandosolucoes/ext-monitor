@@ -222,6 +222,14 @@ Para eliminar o tempo de boot de 1min 50s do Debian e garantir proteção total 
 
 ---
 
+## 📚 Documentação Técnica Aprofundada & Especificações
+
+- [Compêndio Técnico Completo & Artigo LinkedIn](docs/technical-compendium-and-linkedin-summary.md): Histórico completo de decisões, arquitetura do pipeline em hardware, análises de descarte e resumo executivo pronto para publicação.
+- [Especificação de Multi-Telas & PC como Tela Remota (Reversibilidade Universal)](docs/superpowers/specs/2026-09-25-universal-multiscreen-and-reverse-display.md): Planejamento para transformar qualquer PC/Notebook em segunda tela e multiplexação de múltiplos monitores virtuais.
+- [Especificação de Miracast & USB Bulk Direto](docs/superpowers/specs/2026-09-25-miracast-and-usb-bulk-design.md): Detalhamento do RTSP WFD (Win + K) e FunctionFS Bulk sem pilha de rede.
+
+---
+
 ## 📄 Licença
 
 Distribuído sob a licença **MIT** (permissiva). Consulte o arquivo [LICENSE](LICENSE) para obter mais informações.
