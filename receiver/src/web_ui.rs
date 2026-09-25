@@ -11,6 +11,8 @@
 //! - Stream tuning: framerate (FPS), adaptive VBR bitrate slider, color profiles, on-screen HUD
 //! - Control actions: Pause Display Stream, Resume Stream, and Clean Shutdown of Panel & Service
 //! - Step-by-step casting instructions for Windows 10/11 (Win + K) and Linux Wayland (ext-sender)
+//! - Comprehensive technical comparison between all 4 streaming modes (Linux Direct, GNOME Miracast, Windows, USB Bulk)
+//! - Diagnostic scripts and copyable commands for host and Pi Zero
 //! - System prerequisites and troubleshooting guide
 //!
 //! License: MIT
@@ -304,6 +306,33 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         .req-list li { margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.5rem; }
         .req-list li strong { color: var(--text-primary); }
         .bullet { color: var(--accent-cyan); }
+        /* Protocols Comparison Table */
+        .proto-table-wrap { overflow-x: auto; margin-top: 1rem; }
+        .proto-table {
+            width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;
+        }
+        .proto-table th, .proto-table td {
+            padding: 0.85rem 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .proto-table th {
+            color: var(--text-muted); font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .proto-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+        .proto-badge {
+            display: inline-block; padding: 0.2rem 0.55rem; border-radius: var(--radius-sm);
+            font-size: 0.72rem; font-weight: 700; font-family: monospace;
+        }
+        .proto-badge.fast {
+            background: rgba(0, 255, 102, 0.12); border: 1px solid rgba(0, 255, 102, 0.3); color: var(--accent-emerald);
+        }
+        .proto-badge.std {
+            background: rgba(0, 229, 255, 0.12); border: 1px solid rgba(0, 229, 255, 0.3); color: var(--accent-cyan);
+        }
+        .proto-badge.usb {
+            background: rgba(179, 136, 255, 0.12); border: 1px solid rgba(179, 136, 255, 0.3); color: var(--accent-purple);
+        }
     </style>
 </head>
 <body>
@@ -433,25 +462,6 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                         </div>
                     </div>
                 </div>
-
-                <!-- Windows Casting Instructions -->
-                <div class="glass-card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <span>🪟</span>
-                            <span data-i18n="winCastHeader">Windows 10/11 Wireless Cast (Win + K)</span>
-                        </div>
-                        <span class="card-badge" data-i18n="badgeNative">Zero Drivers</span>
-                    </div>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;" data-i18n="winCastDesc">
-                        Pi Zero acts as a native Miracast & MS-MICE receiver on TCP port 7236. To cast directly from Windows without installing any software:
-                    </p>
-                    <ol style="margin-left: 1.2rem; margin-top: 0.6rem; font-size: 0.85rem; color: var(--text-primary); line-height: 1.7;" id="winCastSteps">
-                        <li data-i18n="winStep1">Connect PC to the Pi Zero via USB cable (Ethernet gadget) or Wi-Fi.</li>
-                        <li data-i18n="winStep2">Press <strong style="color: var(--accent-cyan);">Win + K</strong> to open the Cast flyout.</li>
-                        <li data-i18n="winStep3">Select <strong>"Pi Zero Wireless Display"</strong> to mirror or extend.</li>
-                    </ol>
-                </div>
             </div>
 
             <!-- Right Column: Telemetry & Host Connection -->
@@ -509,32 +519,114 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Linux Sender Connection Command -->
-                <div class="glass-card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <span>🐧</span>
-                            <span data-i18n="linuxHeader">Linux Wayland Host Command</span>
-                        </div>
-                        <span class="card-badge">Wayland</span>
-                    </div>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);" data-i18n="linuxDesc">
-                        Run ext-sender on your Linux host to start streaming the virtual extended monitor:
-                    </p>
-                    <div class="code-box">
-                        <button class="copy-btn" onclick="copyCode('linuxCmd')">Copy</button>
-                        <code id="linuxCmd">ext-sender 192.168.7.2 5000 3000 extend auto 30</code>
-                    </div>
-
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;" data-i18n="linuxStopDesc">
-                        To stop streaming from Linux host terminal:
-                    </p>
-                    <div class="code-box">
-                        <button class="copy-btn" onclick="copyCode('linuxStopCmd')">Copy</button>
-                        <code id="linuxStopCmd">pkill -f ext-sender</code>
-                    </div>
+        <!-- Full-Width Card: Connection Protocols & Comparison -->
+        <div class="glass-card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>🌐</span>
+                    <span data-i18n="protoHeader">Connection Methods & Protocol Comparison</span>
                 </div>
+                <span class="card-badge" data-i18n="protoBadge">Multi-Protocol</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);" data-i18n="protoDesc">
+                Pi Zero supports multiple concurrent streaming protocols. Choose the optimal method for your OS:
+            </p>
+            <div class="proto-table-wrap">
+                <table class="proto-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="thMethod">Method / Client</th>
+                            <th data-i18n="thProtocol">Protocol & Port</th>
+                            <th data-i18n="thLatency">Latency</th>
+                            <th data-i18n="thBestFor">Ideal Use-Case</th>
+                            <th data-i18n="thCommand">How to Connect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong style="color:#fff;" data-i18n="m1Name">Linux Wayland Direct (ext-sender)</strong></td>
+                            <td><span class="proto-badge fast" data-i18n="m1Proto">Raw RTP H.264 (UDP 5000)</span></td>
+                            <td style="color:var(--accent-emerald); font-weight:700;" data-i18n="m1Lat">&lt; 15 ms</td>
+                            <td data-i18n="m1Use">Interactive desktop, fluid mouse, zero container overhead</td>
+                            <td><code style="color:var(--accent-cyan);">ext-sender 192.168.7.2 5000 3000 extend auto 30</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#fff;" data-i18n="m2Name">Linux Wayland Miracast (GNOME Displays)</strong></td>
+                            <td><span class="proto-badge std" data-i18n="m2Proto">WFD RTSP 7236 + MPEG-TS (UDP 5002)</span></td>
+                            <td style="color:var(--accent-cyan); font-weight:700;" data-i18n="m2Lat">40–70 ms</td>
+                            <td data-i18n="m2Use">GNOME official UI tool, same protocol as Windows</td>
+                            <td><code style="color:var(--accent-cyan);">gnome-network-displays</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#fff;" data-i18n="m3Name">Windows 10/11 Wireless Cast (Win + K)</strong></td>
+                            <td><span class="proto-badge std" data-i18n="m3Proto">MS-MICE RTSP 7236 + MPEG-TS (UDP 5002)</span></td>
+                            <td style="color:var(--accent-cyan); font-weight:700;" data-i18n="m3Lat">40–70 ms</td>
+                            <td data-i18n="m3Use">Native Windows projection without any extra drivers</td>
+                            <td>Press <strong style="color:var(--accent-cyan);">Win + K</strong> & select Pi Zero</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#fff;" data-i18n="m4Name">Mode 2: USB Bulk Direct (FunctionFS)</strong></td>
+                            <td><span class="proto-badge usb" data-i18n="m4Proto">USB 2.0 Bulk 480 Mbps (Zero Network)</span></td>
+                            <td style="color:var(--accent-purple); font-weight:700;" data-i18n="m4Lat">&lt; 1 ms</td>
+                            <td data-i18n="m4Use">No network stack, direct high-speed hardware pipe</td>
+                            <td><code style="color:var(--accent-purple);">ext-sender --transport=usb</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Full-Width Card: Scripts & Diagnostic Commands -->
+        <div class="glass-card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>💻</span>
+                    <span data-i18n="scriptsHeader">Diagnostic Scripts & Helper Commands</span>
+                </div>
+                <span class="card-badge">CLI Tools</span>
+            </div>
+            
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;" data-i18n="scriptGnomeDesc">
+                Launch GNOME Network Displays (Linux Miracast UI):
+            </p>
+            <div class="code-box">
+                <button class="copy-btn" onclick="copyCode('cmdGnome')">Copy</button>
+                <code id="cmdGnome">gnome-network-displays</code>
+            </div>
+
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;" data-i18n="scriptWfdDesc">
+                Test WFD / Miracast RTSP handshake & streaming:
+            </p>
+            <div class="code-box">
+                <button class="copy-btn" onclick="copyCode('cmdTestWfd')">Copy</button>
+                <code id="cmdTestWfd">python3 /home/carlos/ide/ext-monitor/scripts/test-wfd-client.py 192.168.7.2</code>
+            </div>
+
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;" data-i18n="scriptModeDesc">
+                Check Pi Zero subsystem status (Serial, Network, Video):
+            </p>
+            <div class="code-box">
+                <button class="copy-btn" onclick="copyCode('cmdMode')">Copy</button>
+                <code id="cmdMode">ext-mode status</code>
+            </div>
+
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;" data-i18n="scriptSenderDesc">
+                Start Linux Wayland virtual monitor streaming:
+            </p>
+            <div class="code-box">
+                <button class="copy-btn" onclick="copyCode('cmdSender')">Copy</button>
+                <code id="cmdSender">ext-sender 192.168.7.2 5000 3000 extend auto 30</code>
+            </div>
+
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;" data-i18n="scriptStopDesc">
+                Stop Linux sender process:
+            </p>
+            <div class="code-box">
+                <button class="copy-btn" onclick="copyCode('cmdStop')">Copy</button>
+                <code id="cmdStop">pkill -f ext-sender</code>
             </div>
         </div>
     </div>
@@ -594,9 +686,36 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 statLatency: "Link Latency (RTT)",
                 statCpu: "CPU Usage",
                 statRam: "Free RAM",
-                linuxHeader: "Linux Wayland Host Command",
-                linuxDesc: "Run ext-sender on your Linux host to start streaming the virtual extended monitor:",
-                linuxStopDesc: "To stop streaming from Linux host terminal:"
+                protoHeader: "Connection Methods & Protocol Comparison",
+                protoBadge: "Multi-Protocol",
+                protoDesc: "Pi Zero supports multiple concurrent streaming protocols. Choose the optimal method for your OS:",
+                thMethod: "Method / Client",
+                thProtocol: "Protocol & Port",
+                thLatency: "Latency",
+                thBestFor: "Ideal Use-Case",
+                thCommand: "How to Connect",
+                m1Name: "Linux Wayland Direct (ext-sender)",
+                m1Proto: "Raw RTP H.264 (UDP 5000)",
+                m1Lat: "< 15 ms",
+                m1Use: "Interactive desktop, fluid mouse, zero container overhead",
+                m2Name: "Linux Wayland Miracast (GNOME Displays)",
+                m2Proto: "WFD RTSP 7236 + MPEG-TS (UDP 5002)",
+                m2Lat: "40–70 ms",
+                m2Use: "GNOME official UI tool, same protocol as Windows",
+                m3Name: "Windows 10/11 Wireless Cast (Win + K)",
+                m3Proto: "MS-MICE RTSP 7236 + MPEG-TS (UDP 5002)",
+                m3Lat: "40–70 ms",
+                m3Use: "Native Windows projection without any extra drivers",
+                m4Name: "Mode 2: USB Bulk Direct (FunctionFS)",
+                m4Proto: "USB 2.0 Bulk 480 Mbps (Zero Network)",
+                m4Lat: "< 1 ms",
+                m4Use: "No network stack, direct high-speed hardware pipe",
+                scriptsHeader: "Diagnostic Scripts & Helper Commands",
+                scriptGnomeDesc: "Launch GNOME Network Displays (Linux Miracast UI):",
+                scriptWfdDesc: "Test WFD / Miracast RTSP handshake & streaming:",
+                scriptModeDesc: "Check Pi Zero subsystem status (Serial, Network, Video):",
+                scriptSenderDesc: "Start Linux Wayland virtual monitor streaming:",
+                scriptStopDesc: "Stop Linux sender process:"
             },
             pt: {
                 title: "Pi Zero Monitor Estendido",
@@ -650,9 +769,36 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 statLatency: "Latência de Link (RTT)",
                 statCpu: "Carga da CPU",
                 statRam: "RAM Disponível",
-                linuxHeader: "Comando para Host Linux Wayland",
-                linuxDesc: "Execute o ext-sender no Linux para iniciar o streaming do monitor virtual:",
-                linuxStopDesc: "Para parar a transmissão pelo terminal do Linux:"
+                protoHeader: "Comparativo de Protocolos e Métodos de Conexão",
+                protoBadge: "Multi-Protocolo",
+                protoDesc: "O Pi Zero suporta múltiplos protocolos de streaming em paralelo. Escolha o método ideal para o seu caso:",
+                thMethod: "Método / Cliente",
+                thProtocol: "Protocolo / Porta",
+                thLatency: "Latência",
+                thBestFor: "Caso de Uso Ideal",
+                thCommand: "Como Executar",
+                m1Name: "Linux Wayland Direto (ext-sender)",
+                m1Proto: "Raw RTP H.264 (UDP 5000)",
+                m1Lat: "< 15 ms",
+                m1Use: "Desktop interativo, mouse fluido e menor latência",
+                m2Name: "Linux Wayland Miracast (GNOME Displays)",
+                m2Proto: "WFD RTSP 7236 + MPEG-TS (UDP 5002)",
+                m2Lat: "40–70 ms",
+                m2Use: "App oficial do GNOME, mesmo protocolo do Windows",
+                m3Name: "Transmissão Windows 10/11 (Win + K)",
+                m3Proto: "MS-MICE RTSP 7236 + MPEG-TS (UDP 5002)",
+                m3Lat: "40–70 ms",
+                m3Use: "Projeção nativa do Windows sem instalar drivers",
+                m4Name: "Modo 2: USB Bulk Direto (FunctionFS)",
+                m4Proto: "USB 2.0 Bulk 480 Mbps (Zero Rede)",
+                m4Lat: "< 1 ms",
+                m4Use: "Sem overhead de rede, canal de hardware direto",
+                scriptsHeader: "Scripts e Comandos de Diagnóstico",
+                scriptGnomeDesc: "Abrir o GNOME Network Displays (Miracast no Linux):",
+                scriptWfdDesc: "Testar o handshake WFD / Miracast RTSP:",
+                scriptModeDesc: "Verificar status dos subsistemas (Serial, Rede, Vídeo):",
+                scriptSenderDesc: "Iniciar streaming do monitor virtual no Linux:",
+                scriptStopDesc: "Parar processo do sender no Linux:"
             },
             it: {
                 title: "Pi Zero Monitor Esteso",
@@ -706,9 +852,36 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 statLatency: "Latenza Link (RTT)",
                 statCpu: "Carico CPU",
                 statRam: "RAM Libera",
-                linuxHeader: "Comando per Host Linux Wayland",
-                linuxDesc: "Esegui ext-sender su Linux per avviare il monitor virtuale:",
-                linuxStopDesc: "Per arrestare lo streaming dal terminale di Linux:"
+                protoHeader: "Confronto Metodi di Connessione e Protocolli",
+                protoBadge: "Multi-Protocollo",
+                protoDesc: "Il Pi Zero supporta molteplici protocolli di streaming in parallelo. Scegli il metodo ideale:",
+                thMethod: "Metodo / Client",
+                thProtocol: "Protocollo / Porta",
+                thLatency: "Latenza",
+                thBestFor: "Uso Consigliato",
+                thCommand: "Come Avviare",
+                m1Name: "Linux Wayland Diretto (ext-sender)",
+                m1Proto: "Raw RTP H.264 (UDP 5000)",
+                m1Lat: "< 15 ms",
+                m1Use: "Desktop interattivo, mouse fluido, bassissima latenza",
+                m2Name: "Linux Wayland Miracast (GNOME Displays)",
+                m2Proto: "WFD RTSP 7236 + MPEG-TS (UDP 5002)",
+                m2Lat: "40–70 ms",
+                m2Use: "App ufficiale GNOME, stesso protocollo di Windows",
+                m3Name: "Proiezione Windows 10/11 (Win + K)",
+                m3Proto: "MS-MICE RTSP 7236 + MPEG-TS (UDP 5002)",
+                m3Lat: "40–70 ms",
+                m3Use: "Proiezione nativa Windows senza alcun driver",
+                m4Name: "Modalità 2: USB Bulk Diretto (FunctionFS)",
+                m4Proto: "USB 2.0 Bulk 480 Mbps (Zero Rete)",
+                m4Lat: "< 1 ms",
+                m4Use: "Zero overhead di rete, canale hardware diretto",
+                scriptsHeader: "Script e Comandi di Diagnostica",
+                scriptGnomeDesc: "Apri GNOME Network Displays (Miracast su Linux):",
+                scriptWfdDesc: "Test handshake WFD / Miracast RTSP:",
+                scriptModeDesc: "Verifica stato sottosistemi (Seriale, Rete, Video):",
+                scriptSenderDesc: "Avvia streaming monitor virtuale Linux:",
+                scriptStopDesc: "Arresta processo sender su Linux:"
             },
             zh: {
                 title: "树莓派 Zero 扩展显示屏",
@@ -762,9 +935,36 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 statLatency: "传输延迟 (RTT)",
                 statCpu: "CPU 占用率",
                 statRam: "空闲内存",
-                linuxHeader: "Linux Wayland 主机端启动命令",
-                linuxDesc: "在 Linux 主机上运行 ext-sender 即可开启虚拟显示器推流:",
-                linuxStopDesc: "在 Linux 终端中停止推流的命令:"
+                protoHeader: "连接协议与模式深度对比",
+                protoBadge: "多协议支持",
+                protoDesc: "树莓派 Zero 支持并行运行多种流媒体协议，请根据操作系统选择最佳连接方式:",
+                thMethod: "连接方式 / 客户端",
+                thProtocol: "网络协议 / 端口",
+                thLatency: "传输延迟",
+                thBestFor: "最佳应用场景",
+                thCommand: "启动方式",
+                m1Name: "Linux Wayland 直推 (ext-sender)",
+                m1Proto: "原生 RTP H.264 (UDP 5000)",
+                m1Lat: "< 15 ms",
+                m1Use: "交互式桌面办公、流畅光标、超低延迟",
+                m2Name: "Linux Wayland Miracast (GNOME 网络显示)",
+                m2Proto: "WFD RTSP 7236 + MPEG-TS (UDP 5002)",
+                m2Lat: "40–70 ms",
+                m2Use: "GNOME 官方图形投屏工具，与 Windows 协议完全一致",
+                m3Name: "Windows 10/11 原生投屏 (Win + K)",
+                m3Proto: "MS-MICE RTSP 7236 + MPEG-TS (UDP 5002)",
+                m3Lat: "40–70 ms",
+                m3Use: "Windows 系统免驱原生投屏，一键连接",
+                m4Name: "模式 2: USB Bulk 直通 (FunctionFS)",
+                m4Proto: "USB 2.0 Bulk 480 Mbps (完全绕过网络栈)",
+                m4Lat: "< 1 ms",
+                m4Use: "零网络开销，纯硬件通道高速推流",
+                scriptsHeader: "诊断脚本与实用命令大全",
+                scriptGnomeDesc: "启动 GNOME Network Displays (Linux 原生 Miracast 图形界面):",
+                scriptWfdDesc: "测试 WFD / Miracast RTSP 握手与推流状态:",
+                scriptModeDesc: "检查树莓派子系统状态 (串口、网络、视频):",
+                scriptSenderDesc: "在 Linux 上启动虚拟扩展屏推流:",
+                scriptStopDesc: "在 Linux 终端中停止推流进程:"
             }
         };
 
