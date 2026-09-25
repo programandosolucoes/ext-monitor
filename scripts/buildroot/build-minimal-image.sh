@@ -16,7 +16,7 @@
 set -e
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 BUILDROOT_VERSION="2024.02.1"
 BUILD_DIR="${PROJECT_ROOT}/build-buildroot"
 DL_DIR="${PROJECT_ROOT}/downloads"
