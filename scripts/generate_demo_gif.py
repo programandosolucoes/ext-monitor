@@ -64,8 +64,8 @@ def create_demo_gif():
         ms_pi = ms_host - 18
         time_pi_str = f"PI 0: 10:30:15.{ms_pi:03d} (Δ 18ms)"
 
-        # 3. Floating HUD Overlay on Pi Zero Screen (Right side: ~x: 580..910, y: 60..240)
-        hud_x, hud_y = 610, 56
+        # 3. Floating HUD Overlay on Pi Zero Screen (Right side portable monitor)
+        hud_x, hud_y = 620, 56
         draw.rounded_rectangle(
             [(hud_x, hud_y), (hud_x + 310, hud_y + 115)],
             radius=8,
@@ -82,9 +82,9 @@ def create_demo_gif():
         # 4. Animated moving window crossing from Laptop to Pi Zero screen!
         # Parametric trajectory: t from 0 to 1
         t = (math.sin(i / num_frames * 2 * math.pi) + 1.0) / 2.0
-        # Laptop screen center ~ x: 200, Pi screen center ~ x: 740
-        win_x = int(180 + t * (740 - 180))
-        win_y = int(240 - math.sin(t * math.pi) * 30)
+        # Laptop screen center ~ x: 220, Pi screen center ~ x: 760
+        win_x = int(210 + t * (760 - 210))
+        win_y = int(220 - math.sin(t * math.pi) * 25)
         win_w, win_h = 160, 100
 
         # Draw moving app window
