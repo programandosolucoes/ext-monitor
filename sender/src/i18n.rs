@@ -75,7 +75,7 @@ fn print_help_en() {
     println!("  1. \x1b[1;37mWayland Session:\x1b[0m GNOME 44+ on Wayland with org.gnome.Mutter.ScreenCast.");
     println!("  2. \x1b[1;37mPipeWire:\x1b[0m pipewire, wireplumber, and pipewire-pulse running.");
     println!("  3. \x1b[1;37mGPU Hardware Acceleration:\x1b[0m AMD (VA-API), Intel (VA-API/QSV), or NVIDIA (NVENC).");
-    println!("  4. \x1b[1;37mGStreamer 1.0:\x1b[0m gst-plugins-base, good, bad, and vaapi/nvenc/qsv.");
+    println!("  4. \x1b[1;37mStreaming Engine:\x1b[0m 100% Native Rust In-Process (DEFAULT - zero external software), or GStreamer / FFmpeg.");
     println!("  5. \x1b[1;37mPi Zero Connection:\x1b[0m Connected via USB OTG cable (IP 192.168.7.2 or USB Direct).\n");
 
     println!("\x1b[1;33mARGUMENTS & DEFAULTS:\x1b[0m");
@@ -87,13 +87,13 @@ fn print_help_en() {
     println!("  6. FPS           Target framerate: 10 to 60 FPS (default: 30)\n");
 
     println!("\x1b[1;33mOPTIONS & FLAGS:\x1b[0m");
-    println!("  \x1b[1;32m--engine=<gst|ffmpeg>\x1b[0m     Select streaming engine (gst: GStreamer, ffmpeg: Lean FFmpeg)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m Select transport protocol (default: network)");
-    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m         Shortcut for Mode 2 (Direct USB Bulk via rusb)");
-    println!("  \x1b[1;32m--hud\x1b[0m                     Enable diagnostic on-screen telemetry overlay (auto-hides in 60s)");
-    println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m   Set color profile (24-bit TrueColor, 256-color QP, Monochrome)");
-    println!("  \x1b[1;32m--help, -h\x1b[0m                Display this help message");
-    println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m      Select help language (English, Portuguese, Italian, Chinese)\n");
+    println!("  \x1b[1;32m--engine=<native|gst|ffmpeg>\x1b[0m Streaming engine (native: 100% Pure Rust - DEFAULT, gst: GStreamer, ffmpeg: FFmpeg)");
+    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Select transport protocol (default: network)");
+    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Shortcut for Mode 2 (Direct USB Bulk via rusb)");
+    println!("  \x1b[1;32m--hud\x1b[0m                        Enable diagnostic on-screen telemetry overlay (auto-hides in 60s)");
+    println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      Set color profile (24-bit TrueColor, 256-color QP, Monochrome)");
+    println!("  \x1b[1;32m--help, -h\x1b[0m                   Display this help message");
+    println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m         Select help language (English, Portuguese, Italian, Chinese)\n");
 
     println!("\x1b[1;33mHOW TO STOP EXT-SENDER:\x1b[0m");
     println!("  - \x1b[1;37mInteractive:\x1b[0m Press \x1b[1;31mCtrl + C\x1b[0m in the terminal running ext-sender.");
@@ -119,7 +119,7 @@ fn print_help_pt() {
     println!("  1. \x1b[1;37mSessão Wayland:\x1b[0m GNOME 44+ em Wayland com interface org.gnome.Mutter.ScreenCast.");
     println!("  2. \x1b[1;37mPipeWire:\x1b[0m Servidores pipewire, wireplumber e pipewire-pulse em execução.");
     println!("  3. \x1b[1;37mAceleração de GPU:\x1b[0m Placa AMD (VA-API), Intel (VA-API/QSV) ou NVIDIA (NVENC).");
-    println!("  4. \x1b[1;37mGStreamer 1.0:\x1b[0m gst-plugins-base, good, bad e plugins de hardware de vídeo.");
+    println!("  4. \x1b[1;37mMotor de Streaming:\x1b[0m 100% Rust Nativo em Processo (PADRÃO - zero dependências), ou GStreamer / FFmpeg.");
     println!("  5. \x1b[1;37mConexão com Pi Zero:\x1b[0m Cabo Micro-USB OTG conectado (IP 192.168.7.2 ou USB Direto).\n");
 
     println!("\x1b[1;33mARGUMENTOS E VALORES PADRÃO:\x1b[0m");
@@ -131,13 +131,13 @@ fn print_help_pt() {
     println!("  6. FPS           Taxa de quadros: 10 a 60 FPS (padrão: 30)\n");
 
     println!("\x1b[1;33mOPÇÕES E PARÂMETROS:\x1b[0m");
-    println!("  \x1b[1;32m--engine=<gst|ffmpeg>\x1b[0m     Seleciona o motor de streaming (gst: GStreamer, ffmpeg: FFmpeg enxuto)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m Seleciona o protocolo de transporte (padrão: network)");
-    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m         Atalho para o Modo 2 (USB Bulk Direto via rusb)");
-    println!("  \x1b[1;32m--hud\x1b[0m                     Ativa o painel de telemetria na tela (auto-oculta em 60s)");
-    println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m   Perfil de cor (TrueColor 24-bit, 256 cores QP, Monocromático)");
-    println!("  \x1b[1;32m--help, -h\x1b[0m                Exibe esta mensagem de ajuda");
-    println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m      Seleciona o idioma (Inglês, Português, Italiano, Chinês)\n");
+    println!("  \x1b[1;32m--engine=<native|gst|ffmpeg>\x1b[0m Motor de streaming (native: 100% Rust Nativo - PADRÃO, gst: GStreamer, ffmpeg: FFmpeg)");
+    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Seleciona o protocolo de transporte (padrão: network)");
+    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Atalho para o Modo 2 (USB Bulk Direto via rusb)");
+    println!("  \x1b[1;32m--hud\x1b[0m                        Ativa o painel de telemetria na tela (auto-oculta em 60s)");
+    println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      Perfil de cor (TrueColor 24-bit, 256 cores QP, Monocromático)");
+    println!("  \x1b[1;32m--help, -h\x1b[0m                   Exibe esta mensagem de ajuda");
+    println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m         Seleciona o idioma (Inglês, Português, Italiano, Chinês)\n");
 
     println!("\x1b[1;33mCOMO PARAR O EXT-SENDER:\x1b[0m");
     println!("  - \x1b[1;37mInterativo:\x1b[0m Pressione \x1b[1;31mCtrl + C\x1b[0m no terminal onde o ext-sender está rodando.");
@@ -163,7 +163,7 @@ fn print_help_it() {
     println!("  1. \x1b[1;37mSessione Wayland:\x1b[0m GNOME 44+ su Wayland con org.gnome.Mutter.ScreenCast.");
     println!("  2. \x1b[1;37mPipeWire:\x1b[0m Servizi pipewire, wireplumber e pipewire-pulse attivi.");
     println!("  3. \x1b[1;37mAccelerazione GPU:\x1b[0m Scheda AMD (VA-API), Intel (VA-API/QSV) o NVIDIA (NVENC).");
-    println!("  4. \x1b[1;37mGStreamer 1.0:\x1b[0m Plugin gst-plugins-base, good, bad e plugin di codifica hardware.");
+    println!("  4. \x1b[1;37mMotore di Streaming:\x1b[0m 100% Rust Nativo In-Process (PREDEFINITO - zero software esterno), o GStreamer / FFmpeg.");
     println!("  5. \x1b[1;37mConnessione Pi Zero:\x1b[0m Cavo Micro-USB OTG connesso (IP 192.168.7.2 o USB Diretto).\n");
 
     println!("\x1b[1;33mARGOMENTI E PREDEFINITI:\x1b[0m");
@@ -175,13 +175,13 @@ fn print_help_it() {
     println!("  6. FPS             Frequenza fotogrammi: da 10 a 60 FPS (default: 30)\n");
 
     println!("\x1b[1;33mOPZIONI:\x1b[0m");
-    println!("  \x1b[1;32m--engine=<gst|ffmpeg>\x1b[0m     Seleziona framework di streaming (gst: GStreamer, ffmpeg: FFmpeg leggero)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m Seleziona trasporto dati (default: network)");
-    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m         Scorciatoia per Modalità 2 (USB Bulk Diretto via rusb)");
-    println!("  \x1b[1;32m--hud\x1b[0m                     Attiva telemetria OSD a schermo (scomparsa in 60s)");
-    println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m   Profilo colore (TrueColor 24-bit, 256 colori QP, Bianco/Nero)");
-    println!("  \x1b[1;32m--help, -h\x1b[0m                Mostra questo messaggio di aiuto");
-    println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m      Seleziona lingua (Inglese, Portoghese, Italiano, Cinese)\n");
+    println!("  \x1b[1;32m--engine=<native|gst|ffmpeg>\x1b[0m Motore di streaming (native: 100% Rust Nativo - PREDEFINITO, gst: GStreamer, ffmpeg: FFmpeg)");
+    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Seleziona trasporto dati (default: network)");
+    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Scorciatoia per Modalità 2 (USB Bulk Diretto via rusb)");
+    println!("  \x1b[1;32m--hud\x1b[0m                        Attiva telemetria OSD a schermo (scomparsa in 60s)");
+    println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      Profilo colore (TrueColor 24-bit, 256 colori QP, Bianco/Nero)");
+    println!("  \x1b[1;32m--help, -h\x1b[0m                   Mostra questo messaggio di aiuto");
+    println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m         Seleziona lingua (Inglese, Portoghese, Italiano, Cinese)\n");
 
     println!("\x1b[1;33mCOME ARRESTARE EXT-SENDER:\x1b[0m");
     println!("  - \x1b[1;37mInterattivo:\x1b[0m Premi \x1b[1;31mCtrl + C\x1b[0m nel terminale di ext-sender.");
@@ -207,7 +207,7 @@ fn print_help_zh() {
     println!("  1. \x1b[1;37mWayland 桌面会话:\x1b[0m GNOME 44+ 并开启 org.gnome.Mutter.ScreenCast 接口。");
     println!("  2. \x1b[1;37mPipeWire 音视频服务:\x1b[0m pipewire, wireplumber 及 pipewire-pulse 正常运行。");
     println!("  3. \x1b[1;37mGPU 硬件加速环境:\x1b[0m AMD 显卡 (VA-API), Intel 核显 (VA-API/QSV) 或 NVIDIA 显卡 (NVENC)。");
-    println!("  4. \x1b[1;37mGStreamer 1.0 组件:\x1b[0m 已安装 gst-plugins-base, good, bad 及硬件编码插件。");
+    println!("  4. \x1b[1;37m推流框架环境:\x1b[0m 100% 纯 Rust 原生进程内引擎 (默认 - 无需外部软件), 或 GStreamer / FFmpeg。");
     println!("  5. \x1b[1;37m树莓派连接状态:\x1b[0m 已通过 Micro-USB OTG 数据线连接 (IP 192.168.7.2 或 USB 直通模式)。\n");
 
     println!("\x1b[1;33m位置参数与默认值:\x1b[0m");
@@ -219,13 +219,13 @@ fn print_help_zh() {
     println!("  6. 帧率          目标帧率: 10 到 60 FPS (默认: 30)\n");
 
     println!("\x1b[1;33m可用选项:\x1b[0m");
-    println!("  \x1b[1;32m--engine=<gst|ffmpeg>\x1b[0m     选择推流框架 (gst: GStreamer 硬件流水线, ffmpeg: 精简版 FFmpeg)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m 选择数据传输模式 (默认: network)");
-    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m         模式 2 快捷参数 (基于 rusb 的 USB Bulk 直通模式)");
-    println!("  \x1b[1;32m--hud\x1b[0m                     开启屏幕半透明遥测诊断浮层 (60秒后自动隐藏)");
-    println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m   色彩配置文件 (24位全彩, 256色粗量化, 黑白单色)");
-    println!("  \x1b[1;32m--help, -h\x1b[0m                显示此帮助信息");
-    println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m      选择帮助信息语言 (英语, 葡萄牙语, 意大利语, 中文)\n");
+    println!("  \x1b[1;32m--engine=<native|gst|ffmpeg>\x1b[0m 推流引擎 (native: 100% 纯 Rust 原生 - 默认, gst: GStreamer, ffmpeg: FFmpeg)");
+    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    选择数据传输模式 (默认: network)");
+    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            模式 2 快捷参数 (基于 rusb 的 USB Bulk 直通模式)");
+    println!("  \x1b[1;32m--hud\x1b[0m                        开启屏幕半透明遥测诊断浮层 (60秒后自动隐藏)");
+    println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      色彩配置文件 (24位全彩, 256色粗量化, 黑白单色)");
+    println!("  \x1b[1;32m--help, -h\x1b[0m                   显示此帮助信息");
+    println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m         选择帮助信息语言 (英语, 葡萄牙语, 意大利语, 中文)\n");
 
     println!("\x1b[1;33m如何停止 EXT-SENDER 推流:\x1b[0m");
     println!("  - \x1b[1;37m交互式终止:\x1b[0m 在运行 ext-sender 的终端中按下 \x1b[1;31mCtrl + C\x1b[0m。");

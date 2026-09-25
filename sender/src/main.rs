@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::net::UdpSocket;
 use std::os::unix::io::RawFd;
+use std::os::unix::process::ExitStatusExt;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -25,12 +26,51 @@ use std::{env, thread};
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{OwnedObjectPath, Value};
 
+mod encoder;
 mod i18n;
+mod native_streamer;
 mod usb_transport;
 
 use i18n::Language;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
+
+pub enum StreamerHandle {
+    Child(Child),
+    Native(native_streamer::NativeStreamer),
+}
+
+impl StreamerHandle {
+    pub fn kill(&mut self) -> Result<(), std::io::Error> {
+        match self {
+            StreamerHandle::Child(ref mut c) => c.kill(),
+            StreamerHandle::Native(ref mut n) => {
+                n.stop();
+                Ok(())
+            }
+        }
+    }
+
+    pub fn wait(&mut self) -> Result<std::process::ExitStatus, std::io::Error> {
+        match self {
+            StreamerHandle::Child(ref mut c) => c.wait(),
+            StreamerHandle::Native(_) => Ok(std::process::ExitStatus::from_raw(0)),
+        }
+    }
+
+    pub fn try_wait(&mut self) -> Result<Option<std::process::ExitStatus>, std::io::Error> {
+        match self {
+            StreamerHandle::Child(ref mut c) => c.try_wait(),
+            StreamerHandle::Native(ref n) => {
+                if n.is_running() {
+                    Ok(None)
+                } else {
+                    Ok(Some(std::process::ExitStatus::from_raw(0)))
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorProfile {
@@ -122,10 +162,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let is_usb_transport = args.iter().any(|a| a == "--transport=usb" || a == "--usb-bulk" || a == "--usb");
-    let stream_engine = if args.iter().any(|a| a == "--engine=ffmpeg" || a == "--ffmpeg") {
+    let stream_engine = if args.iter().any(|a| a == "--engine=gst" || a == "--gst" || a == "--gstreamer") {
+        StreamEngine::GStreamer
+    } else if args.iter().any(|a| a == "--engine=ffmpeg" || a == "--ffmpeg") {
         StreamEngine::FFmpeg
     } else {
-        StreamEngine::GStreamer
+        StreamEngine::NativeRust // 100% Pure Rust Native In-Process is DEFAULT!
     };
 
     let running = Arc::new(AtomicBool::new(true));
@@ -436,13 +478,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamEngine {
-    GStreamer,
-    FFmpeg,
+    NativeRust, // 100% Pure Rust Native In-Process GPU Pipeline (DEFAULT)
+    GStreamer,  // GStreamer 1.0 (Hardware)
+    FFmpeg,     // FFmpeg (Lean Hardware)
 }
 
 impl StreamEngine {
     pub fn name(&self) -> &'static str {
         match self {
+            StreamEngine::NativeRust => "100% Native Rust (In-Process GPU Pipeline - DEFAULT)",
             StreamEngine::GStreamer => "GStreamer 1.0 (Hardware)",
             StreamEngine::FFmpeg => "FFmpeg (Lean Hardware)",
         }
@@ -543,10 +587,26 @@ fn spawn_streamer(
     hud: bool,
     color_profile: ColorProfile,
     usb_pipe_fd: Option<RawFd>,
-) -> Result<Child, std::io::Error> {
+) -> Result<StreamerHandle, std::io::Error> {
     match engine {
-        StreamEngine::FFmpeg => spawn_ffmpeg_streamer(target_ip, target_port, bitrate, encoder, fps, color_profile, usb_pipe_fd),
-        StreamEngine::GStreamer => spawn_gst_streamer(target_ip, target_port, bitrate, encoder, fps, hud, color_profile, usb_pipe_fd),
+        StreamEngine::NativeRust => {
+            let streamer = native_streamer::NativeStreamer::start(
+                target_ip.to_string(),
+                target_port,
+                bitrate,
+                fps,
+                usb_pipe_fd,
+            )?;
+            Ok(StreamerHandle::Native(streamer))
+        }
+        StreamEngine::FFmpeg => {
+            let child = spawn_ffmpeg_streamer(target_ip, target_port, bitrate, encoder, fps, color_profile, usb_pipe_fd)?;
+            Ok(StreamerHandle::Child(child))
+        }
+        StreamEngine::GStreamer => {
+            let child = spawn_gst_streamer(target_ip, target_port, bitrate, encoder, fps, hud, color_profile, usb_pipe_fd)?;
+            Ok(StreamerHandle::Child(child))
+        }
     }
 }
 
