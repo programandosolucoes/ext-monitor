@@ -333,6 +333,22 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         .proto-badge.usb {
             background: rgba(179, 136, 255, 0.12); border: 1px solid rgba(179, 136, 255, 0.3); color: var(--accent-purple);
         }
+        /* Network Management Grid & Inputs */
+        .net-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-top: 1rem;
+        }
+        .net-card {
+            background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius-md); padding: 1.1rem;
+        }
+        .net-card.active { border-color: rgba(0, 229, 255, 0.35); }
+        .net-field { margin-bottom: 0.8rem; }
+        .net-label { font-size: 0.76rem; color: var(--text-secondary); margin-bottom: 0.3rem; display: block; }
+        .net-input {
+            width: 100%; background: rgba(10, 14, 23, 0.85); border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius-sm); padding: 0.45rem 0.75rem; color: #fff; font-size: 0.85rem;
+            outline: none; transition: var(--transition);
+        }
+        .net-input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 10px rgba(0, 229, 255, 0.2); }
     </style>
 </head>
 <body>
@@ -518,6 +534,102 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                             <div class="stat-val purple" id="statRam">312 MB</div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full-Width Card: Network & Interface Management (OTG Zero-Gateway & LAN/Wi-Fi) -->
+        <div class="glass-card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>🖧</span>
+                    <span data-i18n="netHeader">Network & Interface Management (OTG Zero-Gateway & LAN/Wi-Fi)</span>
+                </div>
+                <span class="card-badge" data-i18n="netBadge">Zero-Gateway DHCP + Static</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);" data-i18n="netDesc">
+                Pi Zero runs a dedicated Zero-Gateway DHCP server on USB OTG (assigning 192.168.7.1 to your PC without breaking internet). For physical Ethernet/Wi-Fi, select DHCP or define a Static IP:
+            </p>
+
+            <div class="net-grid">
+                <!-- OTG Virtual Network -->
+                <div class="net-card active">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <strong style="color:var(--accent-cyan); font-size:0.95rem;">🔌 USB OTG (usb0)</strong>
+                        <span class="proto-badge fast" data-i18n="netOtgStatus">Zero-Gateway Active</span>
+                    </div>
+                    <div class="net-field">
+                        <span class="net-label" data-i18n="netPiIp">Raspberry Pi IP:</span>
+                        <div style="font-family:monospace; font-weight:700; color:#fff;" id="netUsb0Ip">192.168.7.2 / 24</div>
+                    </div>
+                    <div class="net-field">
+                        <span class="net-label" data-i18n="netHostIp">Host PC IP (DHCP Lease):</span>
+                        <div style="font-family:monospace; font-weight:700; color:var(--accent-emerald);">192.168.7.1</div>
+                    </div>
+                    <div class="net-field">
+                        <span class="net-label" data-i18n="netGateway">Default Gateway:</span>
+                        <div style="font-family:monospace; font-size:0.8rem; color:var(--text-muted);" data-i18n="netNoneGw">None (Direct Link - Safe for PC Internet)</div>
+                    </div>
+                    <div class="net-field">
+                        <span class="net-label" data-i18n="netIpv6">IPv6 Address:</span>
+                        <div style="font-family:monospace; font-size:0.75rem; color:#7dd3fc;" id="netUsb0Ipv6">fe80:: (Link-Local)</div>
+                    </div>
+                </div>
+
+                <!-- Physical / Wi-Fi Adapter Configuration -->
+                <div class="net-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <strong style="color:#fff; font-size:0.95rem;">📶 LAN / Wi-Fi / Miracast</strong>
+                        <span class="proto-badge std" id="netPhysStatus" data-i18n="netPhysBadge">Adapter Config</span>
+                    </div>
+
+                    <div class="net-field">
+                        <span class="net-label" data-i18n="netSelectIface">Interface:</span>
+                        <select id="netSelectIface" class="net-input">
+                            <option value="eth0">eth0 (Physical Ethernet)</option>
+                            <option value="wlan0">wlan0 (Wi-Fi / Miracast P2P)</option>
+                        </select>
+                    </div>
+
+                    <div class="net-field">
+                        <span class="net-label" data-i18n="netModeLabel">Mode:</span>
+                        <select id="netSelectMode" class="net-input">
+                            <option value="dhcp" data-i18n="netModeDhcp">DHCP Client (Automatic from Router)</option>
+                            <option value="static" data-i18n="netModeStatic">Static IP (Manual)</option>
+                        </select>
+                    </div>
+
+                    <div id="staticNetFields" style="display:none;">
+                        <div class="net-field">
+                            <span class="net-label" data-i18n="netStaticIp">IPv4 Address:</span>
+                            <input type="text" id="netInputIp" class="net-input" value="192.168.1.150" placeholder="e.g. 192.168.1.150">
+                        </div>
+                        <div class="net-field">
+                            <span class="net-label" data-i18n="netNetmask">Subnet Mask:</span>
+                            <input type="text" id="netInputMask" class="net-input" value="255.255.255.0" placeholder="255.255.255.0">
+                        </div>
+                        <div class="net-field">
+                            <span class="net-label" data-i18n="netGatewayInput">Gateway:</span>
+                            <input type="text" id="netInputGw" class="net-input" value="192.168.1.1" placeholder="e.g. 192.168.1.1">
+                        </div>
+                        <div class="net-field">
+                            <span class="net-label" data-i18n="netDns">DNS Servers:</span>
+                            <input type="text" id="netInputDns" class="net-input" value="1.1.1.1, 8.8.8.8" placeholder="1.1.1.1, 8.8.8.8">
+                        </div>
+                    </div>
+
+                    <div class="net-field">
+                        <span class="net-label" data-i18n="netIpv6Mode">IPv6 Mode:</span>
+                        <select id="netSelectIpv6" class="net-input">
+                            <option value="auto" data-i18n="netIpv6Auto">Auto SLAAC / Link-Local</option>
+                            <option value="disable" data-i18n="netIpv6Disable">Disabled</option>
+                        </select>
+                    </div>
+
+                    <button id="btnApplyNetwork" class="btn-primary" style="width:100%; margin-top:0.5rem;" data-i18n="netBtnApply">
+                        💾 Apply Network Settings
+                    </button>
+                    <div id="netStatusMessage" style="margin-top:0.6rem; font-size:0.8rem; display:none;"></div>
                 </div>
             </div>
         </div>
@@ -715,7 +827,29 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 scriptWfdDesc: "Test WFD / Miracast RTSP handshake & streaming:",
                 scriptModeDesc: "Check Pi Zero subsystem status (Serial, Network, Video):",
                 scriptSenderDesc: "Start Linux Wayland virtual monitor streaming:",
-                scriptStopDesc: "Stop Linux sender process:"
+                scriptStopDesc: "Stop Linux sender process:",
+                netHeader: "Network & Interface Management (OTG Zero-Gateway & LAN/Wi-Fi)",
+                netBadge: "Zero-Gateway DHCP + Static",
+                netDesc: "Pi Zero runs a dedicated Zero-Gateway DHCP server on USB OTG (assigning 192.168.7.1 to your PC without breaking internet). For physical Ethernet/Wi-Fi, select DHCP or define a Static IP:",
+                netOtgStatus: "Zero-Gateway Active",
+                netPiIp: "Raspberry Pi IP:",
+                netHostIp: "Host PC IP (DHCP Lease):",
+                netGateway: "Default Gateway:",
+                netNoneGw: "None (Direct Link - Safe for PC Internet)",
+                netIpv6: "IPv6 Address:",
+                netPhysBadge: "Adapter Config",
+                netSelectIface: "Interface:",
+                netModeLabel: "Mode:",
+                netModeDhcp: "DHCP Client (Automatic from Router)",
+                netModeStatic: "Static IP (Manual)",
+                netStaticIp: "IPv4 Address:",
+                netNetmask: "Subnet Mask:",
+                netGatewayInput: "Gateway:",
+                netDns: "DNS Servers:",
+                netIpv6Mode: "IPv6 Mode:",
+                netIpv6Auto: "Auto SLAAC / Link-Local",
+                netIpv6Disable: "Disabled",
+                netBtnApply: "💾 Apply Network Settings"
             },
             pt: {
                 title: "Pi Zero Monitor Estendido",
@@ -798,7 +932,29 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 scriptWfdDesc: "Testar o handshake WFD / Miracast RTSP:",
                 scriptModeDesc: "Verificar status dos subsistemas (Serial, Rede, Vídeo):",
                 scriptSenderDesc: "Iniciar streaming do monitor virtual no Linux:",
-                scriptStopDesc: "Parar processo do sender no Linux:"
+                scriptStopDesc: "Parar processo do sender no Linux:",
+                netHeader: "Gerenciador de Redes e Adaptadores (OTG Zero-Gateway & LAN/Wi-Fi)",
+                netBadge: "DHCP Zero-Gateway + IP Estático",
+                netDesc: "O Pi Zero executa um servidor DHCP Zero-Gateway no USB OTG (atribuindo 192.168.7.1 ao PC sem derrubar sua internet). Para Ethernet/Wi-Fi físico, escolha DHCP ou IP estático:",
+                netOtgStatus: "Zero-Gateway Ativo",
+                netPiIp: "IP do Raspberry Pi:",
+                netHostIp: "IP do PC Host (DHCP Automático):",
+                netGateway: "Gateway Padrão:",
+                netNoneGw: "Nenhum (Ponto a Ponto - Seguro para a Internet do PC)",
+                netIpv6: "Endereço IPv6:",
+                netPhysBadge: "Config. de Adaptador",
+                netSelectIface: "Interface de Rede:",
+                netModeLabel: "Modo de IP:",
+                netModeDhcp: "Cliente DHCP (Automático do Roteador)",
+                netModeStatic: "IP Estático (Manual)",
+                netStaticIp: "Endereço IPv4:",
+                netNetmask: "Máscara de Sub-rede:",
+                netGatewayInput: "Gateway:",
+                netDns: "Servidores DNS:",
+                netIpv6Mode: "Modo IPv6:",
+                netIpv6Auto: "Auto SLAAC / Link-Local",
+                netIpv6Disable: "Desativado",
+                netBtnApply: "💾 Aplicar Configurações de Rede"
             },
             it: {
                 title: "Pi Zero Monitor Esteso",
@@ -881,7 +1037,29 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 scriptWfdDesc: "Test handshake WFD / Miracast RTSP:",
                 scriptModeDesc: "Verifica stato sottosistemi (Seriale, Rete, Video):",
                 scriptSenderDesc: "Avvia streaming monitor virtuale Linux:",
-                scriptStopDesc: "Arresta processo sender su Linux:"
+                scriptStopDesc: "Arresta processo sender su Linux:",
+                netHeader: "Gestione Rete e Adattatori (OTG Zero-Gateway & LAN/Wi-Fi)",
+                netBadge: "DHCP Zero-Gateway + IP Statico",
+                netDesc: "Il Pi Zero esegue un server DHCP Zero-Gateway su USB OTG (assegna 192.168.7.1 al PC senza interrompere la connessione internet). Per Ethernet/Wi-Fi, scegli DHCP o IP statico:",
+                netOtgStatus: "Zero-Gateway Attivo",
+                netPiIp: "IP del Raspberry Pi:",
+                netHostIp: "IP del PC Host (Assegnato DHCP):",
+                netGateway: "Gateway Predefinito:",
+                netNoneGw: "Nessuno (Punto-Punto - Sicuro per Internet del PC)",
+                netIpv6: "Indirizzo IPv6:",
+                netPhysBadge: "Config. Adattatore",
+                netSelectIface: "Interfaccia:",
+                netModeLabel: "Modalità IP:",
+                netModeDhcp: "Client DHCP (Automatico dal Router)",
+                netModeStatic: "IP Statico (Manuale)",
+                netStaticIp: "Indirizzo IPv4:",
+                netNetmask: "Maschera di Sottorete:",
+                netGatewayInput: "Gateway:",
+                netDns: "Server DNS:",
+                netIpv6Mode: "Modalità IPv6:",
+                netIpv6Auto: "Auto SLAAC / Link-Local",
+                netIpv6Disable: "Disabilitato",
+                netBtnApply: "💾 Applica Impostazioni di Rete"
             },
             zh: {
                 title: "树莓派 Zero 扩展显示屏",
@@ -964,7 +1142,29 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 scriptWfdDesc: "测试 WFD / Miracast RTSP 握手与推流状态:",
                 scriptModeDesc: "检查树莓派子系统状态 (串口、网络、视频):",
                 scriptSenderDesc: "在 Linux 上启动虚拟扩展屏推流:",
-                scriptStopDesc: "在 Linux 终端中停止推流进程:"
+                scriptStopDesc: "在 Linux 终端中停止推流进程:",
+                netHeader: "网络与网络适配器管理 (OTG 免网关与局域网/Wi-Fi)",
+                netBadge: "免网关 DHCP + 静态 IP",
+                netDesc: "Pi Zero 在 USB OTG 上运行专用免网关 DHCP 服务（自动为电脑分配 192.168.7.1 且不影响电脑原有外网）。对于实体网卡或 Wi-Fi，可自由配置 DHCP 或静态 IP：",
+                netOtgStatus: "免网关服务运行中",
+                netPiIp: "树莓派 IP 地址:",
+                netHostIp: "电脑主机 IP (DHCP 自动分配):",
+                netGateway: "默认网关:",
+                netNoneGw: "无网关 (点对点直连 - 不影响电脑外网)",
+                netIpv6: "IPv6 地址:",
+                netPhysBadge: "适配器配置",
+                netSelectIface: "网卡接口:",
+                netModeLabel: "IP 模式:",
+                netModeDhcp: "DHCP 客户端 (从路由器自动获取)",
+                netModeStatic: "静态 IP (手动设定)",
+                netStaticIp: "IPv4 地址:",
+                netNetmask: "子网掩码:",
+                netGatewayInput: "网关:",
+                netDns: "DNS 服务器:",
+                netIpv6Mode: "IPv6 模式:",
+                netIpv6Auto: "自动 SLAAC / 链路本地",
+                netIpv6Disable: "禁用",
+                netBtnApply: "💾 应用网络配置"
             }
         };
 
@@ -1110,6 +1310,70 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 if (data.ram) document.getElementById('statRam').textContent = data.ram + ' MB';
             }).catch(() => {});
         }, 2000);
+
+        // Network configuration UI handling
+        const netSelectMode = document.getElementById('netSelectMode');
+        const staticNetFields = document.getElementById('staticNetFields');
+        if (netSelectMode && staticNetFields) {
+            netSelectMode.addEventListener('change', (e) => {
+                staticNetFields.style.display = e.target.value === 'static' ? 'block' : 'none';
+            });
+        }
+
+        const btnApplyNetwork = document.getElementById('btnApplyNetwork');
+        if (btnApplyNetwork) {
+            btnApplyNetwork.addEventListener('click', () => {
+                const payload = {
+                    iface: document.getElementById('netSelectIface').value,
+                    mode: document.getElementById('netSelectMode').value,
+                    ip: document.getElementById('netInputIp').value,
+                    netmask: document.getElementById('netInputMask').value,
+                    gateway: document.getElementById('netInputGw').value,
+                    dns: document.getElementById('netInputDns').value,
+                    ipv6: document.getElementById('netSelectIpv6').value
+                };
+                const msgEl = document.getElementById('netStatusMessage');
+                msgEl.style.display = 'block';
+                msgEl.style.color = 'var(--accent-amber)';
+                msgEl.textContent = 'Applying network configuration...';
+
+                fetch('/api/network', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(r => r.json()).then(() => {
+                    msgEl.style.color = 'var(--accent-emerald)';
+                    msgEl.textContent = '✓ Network settings applied successfully!';
+                    setTimeout(() => { msgEl.style.display = 'none'; }, 4000);
+                    pollNetworkStatus();
+                }).catch(err => {
+                    msgEl.style.color = 'var(--accent-red)';
+                    msgEl.textContent = '✗ Error applying settings: ' + err;
+                });
+            });
+        }
+
+        function pollNetworkStatus() {
+            fetch('/api/network').then(r => r.json()).then(data => {
+                if (data.usb0) {
+                    if (data.usb0.ipv4) document.getElementById('netUsb0Ip').textContent = data.usb0.ipv4 + ' / 24';
+                    if (data.usb0.ipv6) document.getElementById('netUsb0Ipv6').textContent = data.usb0.ipv6;
+                }
+                const curIface = document.getElementById('netSelectIface').value;
+                const ifaceData = data[curIface];
+                const badge = document.getElementById('netPhysStatus');
+                if (ifaceData && ifaceData.detected) {
+                    badge.className = 'proto-badge fast';
+                    badge.textContent = ifaceData.ipv4 && ifaceData.ipv4 !== 'disconnected' ? ifaceData.ipv4 : 'Connected';
+                } else {
+                    badge.className = 'proto-badge std';
+                    badge.textContent = 'Disconnected';
+                }
+            }).catch(() => {});
+        }
+
+        pollNetworkStatus();
+        setInterval(pollNetworkStatus, 4000);
     </script>
 </body>
 </html>
