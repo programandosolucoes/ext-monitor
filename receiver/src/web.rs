@@ -167,6 +167,17 @@ fn handle_http_client(
                 b"{\"status\":\"switched\"}",
             );
         }
+        ("GET", "/api/network") => {
+            let net_json = get_network_status_json();
+            send_response(&mut stream, "200 OK", "application/json", net_json.as_bytes());
+        }
+        ("POST", "/api/network") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = &req_str[idx + 4..];
+                apply_network_config(body);
+            }
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
+        }
         _ => {
             send_response(&mut stream, "404 Not Found", "text/plain", b"404 Not Found");
         }
@@ -234,3 +245,157 @@ fn forward_config_to_sender(payload: &str) {
         let _ = sock.send_to(payload.as_bytes(), "127.0.0.1:5001");
     }
 }
+
+/// Retrieve network interfaces status (IPs, DHCP server, gateway)
+fn get_network_status_json() -> String {
+    let (usb0_ipv4, usb0_ipv6) = get_interface_addrs("usb0");
+    let (eth0_ipv4, eth0_ipv6) = get_interface_addrs("eth0");
+    let (wlan0_ipv4, wlan0_ipv6) = get_interface_addrs("wlan0");
+
+    let usb0_detected = fs::metadata("/sys/class/net/usb0").is_ok();
+    let eth0_detected = fs::metadata("/sys/class/net/eth0").is_ok();
+    let wlan0_detected = fs::metadata("/sys/class/net/wlan0").is_ok();
+
+    let dhcp_running = fs::metadata("/var/run/udhcpd.pid").is_ok()
+        || fs::metadata("/var/lib/misc/udhcpd.leases").is_ok();
+
+    format!(
+        concat!(
+            "{{",
+            "\"usb0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\",\"dhcp_server\":{},\"host_ip\":\"192.168.7.1\",\"gateway\":\"none\"}},",
+            "\"eth0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\"}},",
+            "\"wlan0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\"}}",
+            "}}"
+        ),
+        usb0_detected,
+        usb0_ipv4.unwrap_or_else(|| "192.168.7.2".to_string()),
+        usb0_ipv6.unwrap_or_else(|| "none".to_string()),
+        dhcp_running,
+        eth0_detected,
+        eth0_ipv4.unwrap_or_else(|| "disconnected".to_string()),
+        eth0_ipv6.unwrap_or_else(|| "none".to_string()),
+        wlan0_detected,
+        wlan0_ipv4.unwrap_or_else(|| "disconnected".to_string()),
+        wlan0_ipv6.unwrap_or_else(|| "none".to_string())
+    )
+}
+
+fn get_interface_addrs(iface: &str) -> (Option<String>, Option<String>) {
+    let output = match std::process::Command::new("ifconfig").arg(iface).output() {
+        Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
+        Err(_) => return (None, None),
+    };
+    let mut ipv4 = None;
+    let mut ipv6 = None;
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("inet addr:") {
+            if let Some(ip) = trimmed["inet addr:".len()..].split_whitespace().next() {
+                ipv4 = Some(ip.to_string());
+            }
+        } else if trimmed.starts_with("inet ") && !trimmed.starts_with("inet6") {
+            if let Some(ip) = trimmed["inet ".len()..].split_whitespace().next() {
+                ipv4 = Some(ip.to_string());
+            }
+        }
+
+        if trimmed.starts_with("inet6 addr:") {
+            if let Some(ip) = trimmed["inet6 addr:".len()..].split_whitespace().next() {
+                ipv6 = Some(ip.to_string());
+            }
+        } else if trimmed.starts_with("inet6 ") {
+            if let Some(ip) = trimmed["inet6 ".len()..].split_whitespace().next() {
+                ipv6 = Some(ip.to_string());
+            }
+        }
+    }
+    (ipv4, ipv6)
+}
+
+fn extract_json_str<'a>(json: &'a str, key: &str) -> Option<&'a str> {
+    let pattern = format!("\"{}\"", key);
+    let idx = json.find(&pattern)?;
+    let rest = &json[idx + pattern.len()..];
+    let colon_idx = rest.find(':')?;
+    let after_colon = rest[colon_idx + 1..].trim_start();
+    if after_colon.starts_with('"') {
+        let end_quote = after_colon[1..].find('"')?;
+        Some(&after_colon[1..1 + end_quote])
+    } else {
+        None
+    }
+}
+
+fn apply_network_config(payload: &str) {
+    println!("\x1b[1;34m[web-server]\x1b[0m Applying network config: {}", payload);
+    let iface = extract_json_str(payload, "iface").unwrap_or("eth0");
+    let mode = extract_json_str(payload, "mode").unwrap_or("dhcp");
+    let ip = extract_json_str(payload, "ip").unwrap_or("");
+    let netmask = extract_json_str(payload, "netmask").unwrap_or("255.255.255.0");
+    let gateway = extract_json_str(payload, "gateway").unwrap_or("");
+    let dns = extract_json_str(payload, "dns").unwrap_or("");
+    let ipv6_mode = extract_json_str(payload, "ipv6").unwrap_or("auto");
+
+    // Only allow known network interfaces for security
+    if iface != "usb0" && iface != "eth0" && iface != "wlan0" {
+        eprintln!("\x1b[1;31m[web-server]\x1b[0m Invalid network interface: {}", iface);
+        return;
+    }
+
+    // Configure IPv6
+    let ipv6_proc = format!("/proc/sys/net/ipv6/conf/{}/disable_ipv6", iface);
+    if ipv6_mode == "disable" {
+        let _ = fs::write(&ipv6_proc, "1");
+    } else {
+        let _ = fs::write(&ipv6_proc, "0");
+    }
+
+    if mode == "dhcp" {
+        if iface == "usb0" {
+            // For usb0, restore default OTG IP and restart udhcpd zero-gateway server
+            let _ = std::process::Command::new("ifconfig")
+                .args(&["usb0", "192.168.7.2", "netmask", "255.255.255.0", "up"])
+                .output();
+            let _ = std::process::Command::new("killall").arg("udhcpd").output();
+            let _ = std::process::Command::new("udhcpd").arg("/etc/udhcpd.conf").spawn();
+        } else {
+            // Physical interface (eth0/wlan0): run DHCP client
+            let _ = std::process::Command::new("pkill")
+                .args(&["-f", &format!("udhcpc -i {}", iface)])
+                .output();
+            let _ = std::process::Command::new("udhcpc")
+                .args(&["-i", iface, "-b", "-q"])
+                .spawn();
+        }
+    } else if mode == "static" && !ip.is_empty() {
+        // Kill dhcp client on this interface
+        let _ = std::process::Command::new("pkill")
+            .args(&["-f", &format!("udhcpc -i {}", iface)])
+            .output();
+
+        // Apply static IP
+        let _ = std::process::Command::new("ifconfig")
+            .args(&[iface, ip, "netmask", netmask, "up"])
+            .output();
+
+        // Apply Gateway if specified and not "none"
+        if !gateway.is_empty() && gateway != "none" {
+            let _ = std::process::Command::new("route")
+                .args(&["add", "default", "gw", gateway, iface])
+                .output();
+        }
+
+        // Apply DNS
+        if !dns.is_empty() {
+            let mut resolv = String::new();
+            for server in dns.split(',') {
+                let s = server.trim();
+                if !s.is_empty() {
+                    resolv.push_str(&format!("nameserver {}\n", s));
+                }
+            }
+            let _ = fs::write("/etc/resolv.conf", resolv);
+        }
+    }
+}
+

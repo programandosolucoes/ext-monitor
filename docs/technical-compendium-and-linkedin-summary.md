@@ -43,6 +43,9 @@ Durante a evolução do projeto, cada solicitação de Carlos direcionou a arqui
    - *Solução:* Gerador de initramfs ultracompacto (13MB totais contendo kernel oficial, firmware e binário Rust de 642KB) que sobe em 1.8s direto em `tmpfs`.
 5. **Reversibilidade Universal e Multi-Telas:**
    - *Visão do Carlos:* Permitir que qualquer PC velho atue como monitor secundário (sentido inverso) e suporte de 1 a $N$ telas simultâneas com multiplexação limpa.
+6. **Rede USB OTG com DHCP Zero-Gateway e Gestor de Redes (LAN / Wi-Fi / Miracast):**
+   - *Demanda e Validação do Carlos:* Se o PC não receber um IP automaticamente no cabo USB, não há comunicação. Porém, se um servidor DHCP padrão entregar gateway, o PC perde o acesso à internet. Em placas normais (`eth0`, `wlan0`), deve haver suporte a DHCP cliente ou IP estático (IPv4/IPv6).
+   - *Solução:* Sub-rede `192.168.7.0/24` com servidor `udhcpd` embutido no Pi Zero que fornece `192.168.7.1` ao host PC **sem emitir `opt router` (Zero-Gateway)**. A internet do computador do usuário segue intacta no Wi-Fi/Ethernet principal. Adicionado card completo no Web Dashboard para configuração dinâmica de redes físicas e P2P.
 
 ---
 

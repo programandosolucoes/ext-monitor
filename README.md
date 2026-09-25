@@ -199,12 +199,23 @@ gpu_mem=128        # Alocação dedicada para buffers de frame duplo V4L2 M2M
 
 ---
 
-## 💾 Imagem Minimalista em RAM (Boot Instantâneo em 4 a 6 Segundos)
+## 💾 Imagem Minimalista em RAM (Boot Instantâneo em < 2 Segundos)
 
-Para eliminar o tempo de boot de 1min 50s do Debian e garantir proteção total contra desligamentos abruptos (puxar o cabo Micro-USB), a imagem Buildroot é configurada como **Initramfs 100% em RAM**:
+Para eliminar o tempo de boot de 1min 50s do Debian e garantir proteção total contra desligamentos abruptos (puxar o cabo Micro-USB), a imagem appliance é configurada como **Initramfs 100% em RAM**:
 - **Partição Única FAT32:** Apenas 32MB contendo `bootcode.bin`, `start.elf`, `kernel.img`, `config.txt` e `initramfs.cpio.gz`.
-- **Boot Direto em RAM:** O kernel descompacta em `tmpfs`, inicia o gadget USB em 1 segundo e sobe o `ext-receiver`.
-- **Cartão SD Read-Only:** Zero risco de corrupção ao desligar ou desconectar o cabo.
+- **Boot Direto em RAM (< 2 segundos):** O kernel descompacta em `tmpfs`, inicia o gadget USB em 1 segundo e sobe o `ext-receiver` e painel web em porta 8080.
+- **Rede USB OTG Zero-Gateway Automática:** O Raspberry Pi entrega IP `192.168.7.1` ao host PC automaticamente por DHCP (`udhcpd`) **sem fornecer rota de gateway padrão**. Isso garante comunicação instantânea plug-and-play sem derrubar o Wi-Fi ou a internet principal do computador do usuário!
+- **Gerenciador de Redes e Miracast no Painel Web:** Configuração dinâmica de adaptadores físicos (`eth0`, `wlan0`), cliente DHCP do roteador, IP estático, máscara, gateway, DNS e IPv6 diretamente pelo navegador (`http://192.168.7.2:8080`).
+- **Cartão SD Read-Only:** Zero risco de corrupção ao desligar ou desconectar o cabo abruptamente.
+
+### Como gerar e gravar no Cartão Micro-SD:
+```bash
+# 1. Gerar a imagem appliance de 32MB:
+./scripts/build-fast-appliance.sh
+
+# 2. Gravar no cartão micro-SD (substitua /dev/sdX pelo seu leitor de cartão):
+sudo dd if=build-appliance/ext-monitor-pi0-appliance.img of=/dev/sdX bs=4M status=progress conv=fsync
+```
 
 > [!NOTE]
 > **Protocolo Legado GUD Descartado:** O protocolo oficial GUD (`gud_set_buffer_req` + descompressão LZ4 em CPU) foi descartado do projeto por saturar a CPU ARM1176 do Pi Zero em 100% gerando estrangulamento térmico e limite de 10–15 FPS. Nossa arquitetura opera exclusivamente com fluxos H.264 comprimidos pelo hardware da GPU do host (VA-API/NVENC/OpenH264) e decodificados pelo chip VideoCore IV em hardware.
