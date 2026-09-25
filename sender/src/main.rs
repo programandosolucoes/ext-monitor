@@ -122,6 +122,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let is_usb_transport = args.iter().any(|a| a == "--transport=usb" || a == "--usb-bulk" || a == "--usb");
+    let stream_engine = if args.iter().any(|a| a == "--engine=ffmpeg" || a == "--ffmpeg") {
+        StreamEngine::FFmpeg
+    } else {
+        StreamEngine::GStreamer
+    };
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -153,6 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;34m[*] Color Profile:\x1b[0m {}", color_profile.name());
     println!("\x1b[1;34m[*] Display Mode:\x1b[0m {} (options: 'extend' or 'clone')", mode);
     println!("\x1b[1;34m[*] Encoder Engine:\x1b[0m {:?} (arg: '{}')", encoder, encoder_arg);
+    println!("\x1b[1;34m[*] Stream Framework:\x1b[0m {}", stream_engine.name());
     println!("\x1b[1;34m[*] Target Framerate:\x1b[0m {} FPS", fps);
     println!("\x1b[1;34m[*] Diagnostic HUD:\x1b[0m {}", if hud_arg { "\x1b[1;32mENABLED (Auto-hide in 60s)\x1b[0m" } else { "\x1b[1;30mDISABLED\x1b[0m" });
 
@@ -279,9 +285,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("\x1b[1;32m[+] PipeWire Node ID for {}:\x1b[0m {}", monitor_to_record, node_id);
 
-        // Spawn GStreamer pipeline with autoconnect=false
-        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline ({} FPS, HUD: {}, Color: {:?})...\x1b[0m", encoder, fps, hud_showing, color_profile);
-        let mut child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, pipe_write_fd) {
+        // Spawn hardware streaming pipeline with autoconnect=false
+        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline via {} ({} FPS, HUD: {}, Color: {:?})...\x1b[0m", encoder, stream_engine.name(), fps, hud_showing, color_profile);
+        let mut child = match spawn_streamer(stream_engine, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, pipe_write_fd) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -377,7 +383,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\x1b[1;36m[*] Hot-applying configuration (FPS: {}, Color: {:?}, HUD: {})...\x1b[0m", fps, color_profile, hud_showing);
                 let _ = child.kill();
                 let _ = child.wait();
-                child = match spawn_streamer(target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, pipe_write_fd) {
+                child = match spawn_streamer(stream_engine, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, pipe_write_fd) {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("\x1b[1;31m[!] Failed to restart streamer: {}\x1b[0m", e);
@@ -426,6 +432,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\x1b[1;32m[*] ext-sender terminated cleanly.\x1b[0m");
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamEngine {
+    GStreamer,
+    FFmpeg,
+}
+
+impl StreamEngine {
+    pub fn name(&self) -> &'static str {
+        match self {
+            StreamEngine::GStreamer => "GStreamer 1.0 (Hardware)",
+            StreamEngine::FFmpeg => "FFmpeg (Lean Hardware)",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -513,6 +534,93 @@ fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
 }
 
 fn spawn_streamer(
+    engine: StreamEngine,
+    target_ip: &str,
+    target_port: u16,
+    bitrate: u32,
+    encoder: EncoderApi,
+    fps: u32,
+    hud: bool,
+    color_profile: ColorProfile,
+    usb_pipe_fd: Option<RawFd>,
+) -> Result<Child, std::io::Error> {
+    match engine {
+        StreamEngine::FFmpeg => spawn_ffmpeg_streamer(target_ip, target_port, bitrate, encoder, fps, color_profile, usb_pipe_fd),
+        StreamEngine::GStreamer => spawn_gst_streamer(target_ip, target_port, bitrate, encoder, fps, hud, color_profile, usb_pipe_fd),
+    }
+}
+
+fn spawn_ffmpeg_streamer(
+    target_ip: &str,
+    target_port: u16,
+    bitrate: u32,
+    encoder: EncoderApi,
+    fps: u32,
+    color_profile: ColorProfile,
+    usb_pipe_fd: Option<RawFd>,
+) -> Result<Child, std::io::Error> {
+    println!("\x1b[1;36m[+] Initializing FFmpeg Ultra-Low-Latency Streamer ({:?}, {} FPS, {} kbps)...\x1b[0m", encoder, fps, bitrate);
+    let mut cmd = Command::new("ffmpeg");
+    cmd.arg("-nostdin")
+       .arg("-hide_banner")
+       .arg("-loglevel").arg("warning")
+       .arg("-re");
+
+    cmd.arg("-device").arg("/dev/dri/card1")
+       .arg("-f").arg("kmsgrab")
+       .arg("-i").arg("-");
+
+    cmd.arg("-r").arg(format!("{}", fps));
+
+    match encoder {
+        EncoderApi::Vaapi => {
+            let filter = if color_profile == ColorProfile::Grayscale {
+                "hwmap=derive_device=vaapi,scale_vaapi=w=1600:h=900:format=nv12,colorchannelmixer=.3:.4:.3:0:.3:.4:.3:0:.3:.4:.3"
+            } else {
+                "hwmap=derive_device=vaapi,scale_vaapi=w=1600:h=900:format=nv12"
+            };
+            cmd.arg("-vf").arg(filter)
+               .arg("-c:v").arg("h264_vaapi")
+               .arg("-b:v").arg(format!("{}k", bitrate))
+               .arg("-maxrate").arg(format!("{}k", bitrate))
+               .arg("-bufsize").arg(format!("{}k", bitrate / 2))
+               .arg("-g").arg(format!("{}", fps.max(15)));
+        }
+        EncoderApi::Nvenc => {
+            cmd.arg("-c:v").arg("h264_nvenc")
+               .arg("-preset").arg("p1")
+               .arg("-tune").arg("ull")
+               .arg("-b:v").arg(format!("{}k", bitrate))
+               .arg("-g").arg(format!("{}", fps.max(15)));
+        }
+        EncoderApi::Qsv => {
+            cmd.arg("-c:v").arg("h264_qsv")
+               .arg("-preset").arg("veryfast")
+               .arg("-b:v").arg(format!("{}k", bitrate))
+               .arg("-g").arg(format!("{}", fps.max(15)));
+        }
+        EncoderApi::Software => {
+            cmd.arg("-c:v").arg("libx264")
+               .arg("-preset").arg("ultrafast")
+               .arg("-tune").arg("zerolatency")
+               .arg("-b:v").arg(format!("{}k", bitrate))
+               .arg("-g").arg(format!("{}", fps.max(15)));
+        }
+    }
+
+    if let Some(fd) = usb_pipe_fd {
+        cmd.arg("-f").arg("h264")
+           .arg(format!("pipe:{}", fd));
+    } else {
+        cmd.arg("-payload_type").arg("96")
+           .arg("-f").arg("rtp")
+           .arg(format!("rtp://{}:{}", target_ip, target_port));
+    }
+
+    cmd.spawn()
+}
+
+fn spawn_gst_streamer(
     target_ip: &str,
     target_port: u16,
     bitrate: u32,

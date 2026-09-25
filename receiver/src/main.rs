@@ -18,6 +18,7 @@
 
 mod drm;
 mod i18n;
+mod native_v4l2;
 mod pipeline;
 mod usb_bulk;
 mod web;
@@ -25,7 +26,7 @@ mod web_ui;
 mod wfd;
 
 use i18n::Language;
-use pipeline::{PipelineKind, PipelineManager};
+use pipeline::{PipelineBackend, PipelineKind, PipelineManager};
 use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -67,6 +68,10 @@ fn main() {
     drm::ensure_drm_hdmi_connected();
 
     let pipeline_mgr = Arc::new(PipelineManager::new());
+    if let Some(backend_arg) = args.iter().find(|a| a.starts_with("--backend=") || a.starts_with("--engine=")) {
+        let val = if backend_arg.starts_with("--backend=") { &backend_arg[10..] } else { &backend_arg[9..] };
+        pipeline_mgr.set_backend(PipelineBackend::from_str(val));
+    }
 
     if is_usb_bulk_mode {
         println!("\x1b[1;33m[ext-receiver]\x1b[0m Active Mode: MODE 2 (Direct USB Bulk via FunctionFS)");

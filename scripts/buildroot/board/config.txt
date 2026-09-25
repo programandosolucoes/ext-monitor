@@ -1,0 +1,13 @@
+# Raspberry Pi Zero Minimal Appliance Boot Configuration
+# Fast boot, zero splash delay, VideoCore IV VPU & USB Composite Gadget
+disable_splash=1
+boot_delay=0
+disable_overscan=1
+disable_fw_kms_setup=1
+
+# VideoCore IV Hardware Acceleration & KMS Display
+dtoverlay=vc4-kms-v3d,noaudio,nocomposite
+gpu_mem=128
+
+# USB OTG Gadget Peripheral Controller
+dtoverlay=dwc2,dr_mode=otg

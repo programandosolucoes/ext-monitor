@@ -87,6 +87,7 @@ fn print_help_en() {
     println!("  6. FPS           Target framerate: 10 to 60 FPS (default: 30)\n");
 
     println!("\x1b[1;33mOPTIONS & FLAGS:\x1b[0m");
+    println!("  \x1b[1;32m--engine=<gst|ffmpeg>\x1b[0m     Select streaming engine (gst: GStreamer, ffmpeg: Lean FFmpeg)");
     println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m Select transport protocol (default: network)");
     println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m         Shortcut for Mode 2 (Direct USB Bulk via rusb)");
     println!("  \x1b[1;32m--hud\x1b[0m                     Enable diagnostic on-screen telemetry overlay (auto-hides in 60s)");
@@ -130,6 +131,7 @@ fn print_help_pt() {
     println!("  6. FPS           Taxa de quadros: 10 a 60 FPS (padrão: 30)\n");
 
     println!("\x1b[1;33mOPÇÕES E PARÂMETROS:\x1b[0m");
+    println!("  \x1b[1;32m--engine=<gst|ffmpeg>\x1b[0m     Seleciona o motor de streaming (gst: GStreamer, ffmpeg: FFmpeg enxuto)");
     println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m Seleciona o protocolo de transporte (padrão: network)");
     println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m         Atalho para o Modo 2 (USB Bulk Direto via rusb)");
     println!("  \x1b[1;32m--hud\x1b[0m                     Ativa o painel de telemetria na tela (auto-oculta em 60s)");
@@ -173,6 +175,7 @@ fn print_help_it() {
     println!("  6. FPS             Frequenza fotogrammi: da 10 a 60 FPS (default: 30)\n");
 
     println!("\x1b[1;33mOPZIONI:\x1b[0m");
+    println!("  \x1b[1;32m--engine=<gst|ffmpeg>\x1b[0m     Seleziona framework di streaming (gst: GStreamer, ffmpeg: FFmpeg leggero)");
     println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m Seleziona trasporto dati (default: network)");
     println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m         Scorciatoia per Modalità 2 (USB Bulk Diretto via rusb)");
     println!("  \x1b[1;32m--hud\x1b[0m                     Attiva telemetria OSD a schermo (scomparsa in 60s)");
@@ -216,6 +219,7 @@ fn print_help_zh() {
     println!("  6. 帧率          目标帧率: 10 到 60 FPS (默认: 30)\n");
 
     println!("\x1b[1;33m可用选项:\x1b[0m");
+    println!("  \x1b[1;32m--engine=<gst|ffmpeg>\x1b[0m     选择推流框架 (gst: GStreamer 硬件流水线, ffmpeg: 精简版 FFmpeg)");
     println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m 选择数据传输模式 (默认: network)");
     println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m         模式 2 快捷参数 (基于 rusb 的 USB Bulk 直通模式)");
     println!("  \x1b[1;32m--hud\x1b[0m                     开启屏幕半透明遥测诊断浮层 (60秒后自动隐藏)");

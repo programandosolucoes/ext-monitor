@@ -1,0 +1,84 @@
+#!/bin/sh
+#
+# Start Raspberry Pi Zero Hardware Video Display Receiver
+# Sets up 3-in-1 Composite USB Gadget and launches ext-receiver
+#
+
+case "$1" in
+  start)
+    echo "Starting Raspberry Pi Zero Extended Display Receiver..."
+    
+    # 1. Mount configfs & debugfs if not mounted
+    mountpoint -q /sys/kernel/config || mount -t configfs none /sys/kernel/config
+    mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
+    
+    # 2. Configure 3-in-1 Composite Gadget (Serial + Network + FunctionFS Bulk)
+    GADGET_DIR="/sys/kernel/config/usb_gadget/ext_composite"
+    if [ ! -d "$GADGET_DIR" ]; then
+        mkdir -p "$GADGET_DIR"
+        cd "$GADGET_DIR"
+        
+        echo 0x1d50 > idVendor
+        echo 0x614d > idProduct
+        echo 0x0100 > bcdDevice
+        echo 0x0200 > bcdUSB
+        
+        mkdir -p strings/0x409
+        echo "Raspberry Pi" > strings/0x409/manufacturer
+        echo "Pi Zero High-Speed Display & Network Hub" > strings/0x409/product
+        echo "PI0-EXT-COMPOSITE-001" > strings/0x409/serialnumber
+        
+        mkdir -p configs/c.1/strings/0x409
+        echo "Composite Display + Net + Serial" > configs/c.1/strings/0x409/configuration
+        echo 500 > configs/c.1/MaxPower
+        
+        # Function 1: Serial Console
+        mkdir -p functions/acm.usb0
+        ln -sf functions/acm.usb0 configs/c.1/
+        
+        # Function 2: ECM Network
+        mkdir -p functions/ecm.usb0
+        echo "12:22:33:44:55:66" > functions/ecm.usb0/host_addr
+        echo "12:22:33:44:55:67" > functions/ecm.usb0/dev_addr
+        ln -sf functions/ecm.usb0 configs/c.1/
+        
+        # Function 3: FunctionFS Bulk Direct
+        mkdir -p functions/ffs.display
+        ln -sf functions/ffs.display configs/c.1/
+        
+        UDC_NAME=$(ls /sys/class/udc | head -n 1)
+        if [ -n "$UDC_NAME" ]; then
+            echo "$UDC_NAME" > UDC
+        fi
+        
+        mkdir -p /dev/usb-ffs/display
+        mount -t functionfs display /dev/usb-ffs/display
+    fi
+    
+    # 3. Configure Static IP on usb0
+    ifconfig usb0 192.168.7.2 netmask 255.255.255.0 up
+    
+    # 4. Start Getty on ttyGS0 serial
+    /sbin/getty -L 115200 ttyGS0 vt100 &
+    
+    # 5. Launch ext-receiver in background
+    if [ -x /usr/local/bin/ext-receiver ]; then
+        /usr/local/bin/ext-receiver 5000 > /var/log/ext-receiver.log 2>&1 &
+        echo "ext-receiver launched."
+    fi
+    ;;
+  stop)
+    echo "Stopping Extended Display Receiver..."
+    pkill -f ext-receiver
+    ;;
+  restart|reload)
+    "$0" stop
+    sleep 1
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+
+exit 0
