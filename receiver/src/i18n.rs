@@ -96,6 +96,7 @@ fn print_help_en() {
 
     println!("\x1b[1;33mOPTIONS:\x1b[0m");
     println!("  \x1b[1;32m--mode=<network|usb-bulk>\x1b[0m   Select operational mode (default: network)");
+    println!("  \x1b[1;32m--backend=<v4l2|gst|ffmpeg>\x1b[0m Select decoding engine (v4l2: Pure Rust zero-dep, gst: GStreamer, ffmpeg: FFmpeg)");
     println!("  \x1b[1;32m-b, --usb-bulk\x1b[0m              Shortcut for Mode 2 (USB Bulk Direct)");
     println!("  \x1b[1;32m--help, -h\x1b[0m                  Display this help message");
     println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m        Select help language (English, Portuguese, Italian, Chinese)\n");
@@ -150,11 +151,11 @@ fn print_help_pt() {
 
     println!("  \x1b[1;36m2. Modo 2: USB Bulk Direto via FunctionFS (--mode=usb-bulk)\x1b[0m");
     println!("     - Elimina completamente o overhead da pilha de rede (TCP/IP e UDP).");
-    println!("     - Transfere pacotes H.264 NAL diretamente nos endpoints USB a 480 Mbps.");
     println!("     - Latência de transferência sub-milissegundo para máxima fluidez.\n");
 
     println!("\x1b[1;33mOPÇÕES:\x1b[0m");
     println!("  \x1b[1;32m--mode=<network|usb-bulk>\x1b[0m   Seleciona o modo de operação (padrão: network)");
+    println!("  \x1b[1;32m--backend=<v4l2|gst|ffmpeg>\x1b[0m Motor de decodificação (v4l2: Rust puro zero-dep, gst: GStreamer, ffmpeg: FFmpeg)");
     println!("  \x1b[1;32m-b, --usb-bulk\x1b[0m              Atalho para o Modo 2 (USB Bulk Direto)");
     println!("  \x1b[1;32m--help, -h\x1b[0m                  Exibe esta mensagem de ajuda");
     println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m        Seleciona o idioma (Inglês, Português, Italiano, Chinês)\n");
@@ -213,6 +214,7 @@ fn print_help_it() {
 
     println!("\x1b[1;33mOPZIONI:\x1b[0m");
     println!("  \x1b[1;32m--mode=<network|usb-bulk>\x1b[0m   Seleziona modalità operativa (default: network)");
+    println!("  \x1b[1;32m--backend=<v4l2|gst|ffmpeg>\x1b[0m Motore di decodifica (v4l2: Rust puro zero-dep, gst: GStreamer, ffmpeg: FFmpeg)");
     println!("  \x1b[1;32m-b, --usb-bulk\x1b[0m              Scorciatoia per Modalità 2 (USB Bulk Diretto)");
     println!("  \x1b[1;32m--help, -h\x1b[0m                  Mostra questo messaggio di aiuto");
     println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m        Seleziona lingua (Inglese, Portoghese, Italiano, Cinese)\n");
@@ -269,6 +271,7 @@ fn print_help_zh() {
 
     println!("\x1b[1;33m可用选项:\x1b[0m");
     println!("  \x1b[1;32m--mode=<network|usb-bulk>\x1b[0m   选择运行模式 (默认: network)");
+    println!("  \x1b[1;32m--backend=<v4l2|gst|ffmpeg>\x1b[0m 选择解码引擎 (v4l2: 纯 Rust 零依赖内核解码, gst: GStreamer, ffmpeg: FFmpeg)");
     println!("  \x1b[1;32m-b, --usb-bulk\x1b[0m              模式 2 (USB Bulk 直通) 的快捷参数");
     println!("  \x1b[1;32m--help, -h\x1b[0m                  显示此帮助信息");
     println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m        选择帮助信息语言 (英语, 葡萄牙语, 意大利语, 中文)\n");
