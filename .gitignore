@@ -3,3 +3,6 @@
 Cargo.lock
 *.log
 .DS_Store
+build-appliance/
+build-buildroot/
+downloads/
