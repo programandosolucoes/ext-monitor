@@ -17,6 +17,7 @@
 //! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
 
 mod drm;
+pub mod dhcp;
 mod i18n;
 mod native_v4l2;
 mod pipeline;
@@ -93,7 +94,10 @@ fn main() {
             eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to start Miracast server: {}", e);
         }
 
-        // 3. Start default Linux Wayland video decode pipeline
+        // 3. Start native pure-Rust Zero-Gateway DHCP server for usb0
+        dhcp::start_dhcp_server(running.clone());
+
+        // 4. Start default Linux Wayland video decode pipeline
         let default_kind = PipelineKind::RawH264Rtp { port: udp_port };
         if let Err(e) = pipeline_mgr.start(default_kind) {
             eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to start initial UDP pipeline: {}", e);
