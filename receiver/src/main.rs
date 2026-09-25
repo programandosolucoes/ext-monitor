@@ -28,6 +28,7 @@ fn main() {
     );
 
     while running.load(Ordering::SeqCst) {
+        ensure_drm_hdmi_connected();
         println!("\x1b[1;33m[ext-receiver]\x1b[0m Launching hardware decode pipeline...");
 
         let mut child = match Command::new("gst-launch-1.0")
@@ -120,4 +121,23 @@ extern "C" fn handle_sig(_: libc::c_int) {
 
 unsafe fn libc_signal(sig: libc::c_int, handler: extern "C" fn(libc::c_int)) {
     libc::signal(sig, handler as usize);
+}
+
+fn ensure_drm_hdmi_connected() {
+    let paths = [
+        "/sys/class/drm/card0-HDMI-A-1/status",
+        "/sys/class/drm/card1-HDMI-A-1/status",
+    ];
+    for path in &paths {
+        if let Ok(status) = std::fs::read_to_string(path) {
+            if status.trim() == "disconnected" {
+                println!("\x1b[1;33m[ext-receiver]\x1b[0m HDMI status is disconnected. Forcing status 'on' for headless operation...");
+                if let Err(e) = std::fs::write(path, "on\n") {
+                    eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Warning: could not write 'on' to {}: {}", path, e);
+                } else {
+                    println!("\x1b[1;32m[ext-receiver]\x1b[0m DRM HDMI connector successfully forced 'on'.");
+                }
+            }
+        }
+    }
 }

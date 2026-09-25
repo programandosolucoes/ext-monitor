@@ -218,5 +218,10 @@ Para eliminar o tempo de boot de 1min 50s do Debian e garantir proteção total 
 | **ext-monitor (Rust + VA-API AMD + VideoCore IV DMA-BUF)** | **60 / 27 FPS** | **< 25 ms** | **~0%** (Hardware Puro) | **Zero Flick / Zero Tearing** (`kmssink`) | **100% nativo, crash-safe via PipeWire** | 🏆 **Campeão Absoluto** |
 
 ---
-*Desenvolvido por Carlos & Antigravity - Setembro de 2026.*
 
+## 📄 Licença
+
+Distribuído sob a licença **MIT** (permissiva). Consulte o arquivo [LICENSE](LICENSE) para obter mais informações.
+
+---
+*Desenvolvido por Carlos & Antigravity - Setembro de 2026.*

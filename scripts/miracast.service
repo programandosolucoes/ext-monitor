@@ -1,0 +1,21 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">Pi Zero Wireless Display</name>
+  <service>
+    <type>_display._tcp</type>
+    <port>7236</port>
+    <txt-record>name=Pi Zero Wireless Display</txt-record>
+    <txt-record>source-id=b8:27:eb:fd:ca:d1</txt-record>
+    <txt-record>flags=0x01</txt-record>
+    <txt-record>wfd=0006001000000000</txt-record>
+  </service>
+  <service>
+    <type>_miracast._tcp</type>
+    <port>7236</port>
+    <txt-record>name=Pi Zero Wireless Display</txt-record>
+    <txt-record>source-id=b8:27:eb:fd:ca:d1</txt-record>
+    <txt-record>flags=0x01</txt-record>
+    <txt-record>wfd=0006001000000000</txt-record>
+  </service>
+</service-group>
