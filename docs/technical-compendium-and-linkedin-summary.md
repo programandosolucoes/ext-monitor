@@ -117,7 +117,46 @@ enable_uart=1
 
 ---
 
-## 6. Servidor DHCP Zero-Gateway Nativo em Puro Rust (`receiver/src/dhcp.rs`)
+## 6. Diagnóstico do Ciclo de Boot: Da Tela de Arco-Íris à Ativação de Rede USB (`usb0`)
+
+Durante a validação prática no hardware real de Carlos Alberto, foi observado um comportamento clássico da arquitetura de firmware e kernel do Raspberry Pi:
+
+### A. O Significado da Tela Colorida de Arco-Íris (Rainbow Screen)
+A exibição do quadrado de arco-íris de 4 cores na tela HDMI da televisão/monitor é uma função gerada **diretamente pelo firmware da GPU VideoCore IV (`start.elf`)**. A sua aparição na tela é a confirmação visual cabal e incontestável de que 4 etapas críticas de baixo nível funcionaram perfeitamente:
+1. **Alimentação e Barramento Físico OK:** O cabo Micro-USB central forneceu os 5V necessários e o cabo mini-HDMI negociou a linha de clock e vídeo com a TV.
+2. **Boot ROM e Partição FAT32 Aprovada:** O Boot ROM gravado no silício físico do SoC BCM2835 validou o particionamento FAT32 de 256MB com mais de 65.525 clusters, superando a barreira histórica de particionamento da Broadcom.
+3. **Carga do Firmware com Sucesso:** O processador gráfico carregou `bootcode.bin`, `start.elf` e `fixup.dat` para a memória RAM.
+4. **Sinal de Vídeo HDMI Ativo:** As diretivas `hdmi_force_hotplug=1`, `hdmi_drive=2` (modo CEA com áudio/vídeo) e `config_hdmi_boost=7` energizaram o sinal e abriram o canal de exibição com a TV.
+
+### B. Por que o Dispositivo de Rede USB (`usb0`) Não Foi Criado no PC Host
+Apesar do firmware de vídeo estar ativo, o computador host não detectou a criação da interface de rede `usb0` (e o `lsusb` permaneceu inalterado). O motivo técnico foi rastreado até a camada do kernel Linux:
+1. **Módulos Dinâmicos no Kernel Oficial (`CONFIG_USB_CONFIGFS=m`):** No kernel padrão do Raspberry Pi OS (`6.18.50+rpt-rpi-v6`), a pilha de Gadget USB não está compilada de forma estática no binário `kernel.img`. Os drivers essenciais — `libcomposite.ko`, `u_ether.ko`, `usb_f_ecm.ko`, `f_fs.ko` e `g_ether.ko` — residem em arquivos de módulo externos em `/lib/modules/`.
+2. **Initramfs Mínimo Desprovido de Módulos:** O `initramfs.cpio.gz` experimental foi montado contendo apenas o binário `busybox` e o `ext-receiver` em Rust, sem incluir a árvore de drivers `.ko` em `/lib/modules/`.
+3. **Mecanismo de Pull-up da Linha D+ via Software:** Na controladora `dwc2` do BCM2835, o resistor de terminação pull-up na linha de dados USB D+ (necessário para que o computador host perceba que um periférico USB foi plugado) é controlado exclusivamente por software (`dwc2_hsotg_pullup()`).
+4. **A Falha Silenciosa no Script `init`:** Quando o script `/init` tentou acessar `/sys/kernel/config/usb_gadget`, o diretório não existia (pois o módulo `libcomposite` não estava carregado). Como consequência, nenhum gadget USB foi instanciado, a controladora `dwc2` nunca ativou o pull-up físico de D+, e o computador host continuou enxergando uma porta USB desconectada.
+5. **Solução Arquitetural:** Para que a interface `usb0` surja instantaneamente no PC host, o `initramfs` deve conter os módulos de rede USB (`libcomposite.ko`, `u_ether.ko`, `usb_f_ecm.ko`) carregados via `modprobe`/`insmod`, ou o sistema deve utilizar um kernel com USB Gadget embutido monoliticamente (`CONFIG_USB_CONFIGFS=y`, `CONFIG_USB_ETH=y`).
+
+---
+
+## 7. Perfil Específico do Hardware de Referência (Pi Zero v1.3 Single-Core)
+
+Carlos Alberto confirmou que o hardware em operação na bancada é o **Raspberry Pi Zero v1.3 Monocore**:
+
+```
+Processador: Broadcom BCM2835 (SoC de 1 núcleo ARM1176JZF-S a 1.0 GHz)
+Arquitetura: ARMv6 (Instruções VFPv2 Hard-Float - 32 bits)
+Memória RAM: 512 MB LPDDR2 compartilhada com a GPU VideoCore IV
+Conectividade: 1x Mini-HDMI (Vídeo), 1x Micro-USB OTG (Dados + 5V), 1x Micro-USB PWR IN (Desconectada)
+```
+
+### Implicações Críticas do Modelo Single-Core:
+1. **Zero Tolerância para Descompactação de Pixels na CPU:** Em um chip com apenas um núcleo ARMv6 de 1.0 GHz, qualquer processamento de vídeo em software (como a descompactação LZ4 usada pelo GUD ou JPEG usado pelo VNC) satura a CPU em 100%, gerando congelamentos e latência intolerável (> 200ms).
+2. **Decodificação Obrigatória por Hardware (V4L2 M2M):** O binário `ext-receiver` em Rust delega 100% da descompactação dos quadros H.264 para a GPU VideoCore IV através de `/dev/video10`, mantendo o único núcleo da CPU livre (~0.4% de uso) para orquestrar as conexões de rede e o servidor DHCP.
+3. **Binário Otimizado ARMv6:** O código Rust é compilado estritamente para o target `arm-unknown-linux-gnueabihf`, garantindo que não sejam emitidas instruções ARMv7 (como `movw`/`movt`) que causariam pane de instrução ilegal (`Illegal Instruction`) no BCM2835.
+
+---
+
+## 8. Servidor DHCP Zero-Gateway Nativo em Puro Rust (`receiver/src/dhcp.rs`)
 
 Uma das maiores inovações arquiteturais do projeto é o servidor DHCP embutido no binário Rust:
 
@@ -127,7 +166,7 @@ Uma das maiores inovações arquiteturais do projeto é o servidor DHCP embutido
 
 ---
 
-## 7. Gravação e Recuperação In-Situ pelo Cabo USB (`rpiboot`)
+## 9. Gravação e Recuperação In-Situ pelo Cabo USB (`rpiboot`)
 
 Não é necessário retirar o cartão Micro-SD do case do Raspberry Pi para atualizações ou regravações:
 
@@ -141,7 +180,7 @@ Não é necessário retirar o cartão Micro-SD do case do Raspberry Pi para atua
 
 ---
 
-## 8. Linha do Tempo e Decisões de Engenharia do Carlos
+## 10. Linha do Tempo e Decisões de Engenharia do Carlos
 
 Durante a evolução do projeto, cada solicitação de Carlos direcionou a arquitetura para o nível mais profundo de integração com o hardware:
 
@@ -165,7 +204,7 @@ Durante a evolução do projeto, cada solicitação de Carlos direcionou a arqui
 
 ---
 
-## 9. Matriz Comparativa de Desempenho
+## 11. Matriz Comparativa de Desempenho
 
 | Abordagem Avaliada | Latência | FPS | CPU no Pi Zero | Veredito & Motivo da Escolha |
 | :--- | :---: | :---: | :---: | :--- |
@@ -177,7 +216,7 @@ Durante a evolução do projeto, cada solicitação de Carlos direcionou a arqui
 
 ---
 
-## 10. Galeria Visual & Demonstração de Desempenho
+## 12. Galeria Visual & Demonstração de Desempenho
 
 ### A. Montagem Física Correta (Pi Zero + Monitor Secundário)
 ![Hardware Macro Raspberry Pi Zero](assets/hardware-macro.jpg)
@@ -189,7 +228,7 @@ Durante a evolução do projeto, cada solicitação de Carlos direcionou a arqui
 
 ---
 
-## 11. Artigo Completo para Publicação no LinkedIn
+## 13. Artigo Completo para Publicação no LinkedIn
 
 Abaixo está o texto técnico para publicação no LinkedIn:
 

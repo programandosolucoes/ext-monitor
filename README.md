@@ -121,6 +121,26 @@ Para garantir que o Raspberry Pi Zero gere sinal de vídeo estável em **qualque
 
 ---
 
+## 🌈 Diagnóstico de Boot: A Tela Arco-Íris e a Ativação de Rede USB (`usb0`)
+
+Nos testes práticos realizados com Carlos Alberto no **Raspberry Pi Zero v1.3 Monocore**, identificamos e mapeamos todo o fluxo entre o firmware e o kernel:
+
+### 1. O Sucesso da Tela Arco-Íris (Rainbow Screen)
+A exibição do quadrado de 4 cores na tela HDMI confirma que:
+* **Alimentação e Cabos:** A alimentação 5V via porta OTG central e a conexão HDMI estão 100% operacionais.
+* **Boot ROM e FAT32 Aprovados:** O processador BCM2835 aceitou a partição FAT32 de 256MB (`>= 65.525 clusters`).
+* **Firmware Carregado:** `bootcode.bin` e `start.elf` inicializaram a GPU VideoCore IV com sucesso.
+* **Transmissão HDMI OK:** O sinal de vídeo foi recebido e sincronizado pela televisão/monitor da sala.
+
+### 2. Por que o Dispositivo de Rede USB (`usb0`) Não Foi Criado no PC Host
+Ao ligar a placa, o arco-íris apareceu, mas o PC host não detectou a criação da interface `usb0` (nem novos dispositivos em `lsusb`). O diagnóstico de kernel revelou:
+* **Drivers Modulares (`CONFIG_USB_CONFIGFS=m`):** No kernel padrão do Raspberry Pi OS, a pilha USB Gadget não é embutida no binário monolithic `kernel.img`. Os drivers `libcomposite.ko`, `u_ether.ko` e `usb_f_ecm.ko` são módulos `.ko` externos.
+* **Initramfs Sem Módulos:** O initramfs mínimo em RAM não continha a pasta `/lib/modules/$(uname -r)/`.
+* **Falta do Pull-up Físico D+:** O chip BCM2835 só ativa o resistor de terminação USB D+ via software quando um gadget UDC é associado com sucesso. Como o `libcomposite` não estava carregado, o diretório `/sys/kernel/config/usb_gadget` não existia, a criação do gadget falhou silenciosamente, o pull-up D+ nunca foi acionado e o PC host não percebeu nenhum dispositivo conectado.
+* **Correção:** Os módulos de rede `.ko` devem ser incluídos no `initramfs` ou o sistema deve rodar com um kernel com USB Gadget embutido monoliticamente (`CONFIG_USB_ETH=y`).
+
+---
+
 ## 🌐 Servidor DHCP Nativo Zero-Gateway em Puro Rust
 
 Ao conectar o Pi Zero ao computador pelo cabo USB:
