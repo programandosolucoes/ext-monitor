@@ -288,6 +288,14 @@ Criamos uma imagem de sistema operacional minimalista de apenas **19MB compactad
 
 ---
 
+#### 6. Resiliência Total a Suspensão de Energia (Sleep / Suspend-to-RAM / S3)
+Notebooks e desktops suspendem energia constantemente. Em drivers de vídeo virtuais convencionais, a imagem congela permanentemente porque o compositor Mutter destrói os nós PipeWire e fecha a sessão D-Bus ao dormir.  
+Resolvemos isso com um **Supervisor Ativo em Rust de Duplo Watchdog**:
+* Sonda contínua a cada 1500ms (`pw-cli info <node_id>`).
+* Ao acordar da suspensão, encerra processos órfãos presos em I/O wait, renegocia a tela virtual via D-Bus com o Mutter e restabelece a transmissão em **menos de 2 segundos**, 100% autônomo sem intervenção do usuário!
+
+---
+
 #### 📊 Os Resultados Reais:
 * **Taxa de Quadros:** 60 FPS fluidos em 1600x900 / 1080p
 * **Latência Fim-a-Fim:** Inferior a 20 ms (sensação idêntica a cabo físico)

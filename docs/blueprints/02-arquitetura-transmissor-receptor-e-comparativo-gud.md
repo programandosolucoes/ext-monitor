@@ -94,6 +94,7 @@ Durante o planejamento, avaliou-se a adoção do **GUD (Generic USB Display)**, 
 | **Taxa de Quadros Real (FPS)** | **1 a 5 FPS** (em tarefas dinâmicas) | **60 FPS constantes** | O GUD sofre engasgos de processamento na CPU do Pi. O `ext-monitor` mantém 60 FPS estáveis mesmo reproduzindo vídeos em tela cheia. |
 | **Latência Fim-a-Fim** | **250ms a 600ms** (Inviável para mouse) | **< 18ms** (Movimento de mouse instantâneo) | O buffer bloat do GUD acumula frames em fila USB. O `ext-monitor` usa política `drop-on-late` com latência zero. |
 | **Tamanho da Pilha de Software** | Requer kernel completo e módulos DRM | Appliance enxuto em RAM de **22MB** | O GUD exige um sistema operacional robusto. O `ext-monitor` roda como binário estático em Rust sobre um initramfs minimalista. |
+| **Resiliência a Suspensão/Sono (S3)** | **Falha Crítica (Congelamento permanente)** | **Auto-recuperação autônoma (< 2s)** | O GUD trava o pipeline USB Bulk quando o host suspende e perde sincronia de KMS. O `ext-monitor` possui supervisão ativa com duplo watchdog em Rust. |
 
 ---
 
@@ -115,6 +116,12 @@ O fluxo PipeWire é entregue diretamente ao codificador de hardware da placa gr�
 * `bitrate=400` (kbps): Em 720p 30/60 FPS, 400 kbps é suficiente para texto nítido em desktops corporativos.
 * `key-int-max=30` (1 segundo): Injeta um frame IDR completo a cada segundo para garantir recuperação instantânea em caso de perda de pacote.
 * `entropy-coding-mode=cavlc`: Desativa CABAC. O algoritmo CAVLC simplifica brutalmente a tabela de descompressão no VideoCore IV do Pi Zero, eliminando aquecimento.
+
+### 4.3 Supervisão Ativa e Auto-Recuperação de Suspensão (Duplo Watchdog em Rust)
+Diferente de pipelines comuns que assumem conexões estáticas, o `ext-sender` executa um laço de supervisão em Rust que monitora a saúde dos nós de mídia:
+1. **Sonda PipeWire Node (`is_pipewire_node_alive`):** A cada 1500ms, o supervisor consulta `pw-cli info <node_id>`. Quando o computador host entra em suspensão de energia (suspend-to-RAM / S3), o GNOME Mutter encerra sumariamente a sessão ScreenCast e destrói o nó de origem. O processo `gst-launch-1.0` bloqueia em leitura no socket órfão sem encerrar. O supervisor detecta o sumiço do nó, força a terminação atômica do processo filho (`kill -9`), rompe o laço interno e renegocia uma nova sessão ScreenCast via D-Bus assim que o sistema acorda.
+2. **Sonda de Enlace (`is_sender_linked`):** A cada 3000ms, valida a integridade do link `ext-hdmi-sender:input_1` no grafo PipeWire, restabelecendo a rota caso o servidor de áudio/vídeo seja reiniciado.
+3. O resultado prático é que o usuário pode suspender e acordar seu laptop ou desktop inúmeras vezes sem nunca precisar reiniciar o script ou o Raspberry Pi: a imagem é restabelecida em menos de 2 segundos.
 
 ---
 

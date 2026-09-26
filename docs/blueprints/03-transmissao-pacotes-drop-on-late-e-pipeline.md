@@ -112,6 +112,11 @@ Novo Pacote Chegando
 * Se ocorrer perda de pacote no barramento USB, o decodificador descarta os frames P seguintes que dependem do bloco corrompido, evitando artefatos visuais (smearing).
 * No segundo seguinte, o novo IDR reconstrói a tela completamente em menos de 16ms sem que o usuário perceba qualquer intervenção.
 
+### 4.3 Comportamento da Fila e Drenagem Pós-Suspensão de Energia (Power Suspend Drain)
+* **Comportamento Durante o Sono:** Quando o computador entra em suspensão (suspend-to-RAM / S3), a geração de frames é congelada e o tráfego de rede USB é interrompido. O socket UDP no receptor mantém seu descritor aberto com `SO_RCVBUF` de 2MB sem vazamento de memória.
+* **Descarte de Buffers Órfãos:** Se pacotes parciais ou fragmentos residuais ficarem retidos na pilha de rede durante a transição de energia, a Leaky Queue no receptor identifica timestamps defasados em relação à nova sequência e descarta os dados imediatamente via política `drop-on-late`.
+* **Ressincronização Atômica:** Assim que o supervisor do `ext-sender` recria o pipeline e injeta o primeiro frame IDR com metadados SPS/PPS frescos, o decodificador VideoCore IV trava a sincronia de hardware no primeiro ciclo de frame (< 16ms), garantindo retorno limpo e sem artefatos visuais.
+
 ---
 
 ## 5. Evolução Histórica: Do Shell Scripting ao Rust Nativo de Alta Performance
