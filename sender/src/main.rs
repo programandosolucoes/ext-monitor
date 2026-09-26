@@ -162,12 +162,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let is_usb_transport = args.iter().any(|a| a == "--transport=usb" || a == "--usb-bulk" || a == "--usb");
-    let stream_engine = if args.iter().any(|a| a == "--engine=gst" || a == "--gst" || a == "--gstreamer") {
-        StreamEngine::GStreamer
+    let stream_engine = if args.iter().any(|a| a == "--engine=native" || a == "--native" || a == "--rust") {
+        StreamEngine::NativeRust
     } else if args.iter().any(|a| a == "--engine=ffmpeg" || a == "--ffmpeg") {
         StreamEngine::FFmpeg
     } else {
-        StreamEngine::NativeRust // 100% Pure Rust Native In-Process is DEFAULT!
+        StreamEngine::GStreamer // PipeWire ScreenCast + VA-API Hardware Encoder is DEFAULT
     };
 
     let running = Arc::new(AtomicBool::new(true));
