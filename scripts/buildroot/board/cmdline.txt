@@ -1,1 +1,1 @@
-console=tty1 console=ttyAMA0,115200 rdinit=/init video=HDMI-A-1:1280x720@60D
+console=ttyAMA0,115200 console=tty1 rdinit=/init video=HDMI-A-1:1280x720@60D consoleblank=0
