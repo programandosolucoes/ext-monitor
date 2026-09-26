@@ -132,16 +132,26 @@ struct V4l2Buffer {
 pub struct V4l2DecoderSession {
     pub video_fd: RawFd,
     pub fb_fd: RawFd,
+    pub fb_ptr: *mut u8,
+    pub fb_size: usize,
     pub out_ptrs: Vec<*mut u8>,
     pub out_lens: Vec<usize>,
     pub free_out_indices: Vec<u32>,
     pub cap_ptrs: Vec<*mut u8>,
     pub cap_lens: Vec<usize>,
+    pub frames_decoded: u64,
 }
 
 impl V4l2DecoderSession {
     pub fn new() -> Option<Self> {
-        let vfile = OpenOptions::new().read(true).write(true).open("/dev/video10").ok()?;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let vfile = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open("/dev/video10")
+            .ok()?;
         let fbfile = OpenOptions::new().read(true).write(true).open("/dev/fb0").ok()?;
         let video_fd = vfile.as_raw_fd();
         let fb_fd = fbfile.as_raw_fd();
@@ -159,6 +169,19 @@ impl V4l2DecoderSession {
         // Force framebuffer unblank
         const FBIOBLANK: libc::c_ulong = 0x4611;
         unsafe { libc::ioctl(fb_fd, FBIOBLANK, 0 as libc::c_int); }
+
+        // Memory map /dev/fb0 directly for zero-copy DMA-like blits
+        let fb_size = 1280 * 720 * 2;
+        let fb_ptr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                fb_size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                fb_fd,
+                0,
+            ) as *mut u8
+        };
 
         // 1. Set OUTPUT Format (H.264 1280x720)
         let mut out_fmt = V4l2Format {
@@ -288,15 +311,18 @@ impl V4l2DecoderSession {
         Some(Self {
             video_fd,
             fb_fd,
+            fb_ptr,
+            fb_size,
             out_ptrs,
             out_lens,
             free_out_indices,
             cap_ptrs,
             cap_lens,
+            frames_decoded: 0,
         })
     }
 
-    /// Reclaims any OUTPUT buffers that the VideoCore IV hardware has finished processing
+    /// Reclaims any OUTPUT buffers that the VideoCore IV hardware has finished processing (Non-blocking)
     fn reclaim_output_buffers(&mut self) {
         loop {
             let mut out_dq_plane = V4l2Plane::default();
@@ -318,7 +344,7 @@ impl V4l2DecoderSession {
         }
     }
 
-    /// Drains all available decoded frames from CAPTURE queue and writes directly to /dev/fb0
+    /// Drains all available decoded frames from CAPTURE queue and writes directly to /dev/fb0 (Non-blocking)
     pub fn drain_decoded_frames(&mut self) {
         loop {
             let mut cap_plane = V4l2Plane::default();
@@ -338,10 +364,16 @@ impl V4l2DecoderSession {
 
                     // Direct hardware framebuffer blit to HDMI (/dev/fb0)
                     unsafe {
-                        libc::pwrite(self.fb_fd, frame_ptr as *const libc::c_void, frame_size, 0);
-                        let mut var = [0u8; 160];
-                        const FBIOPAN_DISPLAY: libc::c_ulong = 0x4606;
-                        libc::ioctl(self.fb_fd, FBIOPAN_DISPLAY, var.as_mut_ptr());
+                        if !self.fb_ptr.is_null() && self.fb_ptr != libc::MAP_FAILED as *mut u8 {
+                            std::ptr::copy_nonoverlapping(frame_ptr, self.fb_ptr, frame_size);
+                        } else {
+                            libc::pwrite(self.fb_fd, frame_ptr as *const libc::c_void, frame_size, 0);
+                        }
+                    }
+
+                    self.frames_decoded += 1;
+                    if self.frames_decoded % 120 == 1 {
+                        println!("\x1b[1;32m[native-v4l2]\x1b[0m Hardware VPU decoded & displayed {} frames to HDMI (1280x720@60)", self.frames_decoded);
                     }
                 }
 
@@ -471,7 +503,20 @@ impl NativeV4l2Decoder {
             }
         };
 
-        let _ = sock.set_read_timeout(Some(Duration::from_millis(200)));
+        // Increase OS receive buffer to 2MB to prevent dropped UDP packets during burst
+        unsafe {
+            use std::os::unix::io::AsRawFd;
+            let size: libc::c_int = 2 * 1024 * 1024;
+            libc::setsockopt(
+                sock.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_RCVBUF,
+                &size as *const _ as *const libc::c_void,
+                std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+            );
+        }
+
+        let _ = sock.set_read_timeout(Some(Duration::from_millis(10)));
         let mut buf = [0u8; 4096];
         let mut nal_buffer = Vec::with_capacity(65536);
         let mut parsed_nals = Vec::new();
@@ -500,7 +545,7 @@ impl NativeV4l2Decoder {
                 Ok(_) => {}
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
                     session.drain_decoded_frames();
-                    thread::sleep(Duration::from_millis(2));
+                    thread::sleep(Duration::from_micros(500));
                 }
                 Err(e) => {
                     eprintln!("\x1b[1;31m[native-v4l2]\x1b[0m Socket read error: {}", e);
