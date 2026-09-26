@@ -38,15 +38,43 @@ fi
 cp "$RECEIVER_BIN" "${BUILD_DIR}/initramfs/usr/local/bin/ext-receiver"
 chmod +x "${BUILD_DIR}/initramfs/usr/local/bin/ext-receiver"
 
-# 2. Package initramfs.cpio.gz
-echo -e "\x1b[1;34m[*] Step 2: Packaging minimal initramfs.cpio.gz...\x1b[0m"
+# 2. Package client tools archive for one-click downloads
+echo -e "\x1b[1;34m[*] Step 2: Packaging client tools archive for web dashboard downloads...\x1b[0m"
+mkdir -p "${BUILD_DIR}/initramfs/var/www/download"
+TMP_CLIENT=$(mktemp -d)
+if [ -f "${PROJECT_ROOT}/target/release/ext-sender" ]; then
+    cp "${PROJECT_ROOT}/target/release/ext-sender" "${TMP_CLIENT}/ext-sender"
+    cp "${PROJECT_ROOT}/scripts/start.sh" "${TMP_CLIENT}/start.sh"
+    cp "${PROJECT_ROOT}/scripts/connect.sh" "${TMP_CLIENT}/connect.sh"
+    cp "${PROJECT_ROOT}/scripts/install-host.sh" "${TMP_CLIENT}/install-host.sh"
+    cp "${PROJECT_ROOT}/scripts/99-ext-monitor.rules" "${TMP_CLIENT}/99-ext-monitor.rules"
+    cat << 'EOF' > "${TMP_CLIENT}/README.txt"
+========================================================================
+EXT-MONITOR: Pacote de Ferramentas Portáteis do Host PC
+========================================================================
+Instruções Rápidas:
+1. Conecte o cabo USB do Pi Zero (porta USB de dados) no PC.
+2. Para instalar o driver de sistema de forma permanente:
+     sudo ./install-host.sh
+3. Ou para iniciar imediatamente sem instalar nada no sistema:
+     ./start.sh extend auto 30 false economy --bitrate=400
+========================================================================
+EOF
+    chmod +x "${TMP_CLIENT}"/*.sh "${TMP_CLIENT}/ext-sender" 2>/dev/null || true
+    tar -czf "${BUILD_DIR}/initramfs/var/www/download/client.tar.gz" -C "${TMP_CLIENT}" .
+    cp "${TMP_CLIENT}/ext-sender" "${BUILD_DIR}/initramfs/var/www/download/ext-sender"
+fi
+rm -rf "${TMP_CLIENT}"
+
+# 3. Package initramfs.cpio.gz
+echo -e "\x1b[1;34m[*] Step 3: Packaging minimal initramfs.cpio.gz...\x1b[0m"
 (
     cd "${BUILD_DIR}/initramfs"
     find . -print0 | cpio --null -ov --format=newc -R 0:0 2>/dev/null | gzip -9 > "${BUILD_DIR}/boot/initramfs.cpio.gz"
 )
 
-# 3. Create 32MB Disk Image matching BCM2835 Boot ROM Sector 1 geometry
-echo -e "\x1b[1;34m[*] Step 3: Generating 32MB bootable appliance image (Sector 1, FAT16, 2KB clusters)...\x1b[0m"
+# 4. Create 32MB Disk Image matching BCM2835 Boot ROM Sector 1 geometry
+echo -e "\x1b[1;34m[*] Step 4: Generating 32MB bootable appliance image (Sector 1, FAT16, 2KB clusters)...\x1b[0m"
 dd if=/dev/zero of="$OUTPUT_IMG" bs=512 count=65537 status=none
 echo "label: dos
 label-id: 0x00000000
@@ -64,12 +92,20 @@ sudo umount "$MOUNT_DIR"
 rm -rf "$MOUNT_DIR"
 sudo losetup -d "$LOOP_DEV"
 
+# 5. Compress and update release artifacts
+echo -e "\x1b[1;34m[*] Step 5: Updating compressed release artifacts & checksums...\x1b[0m"
+mkdir -p "${PROJECT_ROOT}/release"
+gzip -c9 "$OUTPUT_IMG" > "${PROJECT_ROOT}/release/ext-monitor-pi0-appliance.img.gz"
+(
+    cd "${PROJECT_ROOT}/release"
+    sha256sum ext-monitor-pi0-appliance.img.gz > SHA256SUMS
+)
+
 echo -e "\n\x1b[1;32m========================================================================\x1b[0m"
 echo -e "\x1b[1;32m  SUCCESS: Universal Appliance Image Ready (Pi Zero 1 & Zero 2 W)!      \x1b[0m"
 echo -e "\x1b[1;34m  Image Location: $OUTPUT_IMG                                          \x1b[0m"
 echo -e "\x1b[1;34m  Size: $(du -h "$OUTPUT_IMG" | cut -f1)                               \x1b[0m"
+echo -e "\x1b[1;34m  Release GZ: ${PROJECT_ROOT}/release/ext-monitor-pi0-appliance.img.gz  \x1b[0m"
 echo -e "\x1b[1;32m========================================================================\x1b[0m"
-echo -e "\x1b[1;33mTo test in QEMU:\x1b[0m"
-echo -e "  qemu-system-arm -M raspi0 -kernel ${BUILD_DIR}/boot/kernel.img -dtb ${BUILD_DIR}/boot/bcm2708-rpi-zero.dtb -initrd ${BUILD_DIR}/boot/initramfs.cpio.gz -append \"earlycon console=ttyAMA0,115200 root=/dev/ram0 rdinit=/init\" -serial stdio"
 echo -e "\x1b[1;33mTo flash directly to a micro-SD card:\x1b[0m"
 echo -e "  sudo dd if=$OUTPUT_IMG of=/dev/sdX bs=4M status=progress conv=fsync\n"
