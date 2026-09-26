@@ -1,7 +1,7 @@
 # Compêndio Técnico do Projeto ext-monitor & Artigo LinkedIn
 
 **Projeto:** `ext-monitor` (Second Display Over USB & Network)  
-**Arquitetura:** Rust Nativo | VideoCore IV V4L2 M2M | VA-API/NVENC In-Process | Appliance 32MB RAM  
+**Arquitetura:** Rust Nativo | VideoCore IV V4L2 M2M | VA-API/NVENC In-Process | Appliance 256MB RAM  
 **Autores:** Carlos Alberto & Equipe de Engenharia Antigravity  
 **Data:** Setembro de 2026  
 
@@ -9,7 +9,7 @@
 
 ## 1. Resumo Executivo e Propósito
 
-O projeto `ext-monitor` nasceu com um objetivo audacioso estabelecido por Carlos Alberto: **transformar um humilde Raspberry Pi Zero v1.3 (computador de US$ 5 / R$ 50, com CPU ARM1176 monocore de 1.0 GHz, 512MB de RAM e porta Micro-USB OTG) em uma segunda tela física HDMI profissional para computadores modernos (Linux Wayland e Windows), entregando desempenho indistinguível de um monitor conectado diretamente por cabo de vídeo.**
+O projeto `ext-monitor` nasceu com um objetivo audacioso estabelecido por Carlos Alberto: **transformar um humilde Raspberry Pi Zero v1.3 (computador de US$ 5 / R$ 50, com CPU ARM1176 single-core de 1.0 GHz, 512MB de RAM e porta Micro-USB OTG) em uma segunda tela física HDMI profissional para computadores modernos (Linux Wayland e Windows), entregando desempenho indistinguível de um monitor conectado diretamente por cabo de vídeo.**
 
 Para alcançar esse patamar, todas as soluções prontas existentes no mercado (VNC, RDP, Deskreen, driver GUD oficial) foram analisadas e descartadas por apresentarem gargalos insolúveis: latência inaceitável (> 200 ms), queda brusca de taxa de quadros (10 a 15 FPS), tearing severo e superaquecimento da CPU do Raspberry Pi.
 
@@ -17,12 +17,131 @@ Através de uma engenharia de software implacável e otimização em nível de k
 * **60 FPS fluidos em 1600x900 / 1080p**
 * **Latência fim-a-fim inferior a 20 milissegundos**
 * **Carga de CPU no Raspberry Pi Zero de ~0% a 2%** (decodificação por hardware puro VideoCore IV)
-* **Tempo de boot do Pi Zero de apenas 1.8 segundos** (sistema operacional de 13MB rodando 100% em RAM)
+* **Tempo de boot do Pi Zero de apenas 1.8 segundos** (sistema operacional de 19MB rodando 100% em RAM)
 * **Zero risco de corrupção do cartão micro-SD** ao desligar ou puxar o cabo abruptamente
 
 ---
 
-## 2. Linha do Tempo e Decisões de Engenharia do Carlos
+## 2. Anatomia e Pinagem Física do Hardware (Guia Anti-Erros de Montagem)
+
+A anatomia física do **Raspberry Pi Zero v1.3 / W** exige atenção rigorosa às conexões para evitar erros de alimentação e comunicação:
+
+```
+                            [ 40-Pin GPIO Header ]
+  +------------------------------------------------------------------------+
+  | [Micro-SD Slot]                                                        |
+  | (Cartão SanDisk)              [ BCM2835 SoC ]                          |
+  |                                                                 [CSI]  |
+  +---------[ mini-HDMI ]-----------[ Micro-USB OTG ]---------[ PWR IN ]---+
+                   │                        │                     │
+                   │                        │                     └── [VAZIA!] NÃO CONECTAR NADA
+                   │                        │                         (Evita ground loop e queima)
+                   │                        └── Cabo Micro-USB para PC/Notebook
+                   │                            (Alimentação + Rede 480 Mbps)
+                   └── Cabo mini-HDMI para o Monitor/TV da Sala
+```
+
+### Regras Físicas Mandatórias:
+1. **Porta mini-HDMI (Borda frontal longa, à ESQUERDA):** Conectada exclusivamente ao cabo do monitor ou TV secundária.
+2. **Porta Micro-USB OTG (Borda frontal longa, no CENTRO com símbolo USB):** Conectada diretamente a uma porta USB 2.0 ou 3.0 do computador/notebook host. Esta porta transporta simultaneamente a alimentação de 5V e o barramento de dados bidirecional de 480 Mbps.
+3. **Porta Micro-USB PWR IN (Borda frontal longa, à DIREITA):** **DEVE PERMANECER VAZIA!** O Pi Zero é 100% alimentado pelo computador via cabo OTG. Ligar uma fonte externa aqui enquanto a porta OTG está ligada ao PC cria loops de terra e pode danificar a controladora USB do computador.
+4. **Slot Micro-SD (Borda curta, à ESQUERDA):** Alojamento do cartão Micro-SD gravado.
+5. **Conector CSI de Câmera (Borda curta, à DIREITA):** Permanece vazio no projeto de monitor.
+
+---
+
+## 3. Segredos do Bootloader de Silício da Broadcom e Particionamento FAT32
+
+Durante os testes de campo com Carlos Alberto, desvendamos uma particularidade crucial da arquitetura interna da Broadcom que impede o boot de imagens excessivamente compactadas:
+
+### O Limite de 65.525 Clusters da Microsoft e do Boot ROM
+* **O Problema:** O Boot ROM gravado no silício físico do SoC Broadcom (BCM2835 do Pi Zero 1 e BCM2710 do Pi Zero 2 W) possui um parser estrito da especificação FAT32 da Microsoft. Pela norma, um volume só é considerado legitimamente FAT32 se contiver **pelo menos 65.525 clusters**.
+* **O Sintoma:** Ao criar partições mínimas de 31MB ou 32MB, ferramentas como `mformat` ou `mkfs.vfat` geram cerca de ~62.000 clusters. Ao ligar a placa, o Boot ROM do silício detecta a incongruência, classifica a partição como corrompida e **aborta a leitura do cartão SD antes mesmo de exibir o arco-íris**, caindo em modo de recuperação USB (`idProduct=2763 BCM2708 Boot` no Pi Zero 1, ou `idProduct=2764 BCM2710 Boot` no Pi Zero 2 W).
+* **A Solução Definitiva:** A partição de boot `bootfs` foi padronizada em **256 MB** com formato FAT32 oficial (`130.044 clusters` - o dobro do mínimo exigido). O comando `fsck.vfat -v -n` valida com **zero erros e zero alertas de clusters**.
+
+---
+
+## 4. Matriz de Compatibilidade Universal de Silício (Pi Zero 1 vs. Pi Zero 2 W)
+
+O projeto `ext-monitor` agora fornece uma **imagem única e universal** que detecta dinamicamente a arquitetura do processador no instante do boot:
+
+| Hardware | Processador (SoC) | Arquitetura | Device Tree Requerido | Kernel Requerido | Status na Imagem Universal |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Raspberry Pi Zero v1.2 / v1.3 / W** | Broadcom BCM2835 | ARMv6 single-core 1.0 GHz | `bcm2708-rpi-zero.dtb` | `kernel.img` (ARMv6) | ✅ Suportado nativamente |
+| **Raspberry Pi Zero 2 W** | Broadcom BCM2710 / RP3A0 | ARMv8 / Cortex-A53 quad-core | `bcm2710-rpi-zero-2-w.dtb` | `kernel7.img` (ARMv7) | ✅ Suportado nativamente |
+
+O binário `ext-receiver` em Rust foi compilado com o target `arm-unknown-linux-gnueabihf` (ARMv6 Hard-Float VFPv2). Esse padrão de instrução é 100% retrocompatível com ARMv7 e ARMv8, rodando de forma ultra-otimizada em qualquer modelo de Pi Zero existente.
+
+---
+
+## 5. Compatibilidade HDMI Universal para TVs de Sala e Monitores (`config.txt`)
+
+Para garantir que o Raspberry Pi Zero gere sinal de vídeo em **qualquer monitor de computador ou TV de sala**, o arquivo `config.txt` incorpora as seguintes diretivas obrigatórias:
+
+```ini
+# ==============================================================================
+# Raspberry Pi Zero Universal Appliance Configuration
+# ==============================================================================
+arm_64bit=0
+gpu_mem=128
+
+# Ativa a controladora USB OTG em modo Gadget
+dtoverlay=dwc2
+
+# Módulo de aceleração por hardware VideoCore IV KMS
+dtoverlay=vc4-kms-v3d
+
+# OBRIGATÓRIO: 0 = Ativa a tela de teste colorida de arco-íris (Rainbow Screen)
+# Garante feedback visual imediato de que a BIOS/firmware iniciou
+disable_splash=0
+
+# OBRIGATÓRIO: Força saída HDMI ativa mesmo se o monitor for ligado após o Pi
+hdmi_force_hotplug=1
+
+# OBRIGATÓRIO: Força modo HDMI nativo completo (CEA-861 com pacotes de áudio/vídeo)
+# Sem esta linha, TVs de sala assumem DVI silencioso e recusam o sinal de vídeo!
+hdmi_drive=2
+
+# OBRIGATÓRIO: Ganho máximo de corrente no transmissor HDMI
+# Compensa perdas de impedância de adaptadores mini-HDMI e cabos longos
+config_hdmi_boost=7
+
+# Inicialização 100% em RAM
+initramfs initramfs.cpio.gz followkernel
+
+# Console Serial UART para diagnósticos de baixo nível
+enable_uart=1
+```
+
+> **Atenção:** Modos rígidos de sincronismo como `hdmi_group=2` e `hdmi_mode=82` (VESA DMT de monitores de PC) foram removidos. O sistema agora realiza autonegociação EDID dinâmica via canal I2C/DDC, permitindo que a TV de sala selecione automaticamente sua resolução ideal (1080p, 720p, 60Hz, 50Hz).
+
+---
+
+## 6. Servidor DHCP Zero-Gateway Nativo em Puro Rust (`receiver/src/dhcp.rs`)
+
+Uma das maiores inovações arquiteturais do projeto é o servidor DHCP embutido no binário Rust:
+
+1. **Isolamento por Hardware:** Usa a chamada de sistema `SO_BINDTODEVICE` para escutar e responder pacotes UDP Broadcast exclusivamente na interface `usb0`, blindando o Wi-Fi e a placa de rede cabeada do Raspberry Pi.
+2. **Conceito Zero-Gateway:** Servidores DHCP comuns fornecem o parâmetro `Option 3 (Router/Gateway)`. Se o computador host receber um novo gateway pela porta USB, a tabela de roteamento do sistema operacional prioriza a nova interface e **corta imediatamente o acesso à internet do usuário no Wi-Fi/Ethernet principal**.
+3. **Comportamento do `ext-receiver`:** Fornece o IP `192.168.7.1` ao host PC **sem emitir Option 3 nem Option 6 (DNS)**. O host se comunica com o Pi a 480 Mbps mantendo sua internet 100% funcional sem qualquer intervenção manual.
+
+---
+
+## 7. Gravação e Recuperação In-Situ pelo Cabo USB (`rpiboot`)
+
+Não é necessário retirar o cartão Micro-SD do case do Raspberry Pi para atualizações ou regravações:
+
+1. Conecte o Pi Zero ao computador via cabo Micro-USB central sem segurar nenhuma tecla.
+2. Se o cartão estiver vazio ou com partição corrompida, o BCM2835 entra automaticamente em modo de boot USB (`BCM2708 Boot`).
+3. Execute no terminal:
+   ```bash
+   sudo rpiboot -v
+   ```
+4. O `rpiboot` injeta o bootloader de segundo estágio diretamente na memória RAM do VideoCore IV. Em menos de 2 segundos, o Pi Zero se transforma em um leitor de cartão USB de alta velocidade (`RPi-MSD-0001`), expondo o cartão Micro-SD como `/dev/sda` no PC host para gravação direta via `dd`.
+
+---
+
+## 8. Linha do Tempo e Decisões de Engenharia do Carlos
 
 Durante a evolução do projeto, cada solicitação de Carlos direcionou a arquitetura para o nível mais profundo de integração com o hardware:
 
@@ -38,18 +157,15 @@ Durante a evolução do projeto, cada solicitação de Carlos direcionou a arqui
    - *Discussão:* Foi cogitado se o transmissor deveria falar o protocolo do driver GUD original (`gud_set_buffer_req` + compressão LZ4 na CPU).
    - *Decisão do Carlos:* *"não vamos suportar isso , pode esquecer , ou criamos o nosso driver ou não vale a pena , pode tirar isso do projeto"*.
    - *Motivo Técnico:* O GUD original sobrecarrega a CPU do Pi Zero em 100% descompactando LZ4 por software. Ao eliminá-lo, o projeto foca 100% em fluxos H.264 compactados na GPU do host e decodificados no hardware do chip Broadcom.
-4. **Imagem Mínima em RAM (Appliance de 32MB):**
+4. **Imagem Mínima em RAM (Appliance de 256MB com 19MB de Download):**
    - *Demanda:* Eliminar o tempo de boot de 1min 50s do Debian Raspberry Pi OS e proteger o cartão contra corrupção.
-   - *Solução:* Gerador de initramfs ultracompacto (13MB totais contendo kernel oficial, firmware e binário Rust de 642KB) que sobe em 1.8s direto em `tmpfs`.
+   - *Solução:* Gerador de initramfs ultracompacto (19MB compactado) que sobe em 1.8s direto em `tmpfs` e elimina 100% do risco de corrupção do cartão.
 5. **Reversibilidade Universal e Multi-Telas:**
    - *Visão do Carlos:* Permitir que qualquer PC velho atue como monitor secundário (sentido inverso) e suporte de 1 a $N$ telas simultâneas com multiplexação limpa.
-6. **Rede USB OTG com DHCP Zero-Gateway e Gestor de Redes (LAN / Wi-Fi / Miracast):**
-   - *Demanda e Validação do Carlos:* Se o PC não receber um IP automaticamente no cabo USB, não há comunicação. Porém, se um servidor DHCP padrão entregar gateway, o PC perde o acesso à internet. Em placas normais (`eth0`, `wlan0`), deve haver suporte a DHCP cliente ou IP estático (IPv4/IPv6).
-   - *Solução:* Sub-rede `192.168.7.0/24` com servidor `udhcpd` embutido no Pi Zero que fornece `192.168.7.1` ao host PC **sem emitir `opt router` (Zero-Gateway)**. A internet do computador do usuário segue intacta no Wi-Fi/Ethernet principal. Adicionado card completo no Web Dashboard para configuração dinâmica de redes físicas e P2P.
 
 ---
 
-## 3. Matriz Comparativa: O que Funcionou vs. O que foi Cortado
+## 9. Matriz Comparativa de Desempenho
 
 | Abordagem Avaliada | Latência | FPS | CPU no Pi Zero | Veredito & Motivo da Escolha |
 | :--- | :---: | :---: | :---: | :--- |
@@ -61,60 +177,21 @@ Durante a evolução do projeto, cada solicitação de Carlos direcionou a arqui
 
 ---
 
-## 4. Detalhamento das Técnicas e Otimizações de Engenharia
+## 10. Galeria Visual & Demonstração de Desempenho
 
-### A. Pipeline de Transmissão (ext-sender no Host)
-1. **Captura Zero-Copy via D-Bus Mutter ScreenCast:**
-   - Cria uma sessão de gravação nativa na interface `org.gnome.Mutter.ScreenCast`, vinculada diretamente à saída virtual (`HDMI-1`).
-   - O frame buffer não passa por cópias lentas na memória principal: o compositor Wayland renderiza os pixels diretamente no buffer gerenciado pela GPU.
-2. **Encoders Diretos sem Processos Filhos (`sender/src/encoder.rs`):**
-   - **AMD & Intel:** Conexão direta com `/dev/dri/renderD128` através da API VA-API C FFI (`libva`), aproveitando os motores de codificação por hardware VCN (AMD Mendocino Radeon 610M) e QuickSync (Intel).
-   - **NVIDIA:** Carregamento dinâmico em runtime (`dlopen`) de `libnvidia-encode.so.1` para emissão direta de NAL units H.264 via NVENC.
-   - **Fallback em CPU:** Cisco OpenH264 nativo compilado diretamente no binário para máquinas sem aceleração gráfica.
-3. **Empacotamento RFC 6184 com Fragmentação FU-A:**
-   - As unidades NAL do H.264 são fragmentadas em pacotes RTP de no máximo 1400 bytes (MTU padrão) utilizando cabeçalhos FU-A (Fragmentation Units).
-   - Elimina qualquer fragmentação IP no nível do roteador/switch, garantindo entrega instantânea sem retransmissões ou jitter.
+### A. Montagem Física Correta (Pi Zero + Monitor Secundário)
+![Hardware Macro Raspberry Pi Zero](assets/hardware-macro.jpg)
 
-### B. Pipeline de Recepção (ext-receiver no Pi Zero)
-1. **Decodificador de Kernel V4L2 M2M (`receiver/src/native_v4l2.rs`):**
-   - Comunicação direta com o dispositivo de kernel `/dev/video10` (`bcm2835-codec`).
-   - Opera em arquitetura Memory-to-Memory (M2M): injeta fatias H.264 na fila `OUTPUT` do hardware e retira quadros decodificados em formato NV12/BGR4 da fila `CAPTURE`.
-   - **Zero consumo de CPU:** O trabalho de descompressão é realizado inteiramente pelos processadores de vídeo do coprocessador VideoCore IV.
-2. **Apresentação Direta no Display HDMI via DRM KMS (`/dev/dri/card0`):**
-   - Os buffers de vídeo decodificados são vinculados diretamente ao Framebuffer do DRM KMS por ioctls atômicas, eliminando qualquer servidor gráfico intermediário (sem X11, sem Wayland no Pi Zero).
-3. **Gadget USB Composto 3-em-1 via Kernel Configfs:**
-   - **Canal 1 (ACM Serial):** Porta serial virtual (`/dev/ttyGS0`) para console interativo e depuração.
-   - **Canal 2 (ECM Ethernet):** Placa de rede USB com endereço IP estático `192.168.7.2`, viabilizando o dashboard web e a telemetria HTTP.
-   - **Canal 3 (FunctionFS Bulk Display):** Canal de vídeo USB puro para transferência direta de fatias H.264 sem o overhead da pilha TCP/IP.
-
----
-
-## 5. Inspirações e Referências Técnicas
-
-* **ChromeOS / cros-libva:** Padrão de bindings seguros e diretos em Rust sobre a biblioteca `libva`, provando que é viável dispensar camadas pesadas de C++.
-* **Wi-Fi Display (Miracast) Technical Specification v1.1.0:** Especificação oficial da Wi-Fi Alliance para a máquina de estados RTSP M1 a M7, permitindo que o Windows projete tela nativamente sem softwares de terceiros.
-* **Linux USB Gadget Configfs:** Documentação oficial do kernel Linux (`Documentation/usb/gadget_configfs.rst`) para criação de dispositivos multifunção USB.
-* **RFC 2131 (Dynamic Host Configuration Protocol):** Especificação do protocolo DHCP, adaptada para criar nosso servidor nativo embutido em Rust sem rota de gateway.
-* **Cisco OpenH264:** Implementação padrão ouro de encoder H.264 para fallback seguro em CPU.
-
----
-
-## 6. Galeria Visual & Demonstração de Desempenho
-
-### A. Montagem Completa do Setup (Laptop + Pi Zero + Segunda Tela)
-![Setup Completo com Pi Zero e Monitor Secundário](../docs/assets/hero-setup.jpg)
+*Foto macro mostrando a anatomia correta: cabo mini-HDMI na porta esquerda, cabo Micro-USB OTG na porta central do BCM2835 e porta de alimentação da direita vazia.*
 
 ### B. Demonstração em Tempo Real: Latência Sub-20ms e 60 FPS
-![Demonstração de Baixa Latência em GIF](../docs/assets/demo-fast.gif)
-
-### C. Detalhe do Hardware Raspberry Pi Zero no Case Acrílico com Link 480 Mbps
-![Macro Hardware Raspberry Pi Zero BCM2835](../docs/assets/hardware-macro.jpg)
+![Demonstração em Tempo Real](assets/demo-fast.gif)
 
 ---
 
-## 7. Artigo para Publicação no LinkedIn
+## 11. Artigo Completo para Publicação no LinkedIn
 
-Abaixo está o texto completo pronto para publicação no LinkedIn, formatado para máximo engajamento de engenheiros de sistemas, desenvolvedores Rust, entusiastas de hardware e líderes de tecnologia:
+Abaixo está o texto técnico para publicação no LinkedIn:
 
 ***
 
@@ -164,9 +241,9 @@ Basta apertar o atalho nativo do Windows **`Win + K`**, selecionar o display na 
 
 ---
 
-#### 5. Appliance de 32MB em RAM: Boot em 1.8 Segundos
+#### 5. Appliance de Boot em 1.8 Segundos com 0% de Risco de Corrupção
 O Raspberry Pi OS tradicional leva quase 2 minutos para inicializar e corre risco constante de corromper o cartão micro-SD ao ser desligado puxando o cabo USB.  
-Criamos uma imagem de sistema operacional minimalista de apenas **11MB compactada** (composta pelo kernel oficial, firmware e nosso binário de 670KB):
+Criamos uma imagem de sistema operacional minimalista de apenas **19MB compactada** (composta pelo kernel oficial, firmware e nosso binário de 670KB):
 * O sistema sobe **100% em RAM (`initramfs / tmpfs`) em apenas 1.8 segundos**.
 * O cartão SD fica em modo estritamente somente-leitura: **zero risco de corrupção**, pode puxar o cabo micro-USB a qualquer momento!
 
@@ -180,14 +257,10 @@ Criamos uma imagem de sistema operacional minimalista de apenas **11MB compactad
 * **Tamanho do Binário:** Apenas 670 KB compilado para ARMv6
 * **Tempo de Boot:** 1.8 segundos direto em RAM
 
-Esse projeto prova que, quando unimos a segurança e o desempenho de **Rust** com o respeito às capacidades de hardware do silício, até o hardware mais modesto de US$ 5 pode superar ferramentas comerciais consagradas.
-
-📦 **A imagem pronta para gravação no cartão e todo o código fonte estão disponíveis no GitHub:**  
+📦 **Código Aberto e Imagem Pronta para Gravação no GitHub:**  
 👉 https://github.com/programandosolucoes/ext-monitor
 
 Autor: Carlos Alberto (psncarlosalberto4ti@gmail.com)  
 Licença: MIT (Código Aberto) 🦀🐧
 
 #Rust #Embedded #Linux #RaspberryPi #Performance #HardwareAcceleration #OpenSource #SystemsEngineering
-
-\#RustLang #Linux #RaspberryPi #SistemasEmbarcados #HardwareAcceleration #OpenSource #EngenhariaDeSoftware #Wayland

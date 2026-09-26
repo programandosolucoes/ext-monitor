@@ -45,9 +45,9 @@ echo -e "\x1b[1;34m[*] Step 2: Packaging minimal initramfs.cpio.gz...\x1b[0m"
     find . -print0 | cpio --null -ov --format=newc 2>/dev/null | gzip -9 > "${BUILD_DIR}/boot/initramfs.cpio.gz"
 )
 
-# 3. Create 32MB Disk Image with FAT32 partition
-echo -e "\x1b[1;34m[*] Step 3: Generating 32MB bootable image via parted and mtools...\x1b[0m"
-dd if=/dev/zero of="$OUTPUT_IMG" bs=1M count=32 status=none
+# 3. Create 256MB Disk Image with standard FAT32 partition
+echo -e "\x1b[1;34m[*] Step 3: Generating 256MB universal bootable image via parted and mtools...\x1b[0m"
+dd if=/dev/zero of="$OUTPUT_IMG" bs=1M count=256 status=none
 parted -s "$OUTPUT_IMG" mklabel msdos
 parted -s "$OUTPUT_IMG" mkpart primary fat32 1MiB 100%
 parted -s "$OUTPUT_IMG" set 1 boot on
@@ -56,7 +56,7 @@ mformat -i "${OUTPUT_IMG}@@1048576" -F -v "EXTMONITOR"
 mcopy -i "${OUTPUT_IMG}@@1048576" -s "${BUILD_DIR}/boot/"* ::/
 
 echo -e "\n\x1b[1;32m========================================================================\x1b[0m"
-echo -e "\x1b[1;32m  SUCCESS: 32MB Minimal Appliance Image Ready!                         \x1b[0m"
+echo -e "\x1b[1;32m  SUCCESS: Universal Appliance Image Ready (Pi Zero 1 & Zero 2 W)!      \x1b[0m"
 echo -e "\x1b[1;34m  Image Location: $OUTPUT_IMG                                          \x1b[0m"
 echo -e "\x1b[1;34m  Size: $(du -h "$OUTPUT_IMG" | cut -f1)                               \x1b[0m"
 echo -e "\x1b[1;32m========================================================================\x1b[0m"
