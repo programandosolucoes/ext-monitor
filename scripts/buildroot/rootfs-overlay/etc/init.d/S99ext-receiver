@@ -12,7 +12,16 @@ case "$1" in
     mountpoint -q /sys/kernel/config || mount -t configfs none /sys/kernel/config
     mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
     
-    # 2. Configure 3-in-1 Composite Gadget (Serial + Network + FunctionFS Bulk)
+    # 2. Ensure hardware modules are loaded
+    modprobe dwc2 2>/dev/null || true
+    modprobe libcomposite 2>/dev/null || true
+    modprobe usb_f_acm 2>/dev/null || true
+    modprobe usb_f_ecm 2>/dev/null || modprobe usb_f_rndis 2>/dev/null || true
+    modprobe usb_f_fs 2>/dev/null || true
+    modprobe vc4 2>/dev/null || true
+    modprobe bcm2835-codec 2>/dev/null || true
+    
+    # 3. Configure 3-in-1 Composite Gadget (Serial + Network + FunctionFS Bulk)
     GADGET_DIR="/sys/kernel/config/usb_gadget/ext_composite"
     if [ ! -d "$GADGET_DIR" ]; then
         mkdir -p "$GADGET_DIR"
