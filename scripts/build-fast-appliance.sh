@@ -42,7 +42,7 @@ chmod +x "${BUILD_DIR}/initramfs/usr/local/bin/ext-receiver"
 echo -e "\x1b[1;34m[*] Step 2: Packaging minimal initramfs.cpio.gz...\x1b[0m"
 (
     cd "${BUILD_DIR}/initramfs"
-    find . -print0 | cpio --null -ov --format=newc 2>/dev/null | gzip -9 > "${BUILD_DIR}/boot/initramfs.cpio.gz"
+    find . -print0 | cpio --null -ov --format=newc -R 0:0 2>/dev/null | gzip -9 > "${BUILD_DIR}/boot/initramfs.cpio.gz"
 )
 
 # 3. Create 32MB Disk Image matching BCM2835 Boot ROM Sector 1 geometry
