@@ -103,6 +103,26 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             transition: var(--transition);
         }
         .lang-select:focus { border-color: var(--accent-cyan); }
+        .lang-flags { display: flex; align-items: center; gap: 0.35rem; }
+        .flag-btn {
+            background: rgba(16, 23, 38, 0.9);
+            border: 1px solid var(--bg-surface-border);
+            color: var(--text-primary);
+            padding: 0.35rem 0.65rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+            transition: var(--transition);
+        }
+        .flag-btn:hover { border-color: var(--accent-cyan); }
+        .flag-btn.active {
+            background: rgba(0, 229, 255, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+        }
         .status-badge {
             display: flex; align-items: center; gap: 0.5rem;
             padding: 0.35rem 0.85rem;
@@ -363,7 +383,13 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             </div>
         </div>
         <div class="nav-controls">
-            <select id="langSelect" class="lang-select">
+            <div class="lang-flags">
+                <button type="button" onclick="setLanguage('en')" class="flag-btn" id="btnLang_en" title="English">🇺🇸 EN</button>
+                <button type="button" onclick="setLanguage('pt')" class="flag-btn active" id="btnLang_pt" title="Português">🇧🇷 PT</button>
+                <button type="button" onclick="setLanguage('it')" class="flag-btn" id="btnLang_it" title="Italiano">🇮🇹 IT</button>
+                <button type="button" onclick="setLanguage('zh')" class="flag-btn" id="btnLang_zh" title="中文">🇨🇳 中文</button>
+            </div>
+            <select id="langSelect" class="lang-select" style="display:none;">
                 <option value="en">🇺🇸 English</option>
                 <option value="pt" selected>🇧🇷 Português</option>
                 <option value="it">🇮🇹 Italiano</option>
@@ -1178,7 +1204,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     el.textContent = dict[key];
                 }
             });
-            document.getElementById('langSelect').value = lang;
+            document.querySelectorAll('.flag-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById('btnLang_' + lang);
+            if (activeBtn) activeBtn.classList.add('active');
+            const selectEl = document.getElementById('langSelect');
+            if (selectEl) selectEl.value = lang;
             localStorage.setItem('ext_lang', lang);
         }
 
