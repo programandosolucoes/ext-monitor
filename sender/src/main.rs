@@ -940,6 +940,7 @@ fn spawn_gst_streamer(
 
     // 6. Post-Encoder Leaky Queue & Output Sink (UDP RTP or USB Bulk Pipe)
     cmd.arg("h264parse")
+        .arg("config-interval=-1")
         .arg("!")
         .arg("queue")
         .arg("max-size-buffers=1")
