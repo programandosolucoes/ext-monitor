@@ -1,7 +1,7 @@
 # Blueprint 08: Manual de Instalação, Portabilidade e Script de Setup no Host PC
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto & Antigravity  
+**Autor:** Carlos Alberto  
 **Arquivos de Referência:** `scripts/connect.sh`, `scripts/install-host.sh`, `scripts/99-ext-monitor.rules`  
 **Data:** Setembro de 2026  
 

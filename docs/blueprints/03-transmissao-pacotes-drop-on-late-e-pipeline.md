@@ -1,7 +1,7 @@
 # Blueprint 03: Transmissão de Pacotes, Fragmentação NALU e o Algoritmo Drop-on-Late
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto & Antigravity  
+**Autor:** Carlos Alberto  
 **Arquivos de Referência:** `sender/src/main.rs`, `receiver/src/native_v4l2.rs`, `receiver/src/rtp.rs`  
 **Data:** Setembro de 2026  
 

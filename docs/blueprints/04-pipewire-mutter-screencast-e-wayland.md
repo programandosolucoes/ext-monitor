@@ -1,7 +1,7 @@
 # Blueprint 04: Integração com PipeWire, D-Bus Mutter Screencast e Wayland
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto & Antigravity  
+**Autor:** Carlos Alberto  
 **Arquivos de Referência:** `sender/src/main.rs`, `scripts/start.sh`, `scripts/show-welcome-window.py`  
 **Data:** Setembro de 2026  
 
