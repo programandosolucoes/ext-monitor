@@ -74,42 +74,47 @@ fn main() {
         pipeline_mgr.set_backend(PipelineBackend::from_str(val));
     }
 
+    // 1. Start embedded Web Control Server on HTTP port 8080 (always available for telemetry and control)
+    if let Err(e) = web::start_web_server(running.clone(), pipeline_mgr.clone(), udp_port) {
+        eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to start embedded web server: {}", e);
+    }
+
+    // 2. Start Wi-Fi Display (Miracast / MS-MICE) RTSP server on TCP port 7236
+    if let Err(e) = wfd::start_wfd_server(running.clone(), pipeline_mgr.clone()) {
+        eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to start Miracast server: {}", e);
+    }
+
+    // 3. Start native pure-Rust Zero-Gateway DHCP server for usb0
+    dhcp::start_dhcp_server(running.clone());
+
     if is_usb_bulk_mode {
-        println!("\x1b[1;33m[ext-receiver]\x1b[0m Active Mode: MODE 2 (Direct USB Bulk via FunctionFS)");
-        if let Err(e) = usb_bulk::run_usb_bulk_receiver(running.clone(), pipeline_mgr.clone()) {
-            eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Fatal USB Bulk error: {}", e);
+        println!("\x1b[1;33m[ext-receiver]\x1b[0m Active Mode: MODE 3 (Direct USB Bulk via FunctionFS)");
+        if let Err(e) = usb_bulk::activate_usb_bulk(running.clone(), pipeline_mgr.clone()) {
+            eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to activate initial USB Bulk: {}", e);
         }
     } else {
         println!("\x1b[1;33m[ext-receiver]\x1b[0m Active Mode: MODE 1 (Network + Miracast Hybrid)");
         println!("\x1b[1;34m[ext-receiver]\x1b[0m Linux Channel: UDP port {}", udp_port);
         println!("\x1b[1;34m[ext-receiver]\x1b[0m Windows Channel: RTSP port 7236 (Win + K)");
 
-        // 1. Start embedded Web Control Server on HTTP port 8080
-        if let Err(e) = web::start_web_server(running.clone(), pipeline_mgr.clone(), udp_port) {
-            eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to start embedded web server: {}", e);
-        }
-
-        // 2. Start Wi-Fi Display (Miracast / MS-MICE) RTSP server on TCP port 7236
-        if let Err(e) = wfd::start_wfd_server(running.clone(), pipeline_mgr.clone()) {
-            eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to start Miracast server: {}", e);
-        }
-
-        // 3. Start native pure-Rust Zero-Gateway DHCP server for usb0
-        dhcp::start_dhcp_server(running.clone());
-
-        // 4. Start default Linux Wayland video decode pipeline
         let default_kind = PipelineKind::RawH264Rtp { port: udp_port };
         if let Err(e) = pipeline_mgr.start(default_kind) {
             eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to start initial UDP pipeline: {}", e);
         }
+    }
 
-        // 4. Supervisor loop: restores default Linux channel if Miracast session ends or pipeline restarts
-        while running.load(Ordering::SeqCst) {
-            if !pipeline_mgr.is_paused() {
-                let is_idle = pipeline_mgr.current_kind().is_none();
-                let has_crashed = pipeline_mgr.has_exited();
+    // Supervisor loop: restores active decode pipeline if session ends or pipeline exits
+    while running.load(Ordering::SeqCst) {
+        if !pipeline_mgr.is_paused() {
+            let is_idle = pipeline_mgr.current_kind().is_none();
+            let has_crashed = pipeline_mgr.has_exited();
 
-                if is_idle || has_crashed {
+            if is_idle || has_crashed {
+                if is_usb_bulk_mode {
+                    println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring USB Bulk pipeline...");
+                    let _ = usb_bulk::activate_usb_bulk(running.clone(), pipeline_mgr.clone());
+                } else {
+                    let default_kind = PipelineKind::RawH264Rtp { port: udp_port };
                     println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring default Linux UDP pipeline (port {})...", udp_port);
                     if let Err(e) = pipeline_mgr.start(default_kind) {
                         eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Pipeline start failed: {} (retrying in 3s)", e);
@@ -117,11 +122,11 @@ fn main() {
                     }
                 }
             }
-            thread::sleep(Duration::from_millis(500));
         }
-
-        pipeline_mgr.stop();
+        thread::sleep(Duration::from_millis(500));
     }
+
+    pipeline_mgr.stop();
 
     println!("\x1b[1;32m[ext-receiver]\x1b[0m Receiver terminated cleanly.");
 }

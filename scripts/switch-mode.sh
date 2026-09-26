@@ -32,15 +32,15 @@ case "$MODE" in
         echo -e "    - Serial Console:    /dev/ttyGS0 (/dev/ttyACM0 on Host)"
         ;;
 
-    usb-bulk|mode2|2)
-        echo -e "\x1b[1;34m[*] Activating MODE 2: USB Bulk Direct...\x1b[0m"
+    usb-bulk|mode3|mode2|3|2)
+        echo -e "\x1b[1;34m[*] Activating MODE 3: USB Bulk Direct...\x1b[0m"
         # Ensure FunctionFS display endpoint is mounted
         /usr/local/bin/setup-usb-bulk.sh 2>/dev/null || true
 
         # Restart ext-receiver in USB Bulk mode
         sudo pkill -f ext-receiver 2>/dev/null || true
         sudo ext-receiver --mode=usb-bulk >/dev/null 2>&1 &
-        echo -e "\x1b[1;32m[+] Mode 2 active.\x1b[0m"
+        echo -e "\x1b[1;32m[+] Mode 3 (USB Bulk Direct) active.\x1b[0m"
         echo -e "    - Video Input:    USB Bulk Endpoint 1 (Direct 480 Mbps)"
         echo -e "    - Web Dashboard:  http://192.168.7.2:8080 (Preserved)"
         echo -e "    - Serial Console: /dev/ttyGS0 (Preserved)"

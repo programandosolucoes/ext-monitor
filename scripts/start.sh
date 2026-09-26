@@ -45,6 +45,8 @@ for arg in "$@"; do
         EXTRA_FLAGS+=("$arg")
     elif [[ "$arg" =~ ^--key-int-max=([0-9]+)$ ]] || [[ "$arg" =~ ^--idr=([0-9]+)$ ]] || [[ "$arg" =~ ^--key-int=([0-9]+)$ ]]; then
         EXTRA_FLAGS+=("$arg")
+    elif [ "$arg" = "--transport=usb" ] || [ "$arg" = "--usb" ] || [ "$arg" = "--usb-bulk" ] || [[ "$arg" =~ ^--transport= ]]; then
+        EXTRA_FLAGS+=("$arg")
     fi
 done
 
