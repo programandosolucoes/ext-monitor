@@ -51,17 +51,10 @@ case "$1" in
         echo "12:22:33:44:55:67" > functions/ecm.usb0/dev_addr
         ln -sf functions/ecm.usb0 configs/c.1/
         
-        # Function 3: FunctionFS Bulk Direct
-        mkdir -p functions/ffs.display
-        ln -sf functions/ffs.display configs/c.1/
-        
         UDC_NAME=$(ls /sys/class/udc | head -n 1)
         if [ -n "$UDC_NAME" ]; then
             echo "$UDC_NAME" > UDC
         fi
-        
-        mkdir -p /dev/usb-ffs/display
-        mount -t functionfs display /dev/usb-ffs/display
     fi
     
     # 3. Configure Static IP on usb0
