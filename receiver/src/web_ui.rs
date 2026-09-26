@@ -715,6 +715,61 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- Frame Skipping & Damage-Only Preservation -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span data-i18n="dropOnlyLabel">Preservação de Salto de Quadros (Damage-Only)</span>
+                        <span class="control-value" id="valDropOnly">drop-only=true (Ativo)</span>
+                    </div>
+                    <div class="btn-grid" id="dropOnlyGrid">
+                        <button class="btn-toggle active" id="btnDropOnlyTrue" onclick="setDropOnly(true)" data-i18n="dropOnlyTrue">Ativo (Economia 95% em tela estática)</button>
+                        <button class="btn-toggle" id="btnDropOnlyFalse" onclick="setDropOnly(false)" data-i18n="dropOnlyFalse">Desativado (Envio contínuo forçado)</button>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.4rem; line-height: 1.4;" data-i18n="dropOnlyDesc">
+                        Quando ativo, o pipeline não duplica quadros quando a tela está estática. O orçamento de bitrate é 100% reservado para momentos de movimento (digitação/mouse).
+                    </div>
+                </div>
+
+                <!-- Skip to First Frame -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span data-i18n="skipFirstLabel">Entrega Imediata no Primeiro Quadro (skip-to-first)</span>
+                        <span class="control-value" id="valSkipFirst">skip-to-first=true (Ativo)</span>
+                    </div>
+                    <div class="btn-grid" id="skipFirstGrid">
+                        <button class="btn-toggle active" id="btnSkipFirstTrue" onclick="setSkipToFirst(true)" data-i18n="skipFirstTrue">Ativo (Latência Zero ao Mover)</button>
+                        <button class="btn-toggle" id="btnSkipFirstFalse" onclick="setSkipToFirst(false)" data-i18n="skipFirstFalse">Desativado (Sincronismo Rígido)</button>
+                    </div>
+                </div>
+
+                <!-- IDR Keyframe Interval / Periodic Refresh -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span data-i18n="keyIntLabel">Varredura Periódica / Intervalo IDR (Refresh Clean)</span>
+                        <span class="control-value" id="valKeyInt">30 quadros (~1.0s)</span>
+                    </div>
+                    <div class="slider-wrap">
+                        <input type="range" min="10" max="120" step="5" value="30" class="range-slider" id="keyIntSlider" oninput="updateKeyIntValue(this.value)">
+                        <div class="slider-labels">
+                            <span>10q (0.3s)</span>
+                            <span>15q (0.5s)</span>
+                            <span>30q (1.0s)</span>
+                            <span>60q (2.0s)</span>
+                            <span>90q (3.0s)</span>
+                            <span>120q (4.0s)</span>
+                        </div>
+                    </div>
+                    <div class="btn-grid" id="keyIntGrid" style="margin-top: 0.6rem;">
+                        <button class="btn-toggle" data-keyint="15" onclick="setKeyInt(15)">15q (0.5s - Limpeza Rápida)</button>
+                        <button class="btn-toggle active" data-keyint="30" onclick="setKeyInt(30)">30q (1.0s - Recomendado)</button>
+                        <button class="btn-toggle" data-keyint="60" onclick="setKeyInt(60)">60q (2.0s - Baixo Bitrate)</button>
+                        <button class="btn-toggle" data-keyint="120" onclick="setKeyInt(120)">120q (4.0s - Leitura Estática)</button>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.4rem; line-height: 1.4;" data-i18n="keyIntDesc">
+                        Injeta um quadro-chave IDR completo periodicamente para limpar qualquer resíduo visual na TV ou monitor HDMI.
+                    </div>
+                </div>
+
                 <!-- Commit & Hardware Actions -->
                 <div class="action-row" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 1.2rem;">
                     <button id="btnApply" class="btn-primary" onclick="applyConfiguration()" data-i18n="btnApply">💾 Aplicar Alterações</button>
@@ -922,6 +977,9 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         let currentFps = 30;
         let currentBitrate = 400;
         let currentColor = '256';
+        let currentDropOnly = true;
+        let currentSkipToFirst = true;
+        let currentKeyIntMax = 30;
         let isPaused = false;
 
         // Internationalization Dictionary
@@ -958,6 +1016,15 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 colorFull: "24-bit TrueColor",
                 color256: "256 Cores (QP 30-44)",
                 colorGray: "Monochrome",
+                dropOnlyLabel: "Frame Skipping (Damage-Only Preserving)",
+                dropOnlyTrue: "Enabled (95% bandwidth savings on idle)",
+                dropOnlyFalse: "Disabled (Continuous frame duplication)",
+                dropOnlyDesc: "When enabled, videorate drops duplicate frames while the screen is static, allocating 100% of bitrate to mouse and typing updates.",
+                skipFirstLabel: "Instant Motion Delivery (skip-to-first)",
+                skipFirstTrue: "Enabled (Zero latency on first motion)",
+                skipFirstFalse: "Disabled (Strict timestamp alignment)",
+                keyIntLabel: "Periodic Refresh / IDR Keyframe Interval (Clean Sweep)",
+                keyIntDesc: "Injects a full IDR keyframe periodically to sweep and clear visual artifacts on HDMI/TV.",
                 btnApply: "💾 Apply Settings",
                 btnPauseStream: "⏸ Pause Display",
                 btnResumeStream: "▶ Resume Display",
@@ -1036,6 +1103,15 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 colorFull: "24-bit TrueColor",
                 color256: "256 Cores (QP 30-44)",
                 colorGray: "Monocromático",
+                dropOnlyLabel: "Preservação de Salto de Quadros (Damage-Only)",
+                dropOnlyTrue: "Ativo (Economia 95% em tela estática)",
+                dropOnlyFalse: "Desativado (Envio contínuo forçado)",
+                dropOnlyDesc: "Quando ativo, o pipeline não duplica quadros com a tela estática. O bitrate é 100% alocado para momentos de movimento (digitação/mouse).",
+                skipFirstLabel: "Entrega Imediata no Primeiro Quadro (skip-to-first)",
+                skipFirstTrue: "Ativo (Latência zero ao mover)",
+                skipFirstFalse: "Desativado (Sincronismo rígido)",
+                keyIntLabel: "Varredura Periódica / Intervalo IDR (Refresh Clean)",
+                keyIntDesc: "Injeta um quadro-chave IDR completo periodicamente para limpar qualquer resíduo visual na TV ou monitor HDMI.",
                 btnApply: "💾 Aplicar Alterações",
                 btnPauseStream: "⏸ Pausar Exibição",
                 btnResumeStream: "▶ Retomar Exibição",
@@ -1114,6 +1190,15 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 colorFull: "24-bit TrueColor",
                 color256: "256 Colori (QP 30-44)",
                 colorGray: "Monocromatico",
+                dropOnlyLabel: "Salto Fotogrammi (Damage-Only Preserving)",
+                dropOnlyTrue: "Attivo (Risparmio 95% su schermo statico)",
+                dropOnlyFalse: "Disattivato (Duplicazione continua)",
+                dropOnlyDesc: "Quando attivo, il pipeline non duplica fotogrammi statici, risparmiando banda per il movimento del cursore.",
+                skipFirstLabel: "Consegna Immediata Primo Fotogramma (skip-to-first)",
+                skipFirstTrue: "Attivo (Zero latenza al movimento)",
+                skipFirstFalse: "Disattivato (Allineamento rigido)",
+                keyIntLabel: "Scansione Periodica / Intervallo IDR (Refresh Clean)",
+                keyIntDesc: "Invia periodicamente un frame IDR completo per eliminare artefatti visivi sullo schermo HDMI/TV.",
                 btnApply: "💾 Applica Modifiche",
                 btnPauseStream: "⏸ Sospendi Display",
                 btnResumeStream: "▶ Riprendi Display",
@@ -1192,6 +1277,15 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 colorFull: "24位真彩色",
                 color256: "256 色低功耗",
                 colorGray: "单色灰度",
+                dropOnlyLabel: "跳帧保护与损伤更新 (Damage-Only)",
+                dropOnlyTrue: "启用 (静态屏幕节省 95% 带宽)",
+                dropOnlyFalse: "禁用 (强制连续重复帧)",
+                dropOnlyDesc: "启用后，屏幕静止时不重复发送帧，仅在鼠标移动或打字时全力传输画面更新。",
+                skipFirstLabel: "即时首帧传输 (skip-to-first)",
+                skipFirstTrue: "启用 (动作发生时零延迟送达)",
+                skipFirstFalse: "禁用 (严格时间戳对齐)",
+                keyIntLabel: "定期全屏刷新 / IDR 关键帧间隔 (Refresh Clean)",
+                keyIntDesc: "定期注入完整的 IDR 关键帧，彻底清除 HDMI/TV 显示器上的任何视觉残影。",
                 btnApply: "💾 应用配置",
                 btnPauseStream: "⏸ 暂停显示",
                 btnResumeStream: "▶ 恢复显示",
@@ -1313,6 +1407,45 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             });
         }
 
+        function setDropOnly(val) {
+            currentDropOnly = val;
+            localStorage.setItem('ext_drop_only', val);
+            const el = document.getElementById('valDropOnly');
+            if (el) el.textContent = val ? 'drop-only=true (Ativo)' : 'drop-only=false (Desativado)';
+            const btnT = document.getElementById('btnDropOnlyTrue');
+            const btnF = document.getElementById('btnDropOnlyFalse');
+            if (btnT) btnT.classList.toggle('active', val);
+            if (btnF) btnF.classList.toggle('active', !val);
+        }
+
+        function setSkipToFirst(val) {
+            currentSkipToFirst = val;
+            localStorage.setItem('ext_skip_to_first', val);
+            const el = document.getElementById('valSkipFirst');
+            if (el) el.textContent = val ? 'skip-to-first=true (Ativo)' : 'skip-to-first=false (Desativado)';
+            const btnT = document.getElementById('btnSkipFirstTrue');
+            const btnF = document.getElementById('btnSkipFirstFalse');
+            if (btnT) btnT.classList.toggle('active', val);
+            if (btnF) btnF.classList.toggle('active', !val);
+        }
+
+        function updateKeyIntValue(val) {
+            currentKeyIntMax = parseInt(val, 10);
+            localStorage.setItem('ext_key_int_max', currentKeyIntMax);
+            const sec = (currentKeyIntMax / (currentFps || 30)).toFixed(1);
+            const el = document.getElementById('valKeyInt');
+            if (el) el.textContent = `${currentKeyIntMax} quadros (~${sec}s)`;
+            document.querySelectorAll('#keyIntGrid [data-keyint]').forEach(b => {
+                b.classList.toggle('active', parseInt(b.getAttribute('data-keyint'), 10) === currentKeyIntMax);
+            });
+        }
+
+        function setKeyInt(val) {
+            const slider = document.getElementById('keyIntSlider');
+            if (slider) slider.value = val;
+            updateKeyIntValue(val);
+        }
+
         // Operating Modes State & Toggle
         const activeModes = {
             mode1: true,
@@ -1368,6 +1501,9 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             localStorage.setItem('ext_color', currentColor);
             localStorage.setItem('ext_fps', currentFps);
             localStorage.setItem('ext_bitrate', currentBitrate);
+            localStorage.setItem('ext_drop_only', currentDropOnly);
+            localStorage.setItem('ext_skip_to_first', currentSkipToFirst);
+            localStorage.setItem('ext_key_int_max', currentKeyIntMax);
             showToast('Applying configuration via UDP 5001...');
             fetch('/api/config', {
                 method: 'POST',
@@ -1375,7 +1511,10 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 body: JSON.stringify({
                     fps: currentFps,
                     bitrate: currentBitrate,
-                    color: currentColor
+                    color: currentColor,
+                    drop_only: currentDropOnly,
+                    skip_to_first: currentSkipToFirst,
+                    key_int_max: currentKeyIntMax
                 })
             })
             .then(res => res.json())
@@ -1502,6 +1641,15 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         const savedBitrate = localStorage.getItem('ext_bitrate');
         if (savedBitrate) setBitrate(parseInt(savedBitrate, 10));
 
+        const savedDropOnly = localStorage.getItem('ext_drop_only');
+        if (savedDropOnly !== null) setDropOnly(savedDropOnly === 'true');
+
+        const savedSkipToFirst = localStorage.getItem('ext_skip_to_first');
+        if (savedSkipToFirst !== null) setSkipToFirst(savedSkipToFirst === 'true');
+
+        const savedKeyInt = localStorage.getItem('ext_key_int_max');
+        if (savedKeyInt) setKeyInt(parseInt(savedKeyInt, 10));
+
         const savedM1 = localStorage.getItem('ext_mode1');
         if (savedM1 !== null) setModeToggleUI('mode1', savedM1 === 'true');
 
@@ -1518,6 +1666,9 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 if (cfg.color && !savedColor) setColor(cfg.color);
                 if (cfg.fps && !savedFps) setFps(cfg.fps);
                 if (cfg.bitrate && !savedBitrate) setBitrate(cfg.bitrate);
+                if (cfg.drop_only !== undefined && savedDropOnly === null) setDropOnly(cfg.drop_only);
+                if (cfg.skip_to_first !== undefined && savedSkipToFirst === null) setSkipToFirst(cfg.skip_to_first);
+                if (cfg.key_int_max !== undefined && !savedKeyInt) setKeyInt(cfg.key_int_max);
                 if (cfg.mode1 !== undefined && savedM1 === null) setModeToggleUI('mode1', cfg.mode1);
                 if (cfg.mode2 !== undefined && savedM2 === null) setModeToggleUI('mode2', cfg.mode2);
                 if (cfg.mode3 !== undefined && savedM3 === null) setModeToggleUI('mode3', cfg.mode3);

@@ -161,6 +161,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ColorProfile::TrueColor
     };
 
+    let mut drop_only = if args.iter().any(|a| a == "--no-drop-only" || a == "--drop-only=false") {
+        false
+    } else {
+        true
+    };
+    let mut skip_to_first = if args.iter().any(|a| a == "--no-skip-to-first" || a == "--skip-to-first=false") {
+        false
+    } else {
+        true
+    };
+    let mut key_int_max = args
+        .iter()
+        .find_map(|a| {
+            if let Some(v) = a.strip_prefix("--key-int-max=") {
+                v.parse::<u32>().ok()
+            } else if let Some(v) = a.strip_prefix("--idr=") {
+                v.parse::<u32>().ok()
+            } else if let Some(v) = a.strip_prefix("--key-int=") {
+                v.parse::<u32>().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| fps.max(15));
+
     let is_usb_transport = args.iter().any(|a| a == "--transport=usb" || a == "--usb-bulk" || a == "--usb");
     let stream_engine = if args.iter().any(|a| a == "--engine=native" || a == "--native" || a == "--rust") {
         StreamEngine::NativeRust
@@ -198,6 +223,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;34m[*] Target:\x1b[0m {}:{}", target_ip, target_port);
     println!("\x1b[1;34m[*] Bitrate:\x1b[0m {} kbps (Adaptive VBR, {} FPS)", bitrate, fps);
     println!("\x1b[1;34m[*] Color Profile:\x1b[0m {}", color_profile.name());
+    println!("\x1b[1;34m[*] Frame Skipping:\x1b[0m drop-only={}, skip-to-first={}", drop_only, skip_to_first);
+    println!("\x1b[1;34m[*] IDR Refresh Interval:\x1b[0m {} frames (~{:.1}s)", key_int_max, (key_int_max as f32) / (fps as f32));
     println!("\x1b[1;34m[*] Display Mode:\x1b[0m {} (options: 'extend' or 'clone')", mode);
     println!("\x1b[1;34m[*] Encoder Engine:\x1b[0m {:?} (arg: '{}')", encoder, encoder_arg);
     println!("\x1b[1;34m[*] Stream Framework:\x1b[0m {}", stream_engine.name());
@@ -328,8 +355,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\x1b[1;32m[+] PipeWire Node ID for {}:\x1b[0m {}", monitor_to_record, node_id);
 
         // Spawn hardware streaming pipeline with autoconnect=false
-        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline via {} ({} FPS, HUD: {}, Color: {:?})...\x1b[0m", encoder, stream_engine.name(), fps, hud_showing, color_profile);
-        let mut child = match spawn_streamer(stream_engine, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, pipe_write_fd) {
+        println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline via {} ({} FPS, HUD: {}, Color: {:?}, drop-only: {}, skip-to-first: {}, IDR: {})...\x1b[0m", encoder, stream_engine.name(), fps, hud_showing, color_profile, drop_only, skip_to_first, key_int_max);
+        let mut child = match spawn_streamer(stream_engine, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, drop_only, skip_to_first, key_int_max, pipe_write_fd) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -420,15 +447,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 restart_pipeline = true;
                             }
                         }
+                        if let Some(drop_val) = v.get("drop_only").and_then(|x| x.as_bool()) {
+                            if drop_val != drop_only {
+                                println!("\x1b[1;34m[*] Web Drop-Only Change: {} -> {}\x1b[0m", drop_only, drop_val);
+                                drop_only = drop_val;
+                                restart_pipeline = true;
+                            }
+                        }
+                        if let Some(skip_val) = v.get("skip_to_first").and_then(|x| x.as_bool()) {
+                            if skip_val != skip_to_first {
+                                println!("\x1b[1;34m[*] Web Skip-To-First Change: {} -> {}\x1b[0m", skip_to_first, skip_val);
+                                skip_to_first = skip_val;
+                                restart_pipeline = true;
+                            }
+                        }
+                        if let Some(new_key) = v.get("key_int_max").and_then(|x| x.as_u64()).map(|x| x as u32) {
+                            if new_key != key_int_max && new_key >= 5 && new_key <= 300 {
+                                println!("\x1b[1;34m[*] Web IDR Keyframe Interval Change: {} -> {} frames\x1b[0m", key_int_max, new_key);
+                                key_int_max = new_key;
+                                restart_pipeline = true;
+                            }
+                        }
                     }
                 }
             }
 
             if restart_pipeline {
-                println!("\x1b[1;36m[*] Hot-applying configuration (FPS: {}, Color: {:?}, HUD: {})...\x1b[0m", fps, color_profile, hud_showing);
+                println!("\x1b[1;36m[*] Hot-applying configuration (FPS: {}, Color: {:?}, HUD: {}, drop-only: {}, skip-to-first: {}, IDR: {})...\x1b[0m", fps, color_profile, hud_showing, drop_only, skip_to_first, key_int_max);
                 let _ = child.kill();
                 let _ = child.wait();
-                child = match spawn_streamer(stream_engine, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, pipe_write_fd) {
+                child = match spawn_streamer(stream_engine, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, drop_only, skip_to_first, key_int_max, pipe_write_fd) {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("\x1b[1;31m[!] Failed to restart streamer: {}\x1b[0m", e);
@@ -611,6 +659,9 @@ fn spawn_streamer(
     fps: u32,
     hud: bool,
     color_profile: ColorProfile,
+    drop_only: bool,
+    skip_to_first: bool,
+    key_int_max: u32,
     usb_pipe_fd: Option<RawFd>,
 ) -> Result<StreamerHandle, std::io::Error> {
     match engine {
@@ -625,11 +676,11 @@ fn spawn_streamer(
             Ok(StreamerHandle::Native(streamer))
         }
         StreamEngine::FFmpeg => {
-            let child = spawn_ffmpeg_streamer(target_ip, target_port, bitrate, encoder, fps, color_profile, usb_pipe_fd)?;
+            let child = spawn_ffmpeg_streamer(target_ip, target_port, bitrate, encoder, fps, color_profile, key_int_max, usb_pipe_fd)?;
             Ok(StreamerHandle::Child(child))
         }
         StreamEngine::GStreamer => {
-            let child = spawn_gst_streamer(target_ip, target_port, bitrate, encoder, fps, hud, color_profile, usb_pipe_fd)?;
+            let child = spawn_gst_streamer(target_ip, target_port, bitrate, encoder, fps, hud, color_profile, drop_only, skip_to_first, key_int_max, usb_pipe_fd)?;
             Ok(StreamerHandle::Child(child))
         }
     }
@@ -642,9 +693,10 @@ fn spawn_ffmpeg_streamer(
     encoder: EncoderApi,
     fps: u32,
     color_profile: ColorProfile,
+    key_int_max: u32,
     usb_pipe_fd: Option<RawFd>,
 ) -> Result<Child, std::io::Error> {
-    println!("\x1b[1;36m[+] Initializing FFmpeg Ultra-Low-Latency Streamer ({:?}, {} FPS, {} kbps)...\x1b[0m", encoder, fps, bitrate);
+    println!("\x1b[1;36m[+] Initializing FFmpeg Ultra-Low-Latency Streamer ({:?}, {} FPS, {} kbps, IDR: {})...\x1b[0m", encoder, fps, bitrate, key_int_max);
     let mut cmd = Command::new("ffmpeg");
     cmd.arg("-nostdin")
        .arg("-hide_banner")
@@ -669,27 +721,27 @@ fn spawn_ffmpeg_streamer(
                .arg("-b:v").arg(format!("{}k", bitrate))
                .arg("-maxrate").arg(format!("{}k", bitrate))
                .arg("-bufsize").arg(format!("{}k", bitrate / 2))
-               .arg("-g").arg(format!("{}", fps.max(15)));
+               .arg("-g").arg(format!("{}", key_int_max));
         }
         EncoderApi::Nvenc => {
             cmd.arg("-c:v").arg("h264_nvenc")
                .arg("-preset").arg("p1")
                .arg("-tune").arg("ull")
                .arg("-b:v").arg(format!("{}k", bitrate))
-               .arg("-g").arg(format!("{}", fps.max(15)));
+               .arg("-g").arg(format!("{}", key_int_max));
         }
         EncoderApi::Qsv => {
             cmd.arg("-c:v").arg("h264_qsv")
                .arg("-preset").arg("veryfast")
                .arg("-b:v").arg(format!("{}k", bitrate))
-               .arg("-g").arg(format!("{}", fps.max(15)));
+               .arg("-g").arg(format!("{}", key_int_max));
         }
         EncoderApi::Software => {
             cmd.arg("-c:v").arg("libx264")
                .arg("-preset").arg("ultrafast")
                .arg("-tune").arg("zerolatency")
                .arg("-b:v").arg(format!("{}k", bitrate))
-               .arg("-g").arg(format!("{}", fps.max(15)));
+               .arg("-g").arg(format!("{}", key_int_max));
         }
     }
 
@@ -713,6 +765,9 @@ fn spawn_gst_streamer(
     fps: u32,
     hud: bool,
     color_profile: ColorProfile,
+    drop_only: bool,
+    skip_to_first: bool,
+    key_int_max: u32,
     usb_pipe_fd: Option<RawFd>,
 ) -> Result<Child, std::io::Error> {
     let mut cmd = Command::new("gst-launch-1.0");
@@ -730,8 +785,8 @@ fn spawn_gst_streamer(
 
     // 2. Framerate normalization with frame skipping (drop-only preserves static screen and saves bitrate)
     cmd.arg("videorate")
-        .arg("drop-only=true")
-        .arg("skip-to-first=true")
+        .arg(format!("drop-only={}", drop_only))
+        .arg(format!("skip-to-first={}", skip_to_first))
         .arg("!")
         .arg(format!("video/x-raw,framerate={}/1", fps))
         .arg("!");
@@ -741,8 +796,8 @@ fn spawn_gst_streamer(
         println!("\x1b[1;35m[+] Injecting Advanced On-Screen Diagnostic Telemetry HUD with Glass Transparency...\x1b[0m");
         let avg_pct = if color_profile == ColorProfile::Economy256 { 50 } else { 75 };
         let hud_text = format!(
-            "text=\"[ PI ZERO EXTENDED MONITOR • ACTIVE ]\nPanel:    1600x900@59.95Hz (Native 1:1)\nStream:   {} FPS | Drop-on-Late (3x LIFO)\nColor:    {}\nRate:     Adaptive VBR ({}k cap / {}% avg)\nVPU:      Broadcom VideoCore IV @ 500MHz (+25% OC)\nCPU:      ARM1176 Load ~22% | RAM: ~141 MiB\nNetwork:  USB OTG (RTT 0.34ms, txq: 100)\nSync:     IDR Refresh 1.0s ({} frames)\nWeb:      http://{}:8080 (Auto-hide in 60s)\"",
-            fps, color_profile.name(), bitrate, avg_pct, fps, target_ip
+            "text=\"[ PI ZERO EXTENDED MONITOR • ACTIVE ]\nPanel:    1600x900@59.95Hz (Native 1:1)\nStream:   {} FPS | Drop-on-Late (3x LIFO)\nColor:    {}\nRate:     Adaptive VBR ({}k cap / {}% avg)\nVPU:      Broadcom VideoCore IV @ 500MHz (+25% OC)\nCPU:      ARM1176 Load ~22% | RAM: ~141 MiB\nNetwork:  USB OTG (RTT 0.34ms, txq: 100)\nSync:     IDR Interval {} frames (drop-only={})\nWeb:      http://{}:8080 (Auto-hide in 60s)\"",
+            fps, color_profile.name(), bitrate, avg_pct, key_int_max, drop_only, target_ip
         );
         cmd.arg("textoverlay")
             .arg(hud_text)
@@ -832,7 +887,7 @@ fn spawn_gst_streamer(
                 .arg("cabac=false")              // CAVLC simple entropy coding
                 .arg("dct8x8=false")             // Simple 4x4 transforms
                 .arg("num-slices=1")             // 1 atomic slice
-                .arg(format!("key-int-max={}", fps.max(15))) // IDR keyframe every 1.0s
+                .arg(format!("key-int-max={}", key_int_max)) // IDR keyframe periodic clean
                 .arg("!")
                 .arg("video/x-h264,profile=constrained-baseline")
                 .arg("!");
@@ -848,7 +903,7 @@ fn spawn_gst_streamer(
                 .arg("preset=low-latency-hq")
                 .arg("rc-mode=cbr-ld-hq")
                 .arg("zerolatency=true")
-                .arg("gop-size=30")
+                .arg(format!("gop-size={}", key_int_max))
                 .arg("b-frames=0")
                 .arg("!");
         }
@@ -863,7 +918,7 @@ fn spawn_gst_streamer(
                 .arg("rate-control=cbr")
                 .arg("target-usage=7")
                 .arg("b-frames=0")
-                .arg("gop-size=30")
+                .arg(format!("gop-size={}", key_int_max))
                 .arg("!");
         }
         EncoderApi::Software => {
@@ -878,7 +933,7 @@ fn spawn_gst_streamer(
                 .arg("speed-preset=ultrafast")
                 .arg("b-frames=0")
                 .arg("ref-frames=1")
-                .arg("key-int-max=30")
+                .arg(format!("key-int-max={}", key_int_max))
                 .arg("!");
         }
     }

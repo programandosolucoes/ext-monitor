@@ -18,6 +18,7 @@ BITRATE="${BITRATE:-0}"
 
 # Check for flags, custom IP arguments, and color profiles
 COLOR_FLAG=""
+EXTRA_FLAGS=()
 for arg in "$@"; do
     if [ "$arg" = "hud" ] || [ "$arg" = "--hud" ]; then
         HUD="hud"
@@ -38,6 +39,12 @@ for arg in "$@"; do
         TARGET_IP="${BASH_REMATCH[1]}"
     elif [[ "$arg" =~ ^--port=([0-9]+)$ ]]; then
         TARGET_PORT="${BASH_REMATCH[1]}"
+    elif [ "$arg" = "--drop-only" ] || [ "$arg" = "--no-drop-only" ] || [[ "$arg" =~ ^--drop-only= ]]; then
+        EXTRA_FLAGS+=("$arg")
+    elif [ "$arg" = "--skip-to-first" ] || [ "$arg" = "--no-skip-to-first" ] || [[ "$arg" =~ ^--skip-to-first= ]]; then
+        EXTRA_FLAGS+=("$arg")
+    elif [[ "$arg" =~ ^--key-int-max=([0-9]+)$ ]] || [[ "$arg" =~ ^--idr=([0-9]+)$ ]] || [[ "$arg" =~ ^--key-int=([0-9]+)$ ]]; then
+        EXTRA_FLAGS+=("$arg")
     fi
 done
 
@@ -46,12 +53,12 @@ if ip link show enx122233445566 >/dev/null 2>&1; then
     sudo ip link set enx122233445566 txqueuelen 100 2>/dev/null || true
 fi
 
-echo -e "\x1b[1;32m[*] Iniciando ext-sender (Modo: $MODE, Encoder: $ENCODER, FPS: $FPS, Bitrate: ${BITRATE:-auto} kbps, HUD: $HUD, Cor: ${COLOR_FLAG:-padrão}, Destino: $TARGET_IP:$TARGET_PORT)...\x1b[0m"
+echo -e "\x1b[1;32m[*] Iniciando ext-sender (Modo: $MODE, Encoder: $ENCODER, FPS: $FPS, Bitrate: ${BITRATE:-auto} kbps, HUD: $HUD, Cor: ${COLOR_FLAG:-padrão}, Destino: $TARGET_IP:$TARGET_PORT, Extras: ${EXTRA_FLAGS[*]})...\x1b[0m"
 
 # Mata instâncias anteriores se existirem (inclusive pipelines gst-launch órfãos)
 pkill -f "ext-sender" 2>/dev/null || true
 killall -9 gst-launch-1.0 2>/dev/null || true
 sleep 0.5
 
-# Executa o binário do sender com bitrate
-"$REPO_DIR/target/release/ext-sender" "$TARGET_IP" "$TARGET_PORT" "$BITRATE" "$MODE" "$ENCODER" "$FPS" "$HUD" $COLOR_FLAG
+# Executa o binário do sender com bitrate e flags extras
+"$REPO_DIR/target/release/ext-sender" "$TARGET_IP" "$TARGET_PORT" "$BITRATE" "$MODE" "$ENCODER" "$FPS" "$HUD" $COLOR_FLAG "${EXTRA_FLAGS[@]}"
