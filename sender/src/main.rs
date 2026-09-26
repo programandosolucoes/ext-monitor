@@ -346,6 +346,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at {} FPS ({})!\x1b[0m", monitor_to_record, fps, color_profile.name());
 
+        let mut last_node_check = Instant::now();
+        let mut last_link_check = Instant::now();
+
         // Supervise streaming process & listen for Web Hot-Apply changes
         while running.load(Ordering::SeqCst) {
             let mut restart_pipeline = false;
@@ -449,6 +452,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(e) => {
                     eprintln!("\x1b[1;31m[!] Error monitoring streamer: {}\x1b[0m", e);
                     break;
+                }
+            }
+
+            // 3. Health Watchdog: Detect PC Suspend/Resume or PipeWire node destruction
+            if last_node_check.elapsed() >= Duration::from_millis(1500) {
+                last_node_check = Instant::now();
+                if !is_pipewire_node_alive(node_id) {
+                    println!("\x1b[1;31m[!] PipeWire Screencast node {} disappeared (PC Suspend/Resume or session closed). Reconnecting...\x1b[0m", node_id);
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    // Brief delay to allow system display services to stabilize after wake-up
+                    thread::sleep(Duration::from_millis(1500));
+                    break;
+                }
+            }
+
+            // 4. Link Watchdog: Ensure ext-hdmi-sender is connected to the monitor output
+            if last_link_check.elapsed() >= Duration::from_millis(3000) {
+                last_link_check = Instant::now();
+                if !is_sender_linked() {
+                    println!("\x1b[1;33m[*] PipeWire link lost. Re-establishing link to node {}...\x1b[0m", node_id);
+                    link_monitor_port_to_sender(node_id, monitor_to_record);
                 }
             }
         }
@@ -963,4 +988,26 @@ fn register_ctrlc_hook() {
 
 extern "C" fn signal_handler(_: libc::c_int) {
     RUNNING.store(false, Ordering::SeqCst);
+}
+
+fn is_pipewire_node_alive(node_id: u32) -> bool {
+    let output = match Command::new("pw-cli")
+        .arg("info")
+        .arg(node_id.to_string())
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return false,
+    };
+    let s = String::from_utf8_lossy(&output.stdout);
+    let err = String::from_utf8_lossy(&output.stderr);
+    !s.is_empty() && !s.contains("unknown global") && !err.contains("unknown global")
+}
+
+fn is_sender_linked() -> bool {
+    if let Ok(output) = Command::new("pw-link").arg("-l").output() {
+        let s = String::from_utf8_lossy(&output.stdout);
+        return s.contains("ext-hdmi-sender:input_1");
+    }
+    true
 }
