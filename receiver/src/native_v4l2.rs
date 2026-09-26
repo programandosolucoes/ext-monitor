@@ -149,6 +149,17 @@ impl V4l2DecoderSession {
         std::mem::forget(vfile);
         std::mem::forget(fbfile);
 
+        // Put VT1 into graphics mode to suppress console cursor and text rendering
+        if let Ok(tty1) = OpenOptions::new().read(true).write(true).open("/dev/tty1") {
+            const KDSETMODE: libc::c_ulong = 0x4B3A;
+            const KD_GRAPHICS: libc::c_ulong = 0x01;
+            unsafe { libc::ioctl(tty1.as_raw_fd(), KDSETMODE, KD_GRAPHICS); }
+        }
+
+        // Force framebuffer unblank
+        const FBIOBLANK: libc::c_ulong = 0x4611;
+        unsafe { libc::ioctl(fb_fd, FBIOBLANK, 0 as libc::c_int); }
+
         // 1. Set OUTPUT Format (H.264 1280x720)
         let mut out_fmt = V4l2Format {
             buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
@@ -328,6 +339,9 @@ impl V4l2DecoderSession {
                     // Direct hardware framebuffer blit to HDMI (/dev/fb0)
                     unsafe {
                         libc::pwrite(self.fb_fd, frame_ptr as *const libc::c_void, frame_size, 0);
+                        let mut var = [0u8; 160];
+                        const FBIOPAN_DISPLAY: libc::c_ulong = 0x4606;
+                        libc::ioctl(self.fb_fd, FBIOPAN_DISPLAY, var.as_mut_ptr());
                     }
                 }
 
