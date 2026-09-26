@@ -102,17 +102,19 @@ fn handle_http_client(
             };
             send_response(&mut stream, "200 OK", "text/html; charset=utf-8", body);
         }
-        ("GET", "/connect.sh") => {
-            send_response(&mut stream, "200 OK", "text/x-shellscript", CONNECT_SCRIPT.as_bytes());
+        ("GET", "/connect.sh") | ("HEAD", "/connect.sh") => {
+            let body = if method == "HEAD" { &[][..] } else { CONNECT_SCRIPT.as_bytes() };
+            send_response(&mut stream, "200 OK", "text/x-shellscript", body);
         }
-        ("GET", "/download/ext-sender") => {
-            serve_file_or_fallback(&mut stream, "/var/www/download/ext-sender", "application/octet-stream");
+        ("GET", "/download/ext-sender") | ("HEAD", "/download/ext-sender") => {
+            serve_file_or_fallback(&mut stream, "/var/www/download/ext-sender", "application/octet-stream", method == "HEAD");
         }
-        ("GET", "/download/client.tar.gz") => {
-            serve_file_or_fallback(&mut stream, "/var/www/download/client.tar.gz", "application/gzip");
+        ("GET", "/download/client.tar.gz") | ("HEAD", "/download/client.tar.gz") => {
+            serve_file_or_fallback(&mut stream, "/var/www/download/client.tar.gz", "application/gzip", method == "HEAD");
         }
-        ("GET", "/download/99-ext-monitor.rules") => {
-            send_response(&mut stream, "200 OK", "text/plain", UDEV_RULES.as_bytes());
+        ("GET", "/download/99-ext-monitor.rules") | ("HEAD", "/download/99-ext-monitor.rules") => {
+            let body = if method == "HEAD" { &[][..] } else { UDEV_RULES.as_bytes() };
+            send_response(&mut stream, "200 OK", "text/plain", body);
         }
         ("GET", "/api/status") => {
             let is_paused = pipeline_mgr.is_paused();
@@ -454,11 +456,12 @@ fn apply_network_config(payload: &str) {
 const CONNECT_SCRIPT: &str = include_str!("../../scripts/connect.sh");
 const UDEV_RULES: &str = include_str!("../../scripts/99-ext-monitor.rules");
 
-fn serve_file_or_fallback(stream: &mut TcpStream, path: &str, content_type: &str) {
+fn serve_file_or_fallback(stream: &mut TcpStream, path: &str, content_type: &str, is_head: bool) {
     if let Ok(mut f) = fs::File::open(path) {
         let mut buf = Vec::new();
         if f.read_to_end(&mut buf).is_ok() {
-            send_response(stream, "200 OK", content_type, &buf);
+            let body = if is_head { &[][..] } else { &buf };
+            send_response(stream, "200 OK", content_type, body);
             return;
         }
     }

@@ -113,12 +113,17 @@ set -e
 BUILD_DIR="./build-appliance"
 OUTPUT_IMG="${BUILD_DIR}/ext-monitor-pi0-appliance.img"
 
-# 1. Compila o receptor nativo em Rust para ARMv6 Hard-Float
+# 1. Compila o transmissor do host e o receptor nativo para ARMv6 Hard-Float
+cargo build --release -p ext-sender
 cargo build --release --target arm-unknown-linux-gnueabihf -p ext-receiver
 arm-linux-gnueabihf-strip target/arm-unknown-linux-gnueabihf/release/ext-receiver
 cp target/arm-unknown-linux-gnueabihf/release/ext-receiver ${BUILD_DIR}/initramfs/usr/local/bin/
 
-# 2. Empacota a imagem cpio comprimida em gzip máximo (-9)
+# 2. Empacota o arquivo portátil de ferramentas do cliente (client.tar.gz)
+mkdir -p ${BUILD_DIR}/initramfs/var/www/download
+tar -czf ${BUILD_DIR}/initramfs/var/www/download/client.tar.gz -C ./scripts start.sh connect.sh install-host.sh 99-ext-monitor.rules show-welcome-window.py
+
+# 3. Empacota a imagem cpio comprimida em gzip máximo (-9)
 (
     cd "${BUILD_DIR}/initramfs"
     find . -print0 | cpio --null -ov --format=newc -R 0:0 | gzip -9 > "${BUILD_DIR}/boot/initramfs.cpio.gz"

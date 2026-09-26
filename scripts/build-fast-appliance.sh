@@ -24,8 +24,12 @@ echo -e "\x1b[1;32m  Raspberry Pi Zero Ultra-Fast Appliance Image Builder       
 echo -e "\x1b[1;34m  Target: 32MB SD card image | Boots in < 2s | 100% RAM Initramfs      \x1b[0m"
 echo -e "\x1b[1;32m========================================================================\x1b[0m\n"
 
-# 1. Compile and strip ext-receiver for ARMv6
-echo -e "\x1b[1;34m[*] Step 1: Compiling pure-Rust ext-receiver for ARMv6...\x1b[0m"
+# 1. Compile host ext-sender and appliance ext-receiver
+echo -e "\x1b[1;34m[*] Step 1: Compiling host ext-sender and pure-Rust ext-receiver for ARMv6...\x1b[0m"
+(
+    cd "${PROJECT_ROOT}/sender"
+    cargo build --release
+)
 (
     cd "${PROJECT_ROOT}/receiver"
     cargo build --release --target arm-unknown-linux-gnueabihf
@@ -44,10 +48,12 @@ mkdir -p "${BUILD_DIR}/initramfs/var/www/download"
 TMP_CLIENT=$(mktemp -d)
 if [ -f "${PROJECT_ROOT}/target/release/ext-sender" ]; then
     cp "${PROJECT_ROOT}/target/release/ext-sender" "${TMP_CLIENT}/ext-sender"
+    strip "${TMP_CLIENT}/ext-sender" 2>/dev/null || true
     cp "${PROJECT_ROOT}/scripts/start.sh" "${TMP_CLIENT}/start.sh"
     cp "${PROJECT_ROOT}/scripts/connect.sh" "${TMP_CLIENT}/connect.sh"
     cp "${PROJECT_ROOT}/scripts/install-host.sh" "${TMP_CLIENT}/install-host.sh"
     cp "${PROJECT_ROOT}/scripts/99-ext-monitor.rules" "${TMP_CLIENT}/99-ext-monitor.rules"
+    cp "${PROJECT_ROOT}/scripts/show-welcome-window.py" "${TMP_CLIENT}/show-welcome-window.py"
     cat << 'EOF' > "${TMP_CLIENT}/README.txt"
 ========================================================================
 EXT-MONITOR: Pacote de Ferramentas Portáteis do Host PC
@@ -60,7 +66,7 @@ Instruções Rápidas:
      ./start.sh extend auto 30 false economy --bitrate=400
 ========================================================================
 EOF
-    chmod +x "${TMP_CLIENT}"/*.sh "${TMP_CLIENT}/ext-sender" 2>/dev/null || true
+    chmod +x "${TMP_CLIENT}"/*.sh "${TMP_CLIENT}/ext-sender" "${TMP_CLIENT}/show-welcome-window.py" 2>/dev/null || true
     tar -czf "${BUILD_DIR}/initramfs/var/www/download/client.tar.gz" -C "${TMP_CLIENT}" .
     cp "${TMP_CLIENT}/ext-sender" "${BUILD_DIR}/initramfs/var/www/download/ext-sender"
 fi

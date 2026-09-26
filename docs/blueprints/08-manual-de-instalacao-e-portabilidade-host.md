@@ -62,14 +62,21 @@ O instalador detecta a distribuição Linux em uso e instala os pacotes necessá
 * `ext-monitor-start`: Script de controle com suporte a múltiplos modos (`extend`, `mirror`, `auto`).
 * `ext-monitor-connect`: Conector rápido universal.
 
-#### 3. Regras Udev de Baixa Latência (`/etc/udev/rules.d/99-ext-monitor.rules`)
+#### 3. Regras Udev de Baixa Latência e Retomada de Suspensão (`/etc/udev/rules.d/99-ext-monitor.rules`)
 ```udev
-# 99-ext-monitor.rules: Configuração automática da interface de rede USB
-SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="614d", \
-    RUN+="/sbin/ip link set dev %k txqueuelen 100", \
-    RUN+="/sbin/ip link set dev %k mtu 1500"
+# 99-ext-monitor.rules: Configuração automática da interface de rede USB e recuperação de sleep
+ACTION=="add|change", SUBSYSTEM=="net", KERNEL=="enx*|usb*", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="614d", \
+    RUN+="/sbin/ip link set dev %k txqueuelen 100", RUN+="/sbin/ip link set dev %k mtu 1500"
+ACTION=="add|change", SUBSYSTEM=="net", KERNEL=="enx*|usb*", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", \
+    RUN+="/sbin/ip link set dev %k txqueuelen 100", RUN+="/sbin/ip link set dev %k mtu 1500"
+
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="614d", TAG+="systemd", \
+    RUN+="/usr/bin/systemctl --no-block --user restart ext-monitor-autoconnect.service"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d6b", ATTR{idProduct}=="0104", TAG+="systemd", \
+    RUN+="/usr/bin/systemctl --no-block --user restart ext-monitor-autoconnect.service"
 ```
 * **`txqueuelen 100`:** Reduz a fila de transmissão da placa de rede de 1000 para 100 pacotes. Isso elimina completamente o acúmulo de buffers (buffer bloat) e reduz a latência do mouse em mais de 15ms.
+* **`add|change` na Retomada de Suspensão:** Garante que quando o PC acorda do modo de economia de energia (*sleep / suspend-to-RAM*), as regras de baixa latência e os daemons de extensão de tela sejam reativados instantaneamente.
 
 #### 4. Atalho no Menu de Aplicativos (Desktop Entry)
 Cria o arquivo `/usr/share/applications/ext-monitor.desktop`, permitindo que o usuário inicie a segunda tela com um único clique no menu de programas ou pressione a tecla Super e digite "Ext-Monitor".
