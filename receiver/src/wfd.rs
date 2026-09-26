@@ -22,6 +22,9 @@ use std::time::Duration;
 /// Standard RTSP port for Wi-Fi Display / Miracast
 pub const WFD_RTSP_PORT: u16 = 7236;
 
+/// Standard MS-MICE control signaling port (Miracast over Infrastructure)
+pub const WFD_MICE_PORT: u16 = 7250;
+
 /// UDP port for incoming Windows MPEG-TS / H.264 RTP stream
 pub const WFD_RTP_PORT: u16 = 5002;
 
@@ -36,11 +39,15 @@ pub const WFD_RTP_PORT: u16 = 5002;
 pub const WFD_VIDEO_FORMATS: &str =
     "00 00 02 02 0001deff 157cff5f 00000fff 00 0000 0000 00 none none";
 
-/// Starts the Wi-Fi Display RTSP server on a background thread
+/// Starts the Wi-Fi Display RTSP server and MS-MICE listener on background threads
 pub fn start_wfd_server(
     running: Arc<AtomicBool>,
     pipeline_mgr: Arc<PipelineManager>,
 ) -> std::io::Result<()> {
+    // 1. Start MS-MICE Signaling listener on TCP port 7250 (GNOME Network Displays & Windows Infrastructure)
+    start_mice_listener(running.clone());
+
+    // 2. Start WFD RTSP Session listener on TCP port 7236
     let listener = TcpListener::bind(format!("0.0.0.0:{}", WFD_RTSP_PORT))?;
     listener.set_nonblocking(true)?;
 
@@ -48,7 +55,7 @@ pub fn start_wfd_server(
         "\x1b[1;32m[wfd-rust]\x1b[0m Miracast RTSP server listening on TCP port {}",
         WFD_RTSP_PORT
     );
-    println!("\x1b[1;34m[wfd-rust]\x1b[0m Ready for native Windows wireless casting (Win + K)...");
+    println!("\x1b[1;34m[wfd-rust]\x1b[0m Ready for native Windows (Win + K) and GNOME Network Displays casting...");
 
     thread::spawn(move || {
         while running.load(Ordering::SeqCst) {
@@ -81,6 +88,110 @@ pub fn start_wfd_server(
     });
 
     Ok(())
+}
+
+/// Start background listener on TCP port 7250 for MS-MICE (Miracast over Infrastructure) signaling
+fn start_mice_listener(running: Arc<AtomicBool>) {
+    thread::spawn(move || {
+        let listener = match TcpListener::bind(format!("0.0.0.0:{}", WFD_MICE_PORT)) {
+            Ok(l) => {
+                let _ = l.set_nonblocking(true);
+                println!(
+                    "\x1b[1;32m[wfd-mice]\x1b[0m MS-MICE Signaling listener active on TCP port {}",
+                    WFD_MICE_PORT
+                );
+                l
+            }
+            Err(e) => {
+                eprintln!(
+                    "\x1b[1;31m[wfd-mice]\x1b[0m Failed to bind MS-MICE port {}: {}",
+                    WFD_MICE_PORT, e
+                );
+                return;
+            }
+        };
+
+        while running.load(Ordering::SeqCst) {
+            match listener.accept() {
+                Ok((mut stream, addr)) => {
+                    let client_ip = addr.ip().to_string();
+                    println!(
+                        "\x1b[1;32m[wfd-mice]\x1b[0m Incoming MS-MICE connection on port 7250 from {}",
+                        client_ip
+                    );
+
+                    let run = running.clone();
+                    thread::spawn(move || {
+                        let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+                        let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+
+                        let mut buf = [0u8; 1024];
+                        while run.load(Ordering::SeqCst) {
+                            match stream.read(&mut buf) {
+                                Ok(0) => {
+                                    println!(
+                                        "\x1b[1;33m[wfd-mice]\x1b[0m MS-MICE connection closed by {}",
+                                        client_ip
+                                    );
+                                    break;
+                                }
+                                Ok(n) => {
+                                    let req = &buf[..n];
+                                    let req_str = String::from_utf8_lossy(req);
+
+                                    // Detect SOURCE_READY (text or binary MS-MICE command 0x01)
+                                    if req_str.contains("SOURCE_READY")
+                                        || (!req.is_empty() && (req[0] == 0x01 || req[1] == 0x01))
+                                    {
+                                        println!(
+                                            "\x1b[1;32m[wfd-mice]\x1b[0m Received SOURCE_READY from {} ({} bytes). Handshake accepted!",
+                                            client_ip, n
+                                        );
+                                        // Send acknowledgment if requested
+                                        if req_str.starts_with("SOURCE_READY")
+                                            || req_str.contains("\r\n")
+                                        {
+                                            let _ = stream.write_all(b"OK\r\n\r\n");
+                                        } else {
+                                            let ack = [0x01, 0x00, 0x00, 0x00];
+                                            let _ = stream.write_all(&ack);
+                                        }
+                                        let _ = stream.flush();
+                                    } else {
+                                        println!(
+                                            "\x1b[1;34m[wfd-mice]\x1b[0m Received MICE packet from {} ({} bytes): {:?}",
+                                            client_ip, n, &req[..n.min(32)]
+                                        );
+                                    }
+                                }
+                                Err(ref e)
+                                    if e.kind() == std::io::ErrorKind::WouldBlock
+                                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                                {
+                                    thread::sleep(Duration::from_millis(50));
+                                }
+                                Err(e) => {
+                                    println!(
+                                        "\x1b[1;33m[wfd-mice]\x1b[0m MICE read error from {}: {}",
+                                        client_ip, e
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(100));
+                }
+                Err(e) => {
+                    eprintln!("\x1b[1;31m[wfd-mice]\x1b[0m Accept error: {}", e);
+                    thread::sleep(Duration::from_millis(500));
+                }
+            }
+        }
+        println!("\x1b[1;33m[wfd-mice]\x1b[0m MS-MICE listener stopped.");
+    });
 }
 
 /// Active connection session with a Windows transmitter (Source)

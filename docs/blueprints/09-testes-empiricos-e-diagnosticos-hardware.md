@@ -57,13 +57,38 @@ Durante a homologação em laboratório, foram testados diferentes perfis de cod
 * **Uso Ideal:** Sessões prolongadas de programação, digitação e monitoramento de servidores via rede com largura de banda restrita.
 
 ### 3.2 Perfil 24-bit TrueColor (Full Colors / Dynamic QP 18-34)
-* **Comportamento Observado:**
-  * Sem limites de QP, codificadores H.264 acelerados por hardware (AMD `vah264enc`) a 400 kbps empurravam o quantizador para QP 48+, degradando macroblocos e produzindo artefatos escuros ("imagem suja").
-  * Com a aplicação dos limites `min-qp=18`, `max-qp=34`, `target-percentage=85` e `target-usage=5`, as cores mantêm-se vívidas e o texto permanece nítido.
-  * O ajuste de `videorate drop-only=true` garante que telas estáticas não consumam largura de banda gerando quadros duplicados desnecessários, preservando todo o orçamento para quando houver atualização de áreas (movimento do mouse ou digitação).
-  * O envio de quadros IDR periódicos (`key-int-max=30`) atua como uma varredura de limpeza automática ("refresh clean"), eliminando quaisquer resíduos visuais a cada 1 segundo.
+### 3.3 Preservação de Salto de Quadros (Frame Skipping) e Varredura Periódica IDR
 
-### 3.3 Teste de Estresse Térmico e Uso de Silício
+Durante o refinamento empírico da pipeline GStreamer/VA-API, identificamos que o elemento `videorate` com `drop-only=false` gerava quadros duplicados artificiais mesmo com a tela do desktop 100% estática, saturando a banda com dados redundantes e elevando o atraso residual.
+
+Para sanar o gargalo e permitir sintonia fina dinâmica pelo usuário:
+1. **`drop-only=true` (Preservação Damage-Only):**
+   * Quando a tela está imóvel, o pipeline não duplica quadros; todo o orçamento de taxa de bits (bitrate) é mantido em repouso.
+   * Quando ocorre movimentação (movimento do mouse ou digitação capturada pelo Mutter ScreenCast via D-Bus), o pipeline aloca 100% do orçamento para as áreas com danos atualizados. Economia de até **95% de banda e CPU** em repouso.
+2. **`skip-to-first=true` (Latência Zero ao Mover):**
+   * Garante a entrega imediata do primeiro quadro atualizado sem aguardar slots de tempo prévios, eliminando a sensação de "arrasto" ou atraso ao retomar a digitação ou mover o cursor.
+3. **`key-int-max=N` (Varredura Periódica / Refresh Clean):**
+   * Injeta um quadro-chave IDR completo periodicamente (padrão de 30 quadros a cada 1.0s).
+   * Atua como uma varredura de limpeza automática, eliminando artefatos residuais e restaurando a fidelidade da imagem na TV/monitor HDMI sem necessidade de reinicializar o stream.
+
+### 3.4 Exposição no Painel Web, Scripts e Persistência
+
+Esses três parâmetros foram totalmente externalizados para controle do usuário:
+* **Painel Web (`receiver/src/web_ui.rs`):**
+  * Controles visuais para `drop-only` (Ativo/Desativado), `skip-to-first` (Ativo/Desativado) e slider de quadros IDR com presets (15q, 30q, 60q, 120q).
+  * Persistência automática em `localStorage` no navegador para que as opções sobrevivam a recarregamentos (`F5`).
+  * Sincronização bidirecional em tempo real com `GET /api/config` e `POST /api/config`.
+* **Hot-Apply via UDP 5001:** O receptor repassa a configuração instantaneamente para o transmissor `ext-sender` no PC através do soquete de controle `192.168.7.1:5001`.
+* **Linha de Comando e Scripts (`scripts/start.sh`):** Suporte nativo aos argumentos `--drop-only`, `--no-drop-only`, `--skip-to-first`, `--no-skip-to-first` e `--key-int-max=<N>`.
+
+### 3.5 Sinalização MS-MICE e GNOME Network Displays (Porta TCP 7250)
+
+Para suporte ao GNOME Network Displays no Linux e Windows Miracast sobre Infraestrutura (MS-MICE):
+* O serviço Avahi publica `_display._tcp` e `_miracast._tcp` com o registro TXT `p2pMAC=12:22:33:44:55:66` associado à interface do dispositivo.
+* O `ext-receiver` implementa um listener TCP na porta **7250** dedicado ao protocolo MS-MICE.
+* Ao receber o sinal `SOURCE_READY` na porta 7250, o receptor aceita o handshake e confirma que o canal RTSP 7236 está pronto para início da sessão de vídeo, viabilizando projeção sem fio nativa em clientes GNOME Wayland.
+
+### 3.6 Teste de Estresse Térmico e Uso de Silício
 
 | Parâmetro Medido | Em Repouso (Aguardando Sinal) | Streaming Ativo 30 FPS | Streaming 60 FPS (Pico) |
 | :--- | :--- | :--- | :--- |

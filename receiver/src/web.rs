@@ -30,6 +30,9 @@ struct ConfigState {
     fps: u32,
     bitrate: u32,
     color: String,
+    drop_only: bool,
+    skip_to_first: bool,
+    key_int_max: u32,
     mode1: bool,
     mode2: bool,
     mode3: bool,
@@ -39,6 +42,9 @@ static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
     fps: 30,
     bitrate: 400,
     color: String::new(),
+    drop_only: true,
+    skip_to_first: true,
+    key_int_max: 30,
     mode1: true,
     mode2: true,
     mode3: true,
@@ -144,11 +150,11 @@ fn handle_http_client(
             let json = if let Ok(cfg) = CONFIG.lock() {
                 let col = if cfg.color.is_empty() { "256" } else { &cfg.color };
                 format!(
-                    "{{\"fps\":{},\"bitrate\":{},\"color\":\"{}\",\"mode1\":{},\"mode2\":{},\"mode3\":{}}}",
-                    cfg.fps, cfg.bitrate, col, cfg.mode1, cfg.mode2, cfg.mode3
+                    "{{\"fps\":{},\"bitrate\":{},\"color\":\"{}\",\"drop_only\":{},\"skip_to_first\":{},\"key_int_max\":{},\"mode1\":{},\"mode2\":{},\"mode3\":{}}}",
+                    cfg.fps, cfg.bitrate, col, cfg.drop_only, cfg.skip_to_first, cfg.key_int_max, cfg.mode1, cfg.mode2, cfg.mode3
                 )
             } else {
-                "{\"fps\":30,\"bitrate\":400,\"color\":\"256\",\"mode1\":true,\"mode2\":true,\"mode3\":true}".to_string()
+                "{\"fps\":30,\"bitrate\":400,\"color\":\"256\",\"drop_only\":true,\"skip_to_first\":true,\"key_int_max\":30,\"mode1\":true,\"mode2\":true,\"mode3\":true}".to_string()
             };
             send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
         }
@@ -160,6 +166,9 @@ fn handle_http_client(
                     if let Some(fps) = extract_json_u32(body, "fps") { cfg.fps = fps; }
                     if let Some(bitrate) = extract_json_u32(body, "bitrate") { cfg.bitrate = bitrate; }
                     if let Some(color) = extract_json_str(body, "color") { cfg.color = color.to_string(); }
+                    if let Some(drop_only) = extract_json_bool(body, "drop_only") { cfg.drop_only = drop_only; }
+                    if let Some(skip_to_first) = extract_json_bool(body, "skip_to_first") { cfg.skip_to_first = skip_to_first; }
+                    if let Some(key_int_max) = extract_json_u32(body, "key_int_max") { cfg.key_int_max = key_int_max; }
                     if let Some(m1) = extract_json_bool(body, "mode1") { cfg.mode1 = m1; }
                     if let Some(m2) = extract_json_bool(body, "mode2") { cfg.mode2 = m2; }
                     if let Some(m3) = extract_json_bool(body, "mode3") { cfg.mode3 = m3; }
