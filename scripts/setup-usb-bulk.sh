@@ -19,11 +19,18 @@ modprobe libcomposite 2>/dev/null || true
 modprobe usb_f_fs 2>/dev/null || true
 
 # 2. Unbind existing gadget if active
+for g in /sys/kernel/config/usb_gadget/*; do
+    if [ -d "$g" ] && [ -f "$g/UDC" ]; then
+        echo "" > "$g/UDC" 2>/dev/null || true
+    fi
+done
+
 if [ -d "$GADGET_DIR" ]; then
-    echo "" > "$GADGET_DIR/UDC" 2>/dev/null || true
     umount "$FFS_DIR" 2>/dev/null || true
     rm -f "$GADGET_DIR/configs/c.1/ffs.display" 2>/dev/null || true
+    rm -f "$GADGET_DIR/configs/c.1/acm.usb0" 2>/dev/null || true
     rmdir "$GADGET_DIR/functions/ffs.display" 2>/dev/null || true
+    rmdir "$GADGET_DIR/functions/acm.usb0" 2>/dev/null || true
     rmdir "$GADGET_DIR/configs/c.1/strings/0x409" 2>/dev/null || true
     rmdir "$GADGET_DIR/configs/c.1" 2>/dev/null || true
     rmdir "$GADGET_DIR/strings/0x409" 2>/dev/null || true
@@ -50,8 +57,13 @@ mkdir -p configs/c.1/strings/0x409
 echo "USB Bulk Direct Display" > configs/c.1/strings/0x409/configuration
 echo 500 > configs/c.1/MaxPower
 
+# Function 1: FunctionFS Display (Interface 0: Bulk OUT 0x01 + Bulk IN 0x82)
 mkdir -p functions/ffs.display
-ln -s functions/ffs.display configs/c.1/
+ln -sf functions/ffs.display configs/c.1/
+
+# Function 2: Serial Console (/dev/ttyGS0 -> /dev/ttyACM0 on Host)
+mkdir -p functions/acm.usb0
+ln -sf functions/acm.usb0 configs/c.1/
 
 # 4. Mount FunctionFS user-space directory
 mkdir -p "$FFS_DIR"
@@ -60,3 +72,4 @@ if ! mountpoint -q "$FFS_DIR"; then
 fi
 
 echo -e "\x1b[1;32m[+] FunctionFS mounted at $FFS_DIR. Ready for ext-receiver to open ep0.\x1b[0m"
+

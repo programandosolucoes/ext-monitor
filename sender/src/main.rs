@@ -178,11 +178,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pipe_write_fd = if is_usb_transport {
         println!("\x1b[1;33m[*] Transport Mode: USB Bulk Direct (Mode 2 - Zero Network Stack)\x1b[0m");
         match usb_transport::open_usb_display_device() {
-            Ok(handle) => {
+            Ok((handle, iface_num, ep_out)) => {
                 unsafe { libc::pipe(pipe_fds.as_mut_ptr()); }
                 let read_fd = pipe_fds[0];
                 let write_fd = pipe_fds[1];
-                let _ = usb_transport::spawn_usb_bulk_writer(handle, read_fd, running.clone());
+                let _ = usb_transport::spawn_usb_bulk_writer(handle, read_fd, running.clone(), iface_num, ep_out);
                 Some(write_fd)
             }
             Err(e) => {

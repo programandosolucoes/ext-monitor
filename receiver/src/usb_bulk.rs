@@ -210,6 +210,26 @@ pub fn init_functionfs_descriptors() -> std::io::Result<File> {
     Ok(ep0)
 }
 
+/// Automatically binds gadget to UDC once FunctionFS descriptors have been initialized on ep0
+fn bind_udc_if_needed() {
+    if let Ok(entries) = std::fs::read_dir("/sys/class/udc") {
+        for entry in entries.flatten() {
+            let udc_name = entry.file_name().to_string_lossy().to_string();
+            for gadget in &["/sys/kernel/config/usb_gadget/g_display/UDC", "/sys/kernel/config/usb_gadget/ext_composite/UDC"] {
+                if Path::new(gadget).exists() {
+                    let current = std::fs::read_to_string(gadget).unwrap_or_default();
+                    if current.trim().is_empty() {
+                        let _ = std::fs::write(gadget, &udc_name);
+                        println!("\x1b[1;32m[usb-bulk]\x1b[0m Bound gadget to UDC {}", udc_name);
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+    }
+}
+
 /// Main loop for Mode 2 USB Bulk Direct receiver
 pub fn run_usb_bulk_receiver(
     running: Arc<AtomicBool>,
@@ -223,6 +243,7 @@ pub fn run_usb_bulk_receiver(
     }
 
     let ep0 = init_functionfs_descriptors()?;
+    bind_udc_if_needed();
 
     let run_ep0 = running.clone();
     thread::spawn(move || {
