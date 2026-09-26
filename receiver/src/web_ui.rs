@@ -247,6 +247,57 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         }
         .slider-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem; }
 
+        /* iOS / Cyberpunk Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.15);
+            transition: .25s ease;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #cbd5e1;
+            transition: .25s ease;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+            background-color: #0b0f17;
+        }
+        .mode-card {
+            transition: all 0.3s ease;
+        }
+        .mode-card.disabled {
+            opacity: 0.45;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+            filter: grayscale(0.7);
+        }
+
         /* Action Buttons */
         .action-row { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 1rem; }
         .btn-primary {
@@ -560,20 +611,38 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     <span class="card-badge badge-purple" data-i18n="badgeMultiMode">Concurrent Engine</span>
                 </div>
                 <div class="btn-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
-                    <div class="dl-card" style="border-color: var(--accent-cyan);">
-                        <div class="dl-title">🐧 Mode 1: Linux Wayland</div>
+                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                            <div class="dl-title" style="margin: 0;">🐧 Mode 1: Linux Wayland</div>
+                            <label class="switch" title="Ligar / Desligar Modo 1">
+                                <input type="checkbox" id="toggleMode1" checked onchange="toggleMode('mode1', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                         <div class="dl-desc" data-i18n="m1Desc">Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (&lt; 15ms).</div>
-                        <span class="stat-badge badge-cyan" style="align-self: flex-start;">Active (UDP 5000)</span>
+                        <span id="badgeMode1" class="stat-badge badge-cyan" style="align-self: flex-start;">Ligado (UDP 5000)</span>
                     </div>
-                    <div class="dl-card">
-                        <div class="dl-title">🪟 Mode 2: Windows Miracast</div>
+                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                            <div class="dl-title" style="margin: 0;">🪟 Mode 2: Windows Miracast</div>
+                            <label class="switch" title="Ligar / Desligar Modo 2">
+                                <input type="checkbox" id="toggleMode2" checked onchange="toggleMode('mode2', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                         <div class="dl-desc" data-i18n="m2Desc">Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.</div>
-                        <span class="stat-badge badge-green" style="align-self: flex-start;">Standby (TCP 7236)</span>
+                        <span id="badgeMode2" class="stat-badge badge-green" style="align-self: flex-start;">Ligado (TCP 7236)</span>
                     </div>
-                    <div class="dl-card">
-                        <div class="dl-title">⚡ Mode 3: USB Bulk Direct</div>
+                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                            <div class="dl-title" style="margin: 0;">⚡ Mode 3: USB Bulk Direct</div>
+                            <label class="switch" title="Ligar / Desligar Modo 3">
+                                <input type="checkbox" id="toggleMode3" checked onchange="toggleMode('mode3', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                         <div class="dl-desc" data-i18n="m3Desc">Direct 480 Mbps raw hardware pipe via USB FunctionFS without network stack overhead (&lt; 1ms).</div>
-                        <span class="stat-badge badge-purple" style="align-self: flex-start;">Ready (USB Bulk)</span>
+                        <span id="badgeMode3" class="stat-badge badge-purple" style="align-self: flex-start;">Ligado (USB Bulk)</span>
                     </div>
                 </div>
             </div>
@@ -1209,6 +1278,7 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         // Bitrate & FPS Controls
         function updateBitrateValue(val) {
             currentBitrate = parseInt(val, 10);
+            localStorage.setItem('ext_bitrate', currentBitrate);
             document.getElementById('valBitrate').textContent = currentBitrate + ' kbps';
             document.querySelectorAll('[data-bitrate]').forEach(b => {
                 b.classList.toggle('active', parseInt(b.getAttribute('data-bitrate'), 10) === currentBitrate);
@@ -1216,12 +1286,16 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         }
 
         function setBitrate(kbps) {
-            document.getElementById('bitrateSlider').value = kbps;
+            currentBitrate = parseInt(kbps, 10);
+            localStorage.setItem('ext_bitrate', currentBitrate);
+            const slider = document.getElementById('bitrateSlider');
+            if (slider) slider.value = kbps;
             updateBitrateValue(kbps);
         }
 
         function setFps(fps) {
             currentFps = fps;
+            localStorage.setItem('ext_fps', fps);
             document.getElementById('valFps').textContent = fps + ' FPS';
             document.querySelectorAll('#fpsGrid .btn-toggle').forEach(b => {
                 b.classList.toggle('active', parseInt(b.getAttribute('data-fps'), 10) === fps);
@@ -1230,15 +1304,70 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 
         function setColor(profile) {
             currentColor = profile;
+            localStorage.setItem('ext_color', profile);
             const labels = { full: '24-bit TrueColor', '256': '256-Color (QP 30-44)', gray: 'Monochrome' };
-            document.getElementById('valColor').textContent = labels[profile] || profile;
+            const el = document.getElementById('valColor');
+            if (el) el.textContent = labels[profile] || profile;
             document.querySelectorAll('#colorGrid .btn-toggle').forEach(b => {
                 b.classList.toggle('active', b.getAttribute('data-color') === profile);
             });
         }
 
+        // Operating Modes State & Toggle
+        const activeModes = {
+            mode1: true,
+            mode2: true,
+            mode3: true
+        };
+
+        function setModeToggleUI(modeKey, enabled) {
+            activeModes[modeKey] = enabled;
+            const toggle = document.getElementById('toggle' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
+            const card = document.getElementById('card' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
+            const badge = document.getElementById('badge' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
+
+            if (toggle) toggle.checked = enabled;
+            if (card) {
+                if (enabled) {
+                    card.classList.remove('disabled');
+                } else {
+                    card.classList.add('disabled');
+                }
+            }
+            if (badge) {
+                if (enabled) {
+                    badge.className = modeKey === 'mode1' ? 'stat-badge badge-cyan' : modeKey === 'mode2' ? 'stat-badge badge-green' : 'stat-badge badge-purple';
+                    badge.textContent = modeKey === 'mode1' ? 'Ligado (UDP 5000)' : modeKey === 'mode2' ? 'Ligado (TCP 7236)' : 'Ligado (USB Bulk)';
+                } else {
+                    badge.className = 'stat-badge badge-red';
+                    badge.textContent = 'Desligado (Inativo)';
+                }
+            }
+        }
+
+        function toggleMode(modeKey, enabled) {
+            setModeToggleUI(modeKey, enabled);
+            localStorage.setItem('ext_' + modeKey, enabled);
+            
+            showToast(enabled ? `✓ ${modeKey.toUpperCase()} ligado!` : `✕ ${modeKey.toUpperCase()} desligado.`);
+            
+            fetch('/api/modes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    [modeKey]: enabled,
+                    mode1: activeModes.mode1,
+                    mode2: activeModes.mode2,
+                    mode3: activeModes.mode3
+                })
+            }).catch(() => {});
+        }
+
         // Hot-Apply Configuration
         function applyConfiguration() {
+            localStorage.setItem('ext_color', currentColor);
+            localStorage.setItem('ext_fps', currentFps);
+            localStorage.setItem('ext_bitrate', currentBitrate);
             showToast('Applying configuration via UDP 5001...');
             fetch('/api/config', {
                 method: 'POST',
@@ -1360,9 +1489,41 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 .catch(() => {});
         }
 
-        // Init
+        // Init: Restore from localStorage first (for instant snappy UI on F5), then sync with server
         const savedLang = localStorage.getItem('ext_monitor_lang') || navigator.language.slice(0, 2);
         setLanguage(savedLang);
+
+        const savedColor = localStorage.getItem('ext_color');
+        if (savedColor) setColor(savedColor);
+
+        const savedFps = localStorage.getItem('ext_fps');
+        if (savedFps) setFps(parseInt(savedFps, 10));
+
+        const savedBitrate = localStorage.getItem('ext_bitrate');
+        if (savedBitrate) setBitrate(parseInt(savedBitrate, 10));
+
+        const savedM1 = localStorage.getItem('ext_mode1');
+        if (savedM1 !== null) setModeToggleUI('mode1', savedM1 === 'true');
+
+        const savedM2 = localStorage.getItem('ext_mode2');
+        if (savedM2 !== null) setModeToggleUI('mode2', savedM2 === 'true');
+
+        const savedM3 = localStorage.getItem('ext_mode3');
+        if (savedM3 !== null) setModeToggleUI('mode3', savedM3 === 'true');
+
+        // Fetch server state to sync if not set locally
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(cfg => {
+                if (cfg.color && !savedColor) setColor(cfg.color);
+                if (cfg.fps && !savedFps) setFps(cfg.fps);
+                if (cfg.bitrate && !savedBitrate) setBitrate(cfg.bitrate);
+                if (cfg.mode1 !== undefined && savedM1 === null) setModeToggleUI('mode1', cfg.mode1);
+                if (cfg.mode2 !== undefined && savedM2 === null) setModeToggleUI('mode2', cfg.mode2);
+                if (cfg.mode3 !== undefined && savedM3 === null) setModeToggleUI('mode3', cfg.mode3);
+            })
+            .catch(() => {});
+
         setInterval(pollTelemetry, 2000);
     </script>
 </body>

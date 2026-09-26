@@ -728,9 +728,9 @@ fn spawn_gst_streamer(
         .arg("always-copy=false")
         .arg("!");
 
-    // 2. Framerate normalization and continuous stream maintenance
+    // 2. Framerate normalization with frame skipping (drop-only preserves static screen and saves bitrate)
     cmd.arg("videorate")
-        .arg("drop-only=false")
+        .arg("drop-only=true")
         .arg("skip-to-first=true")
         .arg("!")
         .arg(format!("video/x-raw,framerate={}/1", fps))
@@ -811,14 +811,21 @@ fn spawn_gst_streamer(
 
             if color_profile == ColorProfile::Economy256 {
                 cmd.arg("target-percentage=50")
-                    .arg("min-qp=30")
-                    .arg("max-qp=44");
+                    .arg("min-qp=28")
+                    .arg("max-qp=42");
+            } else if color_profile == ColorProfile::Grayscale {
+                cmd.arg("target-percentage=60")
+                    .arg("min-qp=20")
+                    .arg("max-qp=38");
             } else {
-                cmd.arg("target-percentage=75");
+                // TrueColor (24-bit): enforce QP bounds so colors never smear into muddy artifacts at low bitrates
+                cmd.arg("target-percentage=85")
+                    .arg("min-qp=18")
+                    .arg("max-qp=34");
             }
 
             cmd.arg("mbbrc=enabled")             // Macroblock bitrate control
-                .arg("target-usage=7")           // AMD ultra-fast lowest latency mode
+                .arg("target-usage=5")           // High quality, fast AMD RDNA/GCN mode
                 .arg("b-frames=0")
                 .arg("ref-frames=1")
                 .arg("aud=true")                 // Access Unit delimiter
