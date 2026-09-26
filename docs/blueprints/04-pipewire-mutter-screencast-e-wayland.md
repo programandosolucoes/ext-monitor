@@ -92,3 +92,69 @@ Para manter o canal PipeWire ativo e o decodificador do Raspberry Pi Zero sincro
 2. O relógio atualiza um bloco de 10x10 pixels a cada **500 milissegundos**.
 3. Essa micro-alteração de pixels gera um evento de dano (*damage event*) legítimo no Mutter.
 4. O Mutter dispara um novo buffer DMA-BUF para o PipeWire, garantindo que o fluxo H.264 permaneça fluindo continuamente sem nenhum congelamento ou perda de conexão.
+
+---
+
+## 5. Resiliência a Suspensão/Hibernação de Energia (Sleep / Suspend / Resume)
+
+Um dos desafios mais complexos em drivers de vídeo virtuais no Linux é a **preservação do fluxo após o computador entrar em suspensão de energia (sleep / suspend-to-RAM)**.
+
+### 5.1 A Causa Raiz da "Morte da Imagem" Pós-Suspensão
+1. **Destruição da Sessão pelo Mutter:** Quando o sistema entra em modo de suspensão, o GNOME Mutter encerra sumariamente todas as sessões ativas de ScreenCast D-Bus e destrói o nó de origem do PipeWire para economizar energia.
+2. **Bloqueio Invisível em I/O Wait:** O processo filho (`gst-launch-1.0`) não é encerrado pelo sistema operacional; em vez disso, ele permanece vivo em segundo plano, **bloqueado indefinidamente** em espera de leitura (*I/O wait*) em um socket de PipeWire órfão.
+3. **Falha de Detecção:** Se o supervisor do transmissor monitorar apenas se o processo filho terminou (`child.try_wait()`), ele nunca detectará a queda, pois o filho nunca sai do ar por conta própria. Ao acordar, o usuário encontra a tela secundária congelada ou preta.
+
+### 5.2 A Arquitetura de Duplo Watchdog em Rust
+
+Para garantir recuperação 100% autônoma, o `ext-sender` implementa duas sondas de monitoramento contínuo no laço de supervisão principal:
+
+```
+                  [ Laço de Supervisão (ext-sender) ]
+                                 │
+           ┌─────────────────────┴─────────────────────┐
+           ▼                                           ▼
+ [ Health Watchdog: 1500ms ]                 [ Link Watchdog: 3000ms ]
+           │                                           │
+  is_pipewire_node_alive(id) ?                is_sender_linked() ?
+     ├── SIM: Stream saudável                    ├── SIM: Conexão íntegra
+     └── NÃO: NÓ DESAPARECEU!                   └── NÃO: Link desfeito!
+           │                                           │
+           ▼                                           ▼
+   1. Mata processo filho órfão                Reexecuta pw-link atômico
+   2. Aguarda estabilização (1.5s)
+   3. Break para laço externo
+   4. Cria nova sessão Mutter via D-Bus
+   5. Obtém novo Node ID
+   6. Spawna novo pipeline GStreamer
+   7. Reconecta e retoma em < 2 segundos!
+```
+
+#### Código da Sonda de Verificação no PipeWire:
+```rust
+fn is_pipewire_node_alive(node_id: u32) -> bool {
+    let output = match Command::new("pw-cli")
+        .arg("info")
+        .arg(node_id.to_string())
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return false,
+    };
+    let s = String::from_utf8_lossy(&output.stdout);
+    let err = String::from_utf8_lossy(&output.stderr);
+    !s.is_empty() && !s.contains("unknown global") && !err.contains("unknown global")
+}
+
+fn is_sender_linked() -> bool {
+    if let Ok(output) = Command::new("pw-link").arg("-l").output() {
+        let s = String::from_utf8_lossy(&output.stdout);
+        return s.contains("ext-hdmi-sender:input_1");
+    }
+    true
+}
+```
+
+### 5.3 Resiliência do Relógio Virtual e Regras Udev
+* **Auto-Recuperação do Relógio (`show-welcome-window.py`):** O script em Python agora encapsula a inicialização do Tkinter em um laço infinito `while True:` com captura de exceções, garantindo que se o servidor Xwayland reiniciar na volta do sono, a janela se reconecte ao display `:0` em menos de 2 segundos.
+* **Retomada de Barramento Udev (`99-ext-monitor.rules`):** O evento `ACTION=="add|change"` para o subsistema de rede USB reaplica automaticamente o parâmetro `txqueuelen 100` e dispara o serviço `ext-monitor-autoconnect.service`, assegurando que a placa de rede emulada volte à operação de baixa latência imediatamente após a desativação da suspensão.
+
