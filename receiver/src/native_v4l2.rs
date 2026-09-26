@@ -18,7 +18,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
 use std::net::UdpSocket;
-use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -135,9 +134,9 @@ pub struct V4l2DecoderSession {
     pub fb_fd: RawFd,
     pub out_ptrs: Vec<*mut u8>,
     pub out_lens: Vec<usize>,
+    pub free_out_indices: Vec<u32>,
     pub cap_ptrs: Vec<*mut u8>,
     pub cap_lens: Vec<usize>,
-    pub next_out_idx: usize,
 }
 
 impl V4l2DecoderSession {
@@ -180,9 +179,9 @@ impl V4l2DecoderSession {
             return None;
         }
 
-        // 3. REQBUFS OUTPUT (2 buffers)
+        // 3. REQBUFS OUTPUT (8 buffers to prevent starvation between headers and slices)
         let mut req_out = V4l2RequestBuffers {
-            count: 2,
+            count: 8,
             buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
             memory: V4L2_MEMORY_MMAP,
             ..Default::default()
@@ -193,6 +192,7 @@ impl V4l2DecoderSession {
 
         let mut out_ptrs = Vec::new();
         let mut out_lens = Vec::new();
+        let mut free_out_indices = Vec::new();
         for i in 0..req_out.count {
             let mut plane: V4l2Plane = Default::default();
             let mut buf = V4l2Buffer {
@@ -218,6 +218,7 @@ impl V4l2DecoderSession {
             };
             out_ptrs.push(ptr);
             out_lens.push(plane.length as usize);
+            free_out_indices.push(i);
         }
 
         // 4. REQBUFS CAPTURE (4 buffers)
@@ -278,74 +279,108 @@ impl V4l2DecoderSession {
             fb_fd,
             out_ptrs,
             out_lens,
+            free_out_indices,
             cap_ptrs,
             cap_lens,
-            next_out_idx: 0,
         })
+    }
+
+    /// Reclaims any OUTPUT buffers that the VideoCore IV hardware has finished processing
+    fn reclaim_output_buffers(&mut self) {
+        loop {
+            let mut out_dq_plane = V4l2Plane::default();
+            let mut out_dq_buf = V4l2Buffer {
+                buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
+                memory: V4L2_MEMORY_MMAP,
+                planes_ptr: &mut out_dq_plane as *mut _ as u32,
+                length: 1,
+                ..Default::default()
+            };
+            if unsafe { libc::ioctl(self.video_fd, VIDIOC_DQBUF, &mut out_dq_buf) } == 0 {
+                let idx = out_dq_buf.index;
+                if !self.free_out_indices.contains(&idx) {
+                    self.free_out_indices.push(idx);
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Drains all available decoded frames from CAPTURE queue and writes directly to /dev/fb0
+    pub fn drain_decoded_frames(&mut self) {
+        loop {
+            let mut cap_plane = V4l2Plane::default();
+            let mut cap_buf = V4l2Buffer {
+                buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+                memory: V4L2_MEMORY_MMAP,
+                planes_ptr: &mut cap_plane as *mut _ as u32,
+                length: 1,
+                ..Default::default()
+            };
+            let ret = unsafe { libc::ioctl(self.video_fd, VIDIOC_DQBUF, &mut cap_buf) };
+            if ret == 0 {
+                let cap_idx = cap_buf.index as usize;
+                if cap_idx < self.cap_ptrs.len() {
+                    let frame_ptr = self.cap_ptrs[cap_idx];
+                    let frame_size = 1280 * 720 * 2; // 1,843,200 bytes
+
+                    // Direct hardware framebuffer blit to HDMI (/dev/fb0)
+                    unsafe {
+                        libc::pwrite(self.fb_fd, frame_ptr as *const libc::c_void, frame_size, 0);
+                    }
+                }
+
+                // Re-queue capture buffer immediately
+                unsafe { libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut cap_buf) };
+            } else {
+                break;
+            }
+        }
     }
 
     pub fn decode_nal(&mut self, nal: &[u8]) {
         if nal.is_empty() || self.out_ptrs.is_empty() { return; }
-        let idx = self.next_out_idx % self.out_ptrs.len();
-        self.next_out_idx += 1;
 
-        let max_len = self.out_lens[idx];
-        let copy_len = nal.len().min(max_len);
-        unsafe {
-            std::ptr::copy_nonoverlapping(nal.as_ptr(), self.out_ptrs[idx], copy_len);
-        }
+        self.reclaim_output_buffers();
+        self.drain_decoded_frames();
 
-        let mut plane = V4l2Plane {
-            bytesused: copy_len as u32,
-            length: max_len as u32,
-            ..Default::default()
-        };
-        let mut buf = V4l2Buffer {
-            index: idx as u32,
-            buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
-            memory: V4L2_MEMORY_MMAP,
-            planes_ptr: &mut plane as *mut _ as u32,
-            length: 1,
-            ..Default::default()
-        };
-        unsafe { libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut buf) };
-
-        // Attempt to dequeue a completed decoded frame
-        let mut cap_plane = V4l2Plane::default();
-        let mut cap_buf = V4l2Buffer {
-            buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-            memory: V4L2_MEMORY_MMAP,
-            planes_ptr: &mut cap_plane as *mut _ as u32,
-            length: 1,
-            ..Default::default()
-        };
-        let ret = unsafe { libc::ioctl(self.video_fd, VIDIOC_DQBUF, &mut cap_buf) };
-        if ret == 0 {
-            let cap_idx = cap_buf.index as usize;
-            if cap_idx < self.cap_ptrs.len() {
-                let frame_ptr = self.cap_ptrs[cap_idx];
-                let frame_size = 1280 * 720 * 2; // 1,843,200 bytes
-
-                // Direct hardware framebuffer blit to HDMI (/dev/fb0)
-                unsafe {
-                    libc::pwrite(self.fb_fd, frame_ptr as *const libc::c_void, frame_size, 0);
+        // If no output buffer is free, wait briefly for hardware VPU to complete
+        if self.free_out_indices.is_empty() {
+            for _ in 0..5 {
+                thread::sleep(Duration::from_millis(1));
+                self.reclaim_output_buffers();
+                if !self.free_out_indices.is_empty() {
+                    break;
                 }
             }
-
-            // Re-queue capture buffer
-            unsafe { libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut cap_buf) };
         }
 
-        // Reclaim processed OUTPUT buffer if ready
-        let mut out_dq_plane = V4l2Plane::default();
-        let mut out_dq_buf = V4l2Buffer {
-            buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
-            memory: V4L2_MEMORY_MMAP,
-            planes_ptr: &mut out_dq_plane as *mut _ as u32,
-            length: 1,
-            ..Default::default()
-        };
-        unsafe { libc::ioctl(self.video_fd, VIDIOC_DQBUF, &mut out_dq_buf) };
+        if let Some(idx) = self.free_out_indices.pop() {
+            let uidx = idx as usize;
+            let max_len = self.out_lens[uidx];
+            let copy_len = nal.len().min(max_len);
+            unsafe {
+                std::ptr::copy_nonoverlapping(nal.as_ptr(), self.out_ptrs[uidx], copy_len);
+            }
+
+            let mut plane = V4l2Plane {
+                bytesused: copy_len as u32,
+                length: max_len as u32,
+                ..Default::default()
+            };
+            let mut buf = V4l2Buffer {
+                index: idx,
+                buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
+                memory: V4L2_MEMORY_MMAP,
+                planes_ptr: &mut plane as *mut _ as u32,
+                length: 1,
+                ..Default::default()
+            };
+            unsafe { libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut buf) };
+        }
+
+        self.drain_decoded_frames();
     }
 }
 
@@ -422,9 +457,10 @@ impl NativeV4l2Decoder {
             }
         };
 
-        let _ = sock.set_read_timeout(Some(Duration::from_millis(500)));
+        let _ = sock.set_read_timeout(Some(Duration::from_millis(200)));
         let mut buf = [0u8; 4096];
         let mut nal_buffer = Vec::with_capacity(65536);
+        let mut parsed_nals = Vec::new();
 
         let mut session = match V4l2DecoderSession::new() {
             Some(s) => s,
@@ -441,13 +477,16 @@ impl NativeV4l2Decoder {
                 Ok(n) if n > 12 => {
                     // RTP Header is 12 bytes
                     let payload = &buf[12..n];
-                    if let Some(nal) = parse_rtp_h264_payload(payload, &mut nal_buffer) {
-                        session.decode_nal(&nal);
+                    parsed_nals.clear();
+                    parse_rtp_h264_payload(payload, &mut nal_buffer, &mut parsed_nals);
+                    for nal in &parsed_nals {
+                        session.decode_nal(nal);
                     }
                 }
                 Ok(_) => {}
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
-                    thread::sleep(Duration::from_millis(5));
+                    session.drain_decoded_frames();
+                    thread::sleep(Duration::from_millis(2));
                 }
                 Err(e) => {
                     eprintln!("\x1b[1;31m[native-v4l2]\x1b[0m Socket read error: {}", e);
@@ -480,7 +519,8 @@ impl NativeV4l2Decoder {
                     session.decode_nal(&buf[..n]);
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(5));
+                    session.drain_decoded_frames();
+                    thread::sleep(Duration::from_millis(2));
                 }
                 Err(e) => {
                     eprintln!("\x1b[1;31m[native-v4l2]\x1b[0m USB Bulk stream read error: {}", e);
@@ -491,10 +531,10 @@ impl NativeV4l2Decoder {
     }
 }
 
-/// Parses RTP H.264 payload into raw NAL units (Single NAL or FU-A Fragmentation Unit)
-fn parse_rtp_h264_payload(payload: &[u8], accumulator: &mut Vec<u8>) -> Option<Vec<u8>> {
+/// Parses RTP H.264 payload into raw NAL units (Single NAL, STAP-A Aggregation, or FU-A Fragmentation)
+fn parse_rtp_h264_payload(payload: &[u8], accumulator: &mut Vec<u8>, out_nals: &mut Vec<Vec<u8>>) {
     if payload.is_empty() {
-        return None;
+        return;
     }
 
     let nal_type = payload[0] & 0x1F;
@@ -504,11 +544,28 @@ fn parse_rtp_h264_payload(payload: &[u8], accumulator: &mut Vec<u8>) -> Option<V
         let mut nal = Vec::with_capacity(payload.len() + 4);
         nal.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
         nal.extend_from_slice(payload);
-        Some(nal)
+        out_nals.push(nal);
+    } else if nal_type == 24 {
+        // STAP-A Aggregated NAL units (RFC 6184: used by GStreamer rtph264pay for SPS + PPS)
+        let mut offset = 1;
+        while offset + 2 <= payload.len() {
+            let nalu_size = u16::from_be_bytes([payload[offset], payload[offset + 1]]) as usize;
+            offset += 2;
+            if offset + nalu_size <= payload.len() {
+                let nalu = &payload[offset..offset + nalu_size];
+                let mut nal = Vec::with_capacity(nalu_size + 4);
+                nal.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
+                nal.extend_from_slice(nalu);
+                out_nals.push(nal);
+                offset += nalu_size;
+            } else {
+                break;
+            }
+        }
     } else if nal_type == 28 {
         // FU-A Fragmented NAL unit
         if payload.len() < 2 {
-            return None;
+            return;
         }
         let fu_header = payload[1];
         let start_bit = (fu_header & 0x80) != 0;
@@ -520,19 +577,13 @@ fn parse_rtp_h264_payload(payload: &[u8], accumulator: &mut Vec<u8>) -> Option<V
             accumulator.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
             accumulator.push(reconstructed_nal_type);
             accumulator.extend_from_slice(&payload[2..]);
-            None
         } else {
             accumulator.extend_from_slice(&payload[2..]);
             if end_bit {
-                let complete_nal = accumulator.clone();
+                out_nals.push(accumulator.clone());
                 accumulator.clear();
-                Some(complete_nal)
-            } else {
-                None
             }
         }
-    } else {
-        None
     }
 }
 

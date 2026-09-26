@@ -703,16 +703,13 @@ fn spawn_gst_streamer(
         .arg("always-copy=false")
         .arg("!");
 
-    // 2. Framerate decimation if requested < 60 FPS
-    if fps < 60 {
-        cmd.arg("videorate")
-            .arg("drop-only=true")
-            .arg("new-pref=1.0")
-            .arg("skip-to-first=true")
-            .arg("!")
-            .arg(format!("video/x-raw,framerate={}/1", fps))
-            .arg("!");
-    }
+    // 2. Framerate normalization and continuous stream maintenance
+    cmd.arg("videorate")
+        .arg("drop-only=false")
+        .arg("skip-to-first=true")
+        .arg("!")
+        .arg(format!("video/x-raw,framerate={}/1", fps))
+        .arg("!");
 
     // 3. Diagnostic On-Screen HUD if requested
     if hud {
@@ -872,6 +869,7 @@ fn spawn_gst_streamer(
         cmd.arg("rtph264pay")
             .arg("config-interval=1")
             .arg("pt=96")
+            .arg("aggregate-mode=none")
             .arg("!")
             .arg("udpsink")
             .arg(format!("host={}", target_ip))
