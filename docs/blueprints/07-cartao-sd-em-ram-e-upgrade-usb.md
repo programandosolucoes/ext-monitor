@@ -106,3 +106,17 @@ curl -s -X POST http://192.168.7.2:8080/api/system/reboot
 
 * **Proteção contra Concorrência de Montagem:** Para evitar que o host e o Pi Zero gravem no mesmo volume FAT16 simultaneamente (o que geraria corrupção de FAT), o endpoint `/api/sdcard/mount` verifica se a unidade está sendo acessada ativamente pelo host antes de conceder escrita.
 * **Sincronização de Buffers:** Toda operação de gravação no cartão executa a chamada de sistema `sync()` obrigatória e remonta em modo somente-leitura antes da confirmação do usuário.
+
+---
+
+## 6. Distribuição Automática de Ferramentas e Correções pelo Appliance
+
+Uma das inovações mais fortes do `ext-monitor` é a sua **total auto-suficiência**:
+* O script de build do appliance (`scripts/build-fast-appliance.sh`) compila os binários do receptor (`ext-receiver` em ARMv6 hard-float) e também compila o transmissor do host (`ext-sender` x86_64) contendo os watchdogs de suspensão de energia e otimizações de baixa latência.
+* O `ext-sender`, o script `connect.sh`, o instalador `install-host.sh` e as regras `99-ext-monitor.rules` são empacotados em `client.tar.gz` e gravados diretamente dentro do `initramfs.cpio.gz` no diretório `/var/www/download/`.
+* O servidor web embutido em pure-Rust expõe esses arquivos com suporte completo a requisições `GET` e `HEAD`.
+* **Resultado:** Quando o dispositivo é conectado a uma máquina totalmente desconhecida ou sem acesso à internet, o comando:
+  ```bash
+  curl -sSL http://192.168.7.2:8080/connect.sh | bash
+  ```
+  obtém os executáveis mais recentes diretamente da memória RAM do Pi Zero, com todas as correções de suspensão, suporte a 400 kbps e regras udev instaladas instantaneamente.

@@ -28,7 +28,7 @@ curl -sSL http://192.168.7.2:8080/connect.sh | bash
 2. Cria o diretório de ferramentas portátil `~/.local/share/ext-monitor/`.
 3. Baixa o pacote completo de ferramentas (`client.tar.gz`) diretamente do servidor web embutido no Pi Zero.
 4. Descompacta o binário `ext-sender` e o script de inicialização `start.sh`.
-5. Inicia imediatamente a extensão de tela em modo de economia de banda (400 kbps, 30 FPS).
+5. Inicia imediatamente a extensão de tela em modo de economia de banda (400 kbps, 30 FPS) com supervisão de duplo watchdog ativa (recuperação automática de sleep / suspend-to-RAM em menos de 2 segundos).
 
 ---
 

@@ -41,6 +41,12 @@ A controladora USB OTG Broadcom DWC2 do BCM2835 possui **8 endpoints de hardware
 * `mass_storage.0`: Consome 2 endpoints (1 Bulk IN, 1 Bulk OUT).
 * **Total:** Exatamente 7 endpoints alocados + EP0 de controle. O super-gadget opera 100% dentro dos limites do hardware de silício sem nenhum conflito ou colisão de barramento!
 
+### 2.2 Ciclo de Vida USB Suspend/Resume e Regras Udev de Reconexão
+Durante a transição de energia do host:
+1. **Sinalização USB Suspend:** Ao entrar em suspensão (S3 / suspend-to-RAM), a controladora USB do computador cessa o envio de pacotes SOF (Start of Frame) e comuta as linhas D+/D- para estado de repouso. O silício DWC2 do Pi Zero entra em modo de baixo consumo sem perder os vínculos do ConfigFS.
+2. **Retomada USB Resume:** Quando o PC acorda, a controladora envia sinalização de resume e reativa a interface de rede.
+3. **Reconfiguração Udev Automática:** A regra `/etc/udev/rules.d/99-ext-monitor.rules` monitora eventos `ACTION=="add|change"` para os IDs `1d50:614d` e `1d6b:0104`, reaplicando imediatamente `txqueuelen 100` e `mtu 1500`, garantindo latência zero e reconexão imediata do link de rede.
+
 ---
 
 ## 3. Os Três Modos de Operação do Receptor
