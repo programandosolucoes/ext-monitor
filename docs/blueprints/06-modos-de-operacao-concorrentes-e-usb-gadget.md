@@ -1,8 +1,8 @@
 # Blueprint 06: Modos Concorrentes de Operação e o Super-Gadget USB ConfigFS
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto & Antigravity  
-**Arquivos de Referência:** `build-appliance/initramfs/init`, `receiver/src/wfd.rs`, `receiver/src/pipeline.rs`  
+**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Arquivos de Referência:** `build-appliance/initramfs/init`, `receiver/src/wfd.rs`, `receiver/src/usb_bulk.rs`, `sender/src/usb_transport.rs`, `receiver/src/web_ui.rs`  
 **Data:** Setembro de 2026  
 
 ---
@@ -12,6 +12,7 @@
 Um dos maiores diferenciais técnicos do `ext-monitor` é a sua capacidade de operar de forma **universal e concorrente**:
 * Um único dispositivo Raspberry Pi Zero conectado a qualquer computador (seja Linux, Windows ou Mac) disponibiliza simultaneamente os serviços de rede, terminal de controle serial e unidade de disco para atualização.
 * O firmware em Rust escuta simultaneamente nos canais de transmissão do **Linux (UDP)** e do **Windows Miracast (RTSP/WFD)**, permitindo alternância instantânea de computadores sem necessidade de reiniciar o appliance.
+* O painel Web Dashboard disponibiliza **flags de controle (chaves de ligar/desligar)** independentes para cada um dos 3 modos, permitindo ao usuário desativar modos concorrentes e operar com isolamento total em um canal exclusivo.
 
 ---
 
@@ -21,31 +22,35 @@ O Linux USB Gadget Subsystem é configurado no boot pelo script `/init` utilizan
 
 ```
 /sys/kernel/config/usb_gadget/ext_composite/
-├── idVendor (0x1d50 - Openmoko / Experimental)
-├── idProduct (0x614d - Multifunction Hub)
+├── idVendor (0x1d50 - Openmoko / Experimental / 0x1d6b Linux Foundation)
+├── idProduct (0x614d - Multifunction Hub / 0x0104 Composite Gadget)
 ├── strings/0x409/ (Fabricante: Raspberry Pi | Produto: High-Speed Display Hub)
 ├── configs/c.1/ (Configuração de Energia: 500mA)
 │    ├── acm.usb0 ----------> [ Link para Função 1: Serial ACM ]
 │    ├── ecm.usb0 ----------> [ Link para Função 2: Rede CDC-ECM ]
-│    └── mass_storage.0 ----> [ Link para Função 3: Disco Removível SD ]
+│    └── ffs.usb0 ----------> [ Link para Função 3: FunctionFS Display ]
 └── functions/
      ├── acm.usb0 (Terminal de depuração /dev/ttyGS0 -> /dev/ttyACM0 no PC)
      ├── ecm.usb0 (Rede de dados USB Ethernet 480 Mbps)
-     └── mass_storage.0 (Partição FAT16 /dev/mmcblk0p1 exportada como pendrive)
+     └── ffs.usb0 (USB Bulk Direct montado em /dev/ffs-display)
 ```
 
 ### 2.1 Análise de Endpoints no Controlador DWC2 OTG
 A controladora USB OTG Broadcom DWC2 do BCM2835 possui **8 endpoints de hardware** (EP0 de controle + 7 endpoints configuráveis IN/OUT):
 * `acm.usb0`: Consome 2 endpoints (1 Bulk IN, 1 Bulk OUT) + 1 Interrupt IN.
 * `ecm.usb0`: Consome 2 endpoints (1 Bulk IN, 1 Bulk OUT) + 1 Interrupt IN.
-* `mass_storage.0`: Consome 2 endpoints (1 Bulk IN, 1 Bulk OUT).
+* `ffs.usb0`: Consome 2 endpoints (1 Bulk OUT para vídeo, 1 Bulk IN para retorno de controle).
 * **Total:** Exatamente 7 endpoints alocados + EP0 de controle. O super-gadget opera 100% dentro dos limites do hardware de silício sem nenhum conflito ou colisão de barramento!
 
-### 2.2 Ciclo de Vida USB Suspend/Resume e Regras Udev de Reconexão
-Durante a transição de energia do host:
-1. **Sinalização USB Suspend:** Ao entrar em suspensão (S3 / suspend-to-RAM), a controladora USB do computador cessa o envio de pacotes SOF (Start of Frame) e comuta as linhas D+/D- para estado de repouso. O silício DWC2 do Pi Zero entra em modo de baixo consumo sem perder os vínculos do ConfigFS.
-2. **Retomada USB Resume:** Quando o PC acorda, a controladora envia sinalização de resume e reativa a interface de rede.
-3. **Reconfiguração Udev Automática:** A regra `/etc/udev/rules.d/99-ext-monitor.rules` monitora eventos `ACTION=="add|change"` para os IDs `1d50:614d` e `1d6b:0104`, reaplicando imediatamente `txqueuelen 100` e `mtu 1500`, garantindo latência zero e reconexão imediata do link de rede.
+### 2.2 Descoberta Dinâmica de Endpoints FunctionFS e Prevenção de Conflitos
+Em gadgets multifunção com CDC-ACM Serial e FunctionFS, endpoints físicos compartilham números de interface adjacentes.
+No `sender/src/usb_transport.rs`, o transmissor implementa varredura inteligente por descritores USB:
+1. Compatibilidade com duplo par VID/PID: aceita tanto o identificador experimental `1d50:614d` quanto o padrão Linux Foundation `1d6b:0104`.
+2. Itera todas as interfaces do descritor de configuração ativa procurando especificamente por `interface.class_code() == 0xFF` (Vendor Specific / FunctionFS).
+3. Reivindica a interface correspondente (`claim_interface`) e extrai o endpoint com direção `Direction::Out` e tipo `TransferType::Bulk`, garantindo que o fluxo de vídeo H.264 jamais colida com a interface serial CDC-ACM.
+
+### 2.3 Auto-Binding UDC no Receptor
+No `receiver/src/usb_bulk.rs`, a função `bind_udc_if_needed()` monitora `/sys/kernel/config/usb_gadget/g1/UDC` e vincula o controlador OTG `20980000.usb` imediatamente após a escrita dos descritores em `ep0`, eliminando janelas de corrida onde a USB reportava estado desconectado ao host.
 
 ---
 
@@ -62,15 +67,15 @@ O binário `ext-receiver` em Rust mantém ouvintes ativos em três portas e subs
 Canal: UDP Porta 5000       Canal: RTSP Porta 7236         Canal: USB FunctionFS
 Protocolo: RTP H.264        Protocolo: Wi-Fi Display / WFD Protocolo: Raw Packet Stream
 Cliente: ext-sender         Cliente: Windows Nativo (Win+K)Cliente: Driver USB Direto
-Latência: < 18ms            Latência: ~35ms                Latência: < 15ms
+Latência: < 15ms            Latência: ~30ms                Latência: < 1ms
 ```
 
 ---
 
 ### 3.1 Modo 1: Linux Display de Alta Performance (UDP 5000)
 * **Público-Alvo:** Computadores rodando Linux com GNOME Wayland ou X11.
-* **Mecanismo:** O host executa o script `./scripts/start.sh extend` ou o comando universal `connect.sh`. O fluxo de tela é capturado pelo PipeWire e transmitido via RTP H.264 diretamente para o socket UDP `192.168.7.2:5000`.
-* **Desempenho:** 60 FPS fluidos, resposta de cursor instantânea, suporte a hot-apply de taxa de bits (400 kbps a 6000 kbps) via Web Dashboard.
+* **Mecanismo:** O host executa `./scripts/start.sh extend` ou o comando universal `connect.sh`. O fluxo de tela é capturado pelo PipeWire D-Bus Mutter e transmitido via RTP H.264 diretamente para o socket UDP `192.168.7.2:5000`.
+* **Desempenho:** 60 FPS fluidos, resposta de cursor instantânea, suporte a hot-apply de taxa de bits (400 kbps a 6000 kbps) e alternância de paleta de cores (24-bit TrueColor, 256 cores, monocromático).
 
 ---
 
@@ -87,13 +92,13 @@ Latência: < 18ms            Latência: ~35ms                Latência: < 15ms
 
 ### 3.3 Modo 3: USB Bulk Direct (FunctionFS / Raw Endpoints)
 * **Público-Alvo:** Ambientes de computação embarcada ou redes corporativas restritas onde pilhas TCP/IP ou firewalls bloqueiam tráfego UDP local.
-* **Mecanismo:** A transferência de pacotes de vídeo ocorre diretamente através de chamadas de leitura e escrita nos arquivos de dispositivo do USB Gadget FunctionFS (`/dev/ffs-display/ep1` e `ep2`), contornando por completo a pilha de rede do sistema operacional.
+* **Mecanismo:** A transferência de pacotes de vídeo ocorre diretamente através de chamadas de leitura e escrita nos arquivos de dispositivo do USB Gadget FunctionFS (`/dev/ffs-display/ep1`), contornando por completo a pilha de rede e DHCP do sistema operacional.
 
 ---
 
-## 4. Gerenciamento e Transição de Modos em Tempo Real
+## 4. Chaves de Controle e Persistência de Estado (F5)
 
-O receptor implementa uma máquina de estados com transição atômica gerenciada pelo `PipelineManager`:
-* Se o receptor estiver ocioso exibindo a tela de boas-vindas e pacotes chegarem na porta UDP 5000, o Modo 1 é ativado imediatamente.
-* Se um computador Windows iniciar uma negociação Miracast via RTSP 7236, o receptor pausa o ouvinte UDP e comuta a decodificação para o canal WFD.
-* Ao desconectar, o receptor retorna automaticamente ao estado de espera, pronto para a próxima conexão sem necessidade de reboot.
+O Web Dashboard (`http://192.168.7.2:8080`) disponibiliza interruptores do tipo toggle switch para isolamento granular de modos:
+1. **Comutação Isolada:** Ao desligar os Modos 2 e 3, o receptor encerra os serviços Miracast e FunctionFS, liberando 100% da largura de banda e memória RAM do SoC para o Modo 1.
+2. **Persistência Completa de Sessão:** Toda alteração de chave (Ligar/Desligar) ou perfil de cor (24-bit TrueColor vs 256 cores) é persistida em `localStorage` no navegador e transmitida via `POST /api/modes` e `POST /api/config`. Ao pressionar F5, a interface reidrata instantaneamente o estado exato configurado pelo usuário sem resetar para padrões.
+

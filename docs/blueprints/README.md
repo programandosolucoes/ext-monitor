@@ -2,7 +2,7 @@
 
 **Projeto:** `ext-monitor` — Monitor Secundário USB de Ultra-Baixa Latência  
 **Plataforma Alvo:** Raspberry Pi Zero W / Zero 2 W / Raspberry Pi 4 / PC Linux & Windows  
-**Autor:** Carlos Alberto & Antigravity  
+**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
 **Data:** Setembro de 2026  
 **Status do Projeto:** Estável, Pronto para Produção, Compilado em Rust Nativo Puro  
 
@@ -10,13 +10,13 @@
 
 ## 1. Visão Geral da Suíte de Documentos
 
-Esta pasta reúne a documentação de engenharia reversa, decisões de arquitetura e especificações de baixo nível que tornaram possível transformar um dispositivo de computação de US$ 10 (Raspberry Pi Zero de núcleo único a 1.0 GHz) em um monitor secundário profissional de 60 FPS com latência inferior a 18 milissegundos.
+Esta pasta reúne a documentação de engenharia reversa, decisões de arquitetura e especificações de baixo nível que tornaram possível transformar um dispositivo de computação de US$ 10 (Raspberry Pi Zero de núcleo único a 1.0 GHz) em um monitor secundário profissional de 60 FPS com latência inferior a 15 milissegundos.
 
-Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até a recuperação autônoma de suspensão de energia no Linux Wayland — estão formalizados nos 8 blueprints técnicos a seguir:
+Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até a recuperação autônoma de suspensão de energia no Linux Wayland — estão formalizados nos 9 blueprints técnicos a seguir:
 
 ---
 
-## 2. Mapa dos 8 Blueprints de Engenharia
+## 2. Mapa dos 9 Blueprints de Engenharia
 
 | # | Blueprint Técnico | Arquivo | Foco de Engenharia |
 | :---: | :--- | :--- | :--- |
@@ -25,9 +25,10 @@ Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silí
 | **03** | **Transmissão de Pacotes, Fragmentação NALU e Leaky Queue** | [`03-transmissao-pacotes-drop-on-late-e-pipeline.md`](03-transmissao-pacotes-drop-on-late-e-pipeline.md) | MTU de 1472 bytes, fragmentação FU-A RFC 6184, descarte de pacotes atrasados (*drop-on-late*) e drenagem pós-sono. |
 | **04** | **PipeWire, Mutter D-Bus e Auto-Recuperação Pós-Suspensão** | [`04-pipewire-mutter-screencast-e-wayland.md`](04-pipewire-mutter-screencast-e-wayland.md) | Captura virtual sem dongle, zero-copy DMA-BUF, relógio anti-ociosidade e **Supervisor com Duplo Watchdog em Rust** para sono/S3. |
 | **05** | **Otimizações de CPU em Rust, GPU/VPU e Upscaler CAS** | [`05-otimizacoes-cpu-rust-gpu-vpu-e-cas-scaler.md`](05-otimizacoes-cpu-rust-gpu-vpu-e-cas-scaler.md) | Flags `-C target-cpu=arm1176jzf-s`, codificação por silício VA-API/NVENC e filtros de nitidez CAS vs FSR para texto. |
-| **06** | **Modos Concorrentes de Operação e Super-Gadget USB ConfigFS** | [`06-modos-de-operacao-concorrentes-e-usb-gadget.md`](06-modos-de-operacao-concorrentes-e-usb-gadget.md) | 3 modos simultâneos (Linux UDP, Windows Miracast Win+K, USB Bulk), alocação de 7 endpoints DWC2 e ciclo USB Suspend/Resume. |
+| **06** | **Modos Concorrentes de Operação e Super-Gadget USB ConfigFS** | [`06-modos-de-operacao-concorrentes-e-usb-gadget.md`](06-modos-de-operacao-concorrentes-e-usb-gadget.md) | 3 modos simultâneos (Linux UDP, Windows Miracast Win+K, USB Bulk), alocação de 7 endpoints DWC2, UDC auto-binding e chaves de controle. |
 | **07** | **Cartão Micro-SD em RAM, Proteção e Upgrade via USB** | [`07-cartao-sd-em-ram-e-upgrade-usb.md`](07-cartao-sd-em-ram-e-upgrade-usb.md) | Eliminação de corrupção flash, partição exposta como pendrive `EXTMONITOR` na USB, upgrade em 3 métodos e entrega de binários. |
 | **08** | **Manual de Instalação, Portabilidade e Script de Setup Host** | [`08-manual-de-instalacao-e-portabilidade-host.md`](08-manual-de-instalacao-e-portabilidade-host.md) | Conexão em 1 clique via `curl connect.sh`, instalador multi-distro, regras udev de baixa latência e console serial `/dev/ttyACM0`. |
+| **09** | **Testes Empíricos em Hardware e Diagnósticos de Boot** | [`09-testes-empiricos-e-diagnosticos-hardware.md`](09-testes-empiricos-e-diagnosticos-hardware.md) | Validação no Pi Zero v1.3 Monocore, diagnóstico da tela arco-íris, cronometria de boot de 1.8s e benchmarks térmicos/cores. |
 
 ---
 

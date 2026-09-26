@@ -20,11 +20,29 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 pub const HTTP_PORT: u16 = 8080;
+
+struct ConfigState {
+    fps: u32,
+    bitrate: u32,
+    color: String,
+    mode1: bool,
+    mode2: bool,
+    mode3: bool,
+}
+
+static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
+    fps: 30,
+    bitrate: 400,
+    color: String::new(),
+    mode1: true,
+    mode2: true,
+    mode3: true,
+});
 
 /// Start the embedded HTTP dashboard server in a background thread
 pub fn start_web_server(
@@ -122,11 +140,56 @@ fn handle_http_client(
             let status_json = get_system_telemetry_json(is_paused, is_active);
             send_response(&mut stream, "200 OK", "application/json", status_json.as_bytes());
         }
+        ("GET", "/api/config") => {
+            let json = if let Ok(cfg) = CONFIG.lock() {
+                let col = if cfg.color.is_empty() { "256" } else { &cfg.color };
+                format!(
+                    "{{\"fps\":{},\"bitrate\":{},\"color\":\"{}\",\"mode1\":{},\"mode2\":{},\"mode3\":{}}}",
+                    cfg.fps, cfg.bitrate, col, cfg.mode1, cfg.mode2, cfg.mode3
+                )
+            } else {
+                "{\"fps\":30,\"bitrate\":400,\"color\":\"256\",\"mode1\":true,\"mode2\":true,\"mode3\":true}".to_string()
+            };
+            send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
+        }
         ("POST", "/api/config") => {
             // Find body after empty line
             if let Some(idx) = req_str.find("\r\n\r\n") {
                 let body = &req_str[idx + 4..];
+                if let Ok(mut cfg) = CONFIG.lock() {
+                    if let Some(fps) = extract_json_u32(body, "fps") { cfg.fps = fps; }
+                    if let Some(bitrate) = extract_json_u32(body, "bitrate") { cfg.bitrate = bitrate; }
+                    if let Some(color) = extract_json_str(body, "color") { cfg.color = color.to_string(); }
+                    if let Some(m1) = extract_json_bool(body, "mode1") { cfg.mode1 = m1; }
+                    if let Some(m2) = extract_json_bool(body, "mode2") { cfg.mode2 = m2; }
+                    if let Some(m3) = extract_json_bool(body, "mode3") { cfg.mode3 = m3; }
+                }
                 forward_config_to_sender(body);
+            }
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
+        }
+        ("POST", "/api/modes") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = &req_str[idx + 4..];
+                let mut m1_change = None;
+                if let Ok(mut cfg) = CONFIG.lock() {
+                    if let Some(m1) = extract_json_bool(body, "mode1") {
+                        cfg.mode1 = m1;
+                        m1_change = Some(m1);
+                    }
+                    if let Some(m2) = extract_json_bool(body, "mode2") { cfg.mode2 = m2; }
+                    if let Some(m3) = extract_json_bool(body, "mode3") { cfg.mode3 = m3; }
+                }
+                if let Some(m1) = m1_change {
+                    if !m1 {
+                        println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) turned OFF by user flag.");
+                        pipeline_mgr.pause();
+                    } else {
+                        println!("\x1b[1;32m[web-server]\x1b[0m Mode 1 (Linux UDP) turned ON by user flag.");
+                        let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                        let _ = pipeline_mgr.resume(default_kind);
+                    }
+                }
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
         }
@@ -375,6 +438,31 @@ fn extract_json_str<'a>(json: &'a str, key: &str) -> Option<&'a str> {
     if after_colon.starts_with('"') {
         let end_quote = after_colon[1..].find('"')?;
         Some(&after_colon[1..1 + end_quote])
+    } else {
+        None
+    }
+}
+
+fn extract_json_u32(json: &str, key: &str) -> Option<u32> {
+    let pattern = format!("\"{}\"", key);
+    let idx = json.find(&pattern)?;
+    let rest = &json[idx + pattern.len()..];
+    let colon_idx = rest.find(':')?;
+    let after_colon = rest[colon_idx + 1..].trim_start();
+    let num_str: String = after_colon.chars().take_while(|c| c.is_ascii_digit()).collect();
+    num_str.parse().ok()
+}
+
+fn extract_json_bool(json: &str, key: &str) -> Option<bool> {
+    let pattern = format!("\"{}\"", key);
+    let idx = json.find(&pattern)?;
+    let rest = &json[idx + pattern.len()..];
+    let colon_idx = rest.find(':')?;
+    let after_colon = rest[colon_idx + 1..].trim_start();
+    if after_colon.starts_with("true") {
+        Some(true)
+    } else if after_colon.starts_with("false") {
+        Some(false)
     } else {
         None
     }
