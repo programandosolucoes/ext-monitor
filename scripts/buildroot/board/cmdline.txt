@@ -1,1 +1,1 @@
-console=tty1 console=ttyAMA0,115200 root=/dev/ram0 rdinit=/init quiet vt.global_cursor_default=0
+console=tty1 console=ttyAMA0,115200 rdinit=/init video=HDMI-A-1:1280x720@60D
