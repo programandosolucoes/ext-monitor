@@ -20,9 +20,28 @@ Motor de alta performance em **Rust** para transformar um **Raspberry Pi Zero (v
   <img src="docs/assets/hardware-macro.jpg" alt="Raspberry Pi Zero BCM2835 com Link USB 480Mbps e HDMI" width="760" />
 </p>
 
-* **Raspberry Pi Zero v1.3 / W:** Case acrílico compacto, cabo Micro-USB no conector USB OTG (link 480 Mbps com servidor DHCP Zero-Gateway nativo em Rust) e saída mini-HDMI para o segundo monitor.
-* **Consumo de Energia:** ~0.8W (alimentado diretamente pela porta USB do próprio notebook/PC host).
-* **Temperatura Estável:** 45.2°C sob uso contínuo (zero estrangulamento térmico).
+### 🔌 Pinagem e Conexão Correta das Portas (Anti-Erros de Montagem)
+
+```
+                            [ 40-Pin GPIO Header ]
+  +------------------------------------------------------------------------+
+  | [Micro-SD Slot]                                                        |
+  | (Cartão SanDisk)              [ BCM2835 SoC ]                          |
+  |                                                                 [CSI]  |
+  +---------[ mini-HDMI ]-----------[ Micro-USB OTG ]---------[ PWR IN ]---+
+                   │                        │                     │
+                   │                        │                     └── [VAZIA!] NÃO CONECTAR CABO
+                   │                        │                         (O PC alimenta tudo via OTG)
+                   │                        └── Cabo Micro-USB para PC / Notebook
+                   │                            (Alimentação 5V + Rede OTG 480 Mbps)
+                   └── Cabo mini-HDMI para o Monitor Secundário ou TV da Sala
+```
+
+* **Porta mini-HDMI (Esquerda da borda longa):** Saída de vídeo dedicada para o monitor HDMI secundário ou TV.
+* **Porta Micro-USB do MEIO (OTG / Dados + Energia):** Conectada exclusivamente ao PC/Notebook. Fornece alimentação estável e canal de rede de alta velocidade (480 Mbps).
+* **Porta Micro-USB da DIREITA (PWR IN):** **SEMPRE VAZIA!** Não ligue fonte de carregador aqui enquanto a porta OTG estiver ligada ao PC para evitar loops de aterramento (*ground loop*).
+* **Consumo de Energia:** ~0.8W (alimentado 100% pela porta USB do notebook).
+* **Temperatura Estável:** ~45°C sob carga contínua (zero estrangulamento térmico).
 
 ---
 
@@ -62,6 +81,63 @@ Motor de alta performance em **Rust** para transformar um **Raspberry Pi Zero (v
         │     └── Descarta quadros decodificados antigos se um mais novo já estiver pronto
         └── Apresenta no HDMI via KMS/DRM com Double-Buffering (`kmssink` sync=false skip-vsync=true):
               └── Apresentação imediata sem esperas, saltando direto para o instante atual!
+```
+
+---
+
+## 🧠 Segredos de Silício da Broadcom & Particionamento FAT32
+
+Durante a validação prática, desvendamos uma regra estrita do silício da Broadcom:
+
+### O Limite de 65.525 Clusters da Microsoft e do Boot ROM
+* **O Problema:** O Boot ROM gravado na máscara física do chip Broadcom (BCM2835 do Pi Zero 1 e BCM2710 do Pi Zero 2 W) segue à risca a especificação FAT32 da Microsoft. Por definição, um volume FAT32 só é válido se possuir **no mínimo 65.525 clusters**.
+* **O Erro:** Imagens de disco muito reduzidas (como 31MB ou 32MB) geram apenas ~62.000 clusters. Ao ligar a placa, o Boot ROM do silício rejeita a partição antes mesmo de carregar o firmware e cai em modo de recuperação USB (`idProduct=2763 BCM2708 Boot` no Pi Zero 1, ou `idProduct=2764 BCM2710 Boot` no Pi Zero 2 W).
+* **A Solução:** Padronizamos a partição `bootfs` em **256 MB** com formato FAT32 oficial (`130.044 clusters` - o dobro do mínimo). O comando `fsck.vfat` valida o cartão com zero alertas e compatibilidade 100% garantida.
+
+---
+
+## 🧩 Compatibilidade Universal: Pi Zero 1 (Single-Core) & Pi Zero 2 W (Quad-Core)
+
+A imagem de appliance gerada é **universal** e suporta ambas as gerações do Pi Zero:
+
+| Hardware | Processador (SoC) | Arquitetura | Device Tree | Kernel | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Raspberry Pi Zero v1.2 / v1.3 / W / WH** | Broadcom BCM2835 | ARMv6 single-core 1.0 GHz | `bcm2708-rpi-zero.dtb` | `kernel.img` (ARMv6) | ✅ Suportado |
+| **Raspberry Pi Zero 2 W** | Broadcom BCM2710 / RP3A0 | ARMv8 quad-core Cortex-A53 | `bcm2710-rpi-zero-2-w.dtb` | `kernel7.img` (ARMv7) | ✅ Suportado |
+
+O binário `ext-receiver` em Rust foi compilado com o target `arm-unknown-linux-gnueabihf` (ARMv6 VFPv2 Hard-Float), que é 100% compatível tanto com o chip monocore clássico quanto com os 4 núcleos do Zero 2 W.
+
+---
+
+## 📺 Compatibilidade HDMI Universal (TVs de Sala e Monitores de Mesa)
+
+Para garantir que o Raspberry Pi Zero gere sinal de vídeo estável em **qualquer monitor ou televisão de sala**, o [build-appliance/boot/config.txt](file:///home/carlos/ide/ext-monitor/build-appliance/boot/config.txt) incorpora parâmetros vitais:
+
+* `disable_splash=0`: **Ativa a tela colorida de arco-íris (Rainbow Screen do VideoCore IV)** logo no primeiro instante de alimentação, servindo de confirmação visual imediata de que a placa ligou.
+* `hdmi_drive=2`: **Força modo HDMI nativo completo (CEA-861)**. Sem isso, o Pi Zero emite sinal DVI mudo, o que faz as televisões desligarem a tela ou exibirem tela preta.
+* `config_hdmi_boost=7`: **Ganho máximo de corrente no sinal HDMI**, superando a atenuação de adaptadores mini-HDMI e cabos longos de sala.
+* `hdmi_force_hotplug=1`: Mantém a saída de vídeo energizada mesmo se o monitor/TV for ligado após o Raspberry Pi.
+* **Autonegociação EDID:** Modos rígidos de monitor de PC (`hdmi_group=2, hdmi_mode=82`) foram removidos para permitir que a TV negocie dinamicamente sua resolução ideal (1080p, 720p, etc.).
+
+---
+
+## 🌐 Servidor DHCP Nativo Zero-Gateway em Puro Rust
+
+Ao conectar o Pi Zero ao computador pelo cabo USB:
+* O receptor assume o IP `192.168.7.2`.
+* O servidor DHCP nativo embutido no `ext-receiver` ([receiver/src/dhcp.rs](file:///home/carlos/ide/ext-monitor/receiver/src/dhcp.rs)) usa `SO_BINDTODEVICE` na interface `usb0` e atribui automaticamente o IP `192.168.7.1` ao computador.
+* **Zero-Gateway:** O DHCP **não envia gateway (Option 3)**, garantindo que o seu computador continue navegando na sua internet normal (Wi-Fi ou cabo de rede) sem nenhuma queda de conexão.
+
+---
+
+## ⚡ Recuperação e Gravação In-Situ pelo Cabo USB (`rpiboot`)
+
+Não é necessário retirar o cartão Micro-SD do case do Raspberry Pi para atualizações ou regravações:
+```bash
+# Com o Pi Zero conectado via cabo USB ao PC:
+sudo rpiboot -v
+# O Pi Zero carrega o bootloader na RAM e expõe o próprio cartão como /dev/sda!
+sudo dd if=build-appliance/ext-monitor-pi0-appliance.img of=/dev/sda bs=4M status=progress conv=fsync
 ```
 
 ---

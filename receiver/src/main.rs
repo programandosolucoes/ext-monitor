@@ -111,7 +111,10 @@ fn main() {
 
                 if is_idle || has_crashed {
                     println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring default Linux UDP pipeline (port {})...", udp_port);
-                    let _ = pipeline_mgr.start(default_kind);
+                    if let Err(e) = pipeline_mgr.start(default_kind) {
+                        eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Pipeline start failed: {} (retrying in 3s)", e);
+                        thread::sleep(Duration::from_secs(3));
+                    }
                 }
             }
             thread::sleep(Duration::from_millis(500));
