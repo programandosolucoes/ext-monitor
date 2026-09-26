@@ -45,15 +45,24 @@ echo -e "\x1b[1;34m[*] Step 2: Packaging minimal initramfs.cpio.gz...\x1b[0m"
     find . -print0 | cpio --null -ov --format=newc 2>/dev/null | gzip -9 > "${BUILD_DIR}/boot/initramfs.cpio.gz"
 )
 
-# 3. Create 32MB Disk Image with standard FAT16 partition
-echo -e "\x1b[1;34m[*] Step 3: Generating 32MB bootable appliance image via parted and mtools (FAT16)...\x1b[0m"
-dd if=/dev/zero of="$OUTPUT_IMG" bs=1M count=32 status=none
-parted -s "$OUTPUT_IMG" mklabel msdos
-parted -s "$OUTPUT_IMG" mkpart primary fat16 1MiB 100%
-parted -s "$OUTPUT_IMG" set 1 boot on
+# 3. Create 32MB Disk Image matching BCM2835 Boot ROM Sector 1 geometry
+echo -e "\x1b[1;34m[*] Step 3: Generating 32MB bootable appliance image (Sector 1, FAT16, 2KB clusters)...\x1b[0m"
+dd if=/dev/zero of="$OUTPUT_IMG" bs=512 count=65537 status=none
+echo "label: dos
+label-id: 0x00000000
+unit: sectors
 
-mformat -i "${OUTPUT_IMG}@@1048576" -v "EXTMONITOR"
-mcopy -i "${OUTPUT_IMG}@@1048576" -s "${BUILD_DIR}/boot/"* ::/
+1 : start=1, size=65536, type=c, bootable" | sfdisk "$OUTPUT_IMG" >/dev/null 2>&1
+
+LOOP_DEV=$(sudo losetup -fP --show "$OUTPUT_IMG")
+sudo mkfs.fat -F 16 -s 4 -R 4 -n "EXTMONITOR" "${LOOP_DEV}p1" >/dev/null
+
+MOUNT_DIR=$(mktemp -d)
+sudo mount "${LOOP_DEV}p1" "$MOUNT_DIR"
+sudo cp -r "${BUILD_DIR}/boot/"* "$MOUNT_DIR/"
+sudo umount "$MOUNT_DIR"
+rm -rf "$MOUNT_DIR"
+sudo losetup -d "$LOOP_DEV"
 
 echo -e "\n\x1b[1;32m========================================================================\x1b[0m"
 echo -e "\x1b[1;32m  SUCCESS: Universal Appliance Image Ready (Pi Zero 1 & Zero 2 W)!      \x1b[0m"
