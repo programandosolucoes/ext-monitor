@@ -102,6 +102,18 @@ fn handle_http_client(
             };
             send_response(&mut stream, "200 OK", "text/html; charset=utf-8", body);
         }
+        ("GET", "/connect.sh") => {
+            send_response(&mut stream, "200 OK", "text/x-shellscript", CONNECT_SCRIPT.as_bytes());
+        }
+        ("GET", "/download/ext-sender") => {
+            serve_file_or_fallback(&mut stream, "/var/www/download/ext-sender", "application/octet-stream");
+        }
+        ("GET", "/download/client.tar.gz") => {
+            serve_file_or_fallback(&mut stream, "/var/www/download/client.tar.gz", "application/gzip");
+        }
+        ("GET", "/download/99-ext-monitor.rules") => {
+            send_response(&mut stream, "200 OK", "text/plain", UDEV_RULES.as_bytes());
+        }
         ("GET", "/api/status") => {
             let is_paused = pipeline_mgr.is_paused();
             let is_active = pipeline_mgr.current_kind().is_some();
@@ -115,6 +127,44 @@ fn handle_http_client(
                 forward_config_to_sender(body);
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
+        }
+        ("POST", "/api/system/reboot") => {
+            println!("\x1b[1;31m[web-server]\x1b[0m System REBOOT requested via Web UI.");
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"rebooting\"}");
+            thread::spawn(|| {
+                thread::sleep(Duration::from_millis(500));
+                let _ = std::process::Command::new("/sbin/reboot").output();
+            });
+        }
+        ("GET", "/api/sdcard/status") => {
+            let is_inserted = fs::metadata("/dev/mmcblk0").is_ok();
+            let is_mounted = fs::read_to_string("/proc/mounts")
+                .map(|s| s.contains("mmcblk0"))
+                .unwrap_or(false);
+            let json = format!(
+                "{{\"inserted\":{},\"mounted\":{},\"device\":\"/dev/mmcblk0\",\"partition\":\"/dev/mmcblk0p1\"}}",
+                is_inserted, is_mounted
+            );
+            send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
+        }
+        ("POST", "/api/sdcard/mount") => {
+            let _ = std::process::Command::new("mkdir").args(&["-p", "/mnt/boot"]).output();
+            let res = std::process::Command::new("mount")
+                .args(&["-t", "vfat", "/dev/mmcblk0p1", "/mnt/boot"])
+                .output();
+            let status = match res {
+                Ok(o) if o.status.success() => "mounted",
+                _ => "error",
+            };
+            send_response(&mut stream, "200 OK", "application/json", format!("{{\"status\":\"{}\"}}", status).as_bytes());
+        }
+        ("POST", "/api/sdcard/unmount") => {
+            let res = std::process::Command::new("umount").arg("/mnt/boot").output();
+            let status = match res {
+                Ok(o) if o.status.success() => "unmounted",
+                _ => "error",
+            };
+            send_response(&mut stream, "200 OK", "application/json", format!("{{\"status\":\"{}\"}}", status).as_bytes());
         }
         ("POST", "/api/stream/stop") => {
             println!("\x1b[1;33m[web-server]\x1b[0m User requested stream PAUSE via Web UI.");
@@ -401,3 +451,17 @@ fn apply_network_config(payload: &str) {
     }
 }
 
+const CONNECT_SCRIPT: &str = include_str!("../../scripts/connect.sh");
+const UDEV_RULES: &str = include_str!("../../scripts/99-ext-monitor.rules");
+
+fn serve_file_or_fallback(stream: &mut TcpStream, path: &str, content_type: &str) {
+    if let Ok(mut f) = fs::File::open(path) {
+        let mut buf = Vec::new();
+        if f.read_to_end(&mut buf).is_ok() {
+            send_response(stream, "200 OK", content_type, &buf);
+            return;
+        }
+    }
+    let fallback = format!("File {} not available directly on Pi Zero flash yet. Please use /connect.sh to fetch or build directly.", path);
+    send_response(stream, "404 Not Found", "text/plain", fallback.as_bytes());
+}
