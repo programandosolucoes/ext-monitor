@@ -62,6 +62,22 @@ echo -e "\x1b[1;34m[*] Informing OS of updated partition table...\x1b[0m"
 sudo blockdev --rereadpt "$TARGET_DEV" 2>/dev/null || sudo partx -u "$TARGET_DEV" 2>/dev/null || true
 sleep 1
 
+# Automatically ensure persistent Mode 3 (usb-bulk) is active in mode.txt
+MNT_BOOT_TMP=$(mktemp -d)
+PART_DEV="${TARGET_DEV}1"
+[ -b "${TARGET_DEV}p1" ] && PART_DEV="${TARGET_DEV}p1"
+if [ -b "$PART_DEV" ]; then
+    sudo mount "$PART_DEV" "$MNT_BOOT_TMP" 2>/dev/null || true
+    if mountpoint -q "$MNT_BOOT_TMP"; then
+        echo "usb-bulk" | sudo tee "$MNT_BOOT_TMP/mode.txt" >/dev/null
+        sudo sync
+        sudo umount "$MNT_BOOT_TMP"
+        echo -e "\x1b[1;32m[*] Configured persistent boot mode: MODE 3 (usb-bulk) in mode.txt\x1b[0m"
+    fi
+fi
+rm -rf "$MNT_BOOT_TMP"
+
+
 echo -e "\n\x1b[1;32m========================================================================\x1b[0m"
 echo -e "\x1b[1;32m  SUCCESS: Micro-SD Card Flashed and Verified!                         \x1b[0m"
 echo -e "\x1b[1;32m========================================================================\x1b[0m"
