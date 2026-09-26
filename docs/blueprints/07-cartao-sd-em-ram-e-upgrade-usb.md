@@ -1,7 +1,7 @@
 # Blueprint 07: Cartão Micro-SD em RAM, Proteção Elétrica e Upgrade de Firmware via USB
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto & Antigravity  
+**Autor:** Carlos Alberto  
 **Arquivos de Referência:** `build-appliance/initramfs/init`, `receiver/src/web.rs`, `receiver/src/web_ui.rs`  
 **Data:** Setembro de 2026  
 
@@ -38,24 +38,36 @@ Durante a inicialização do aparelho:
 Como o sistema operacional em RAM não mantém a partição `/dev/mmcblk0p1` montada, podemos conectá-la diretamente à função **USB Mass Storage** do Gadget ConfigFS:
 
 ```sh
-mkdir -p functions/mass_storage.0
-echo 1 > functions/mass_storage.0/stall
-echo 0 > functions/mass_storage.0/lun.0/cdrom
-echo 0 > functions/mass_storage.0/lun.0/ro
-echo 0 > functions/mass_storage.0/lun.0/nofua
-echo "/dev/mmcblk0p1" > functions/mass_storage.0/lun.0/file
-ln -sf functions/mass_storage.0 configs/c.1/
+# Aguarda o probe do driver MMC do kernel (dwc2 / bcm2835-mmc)
+for i in 1 2 3 4; do
+    [ -b /dev/mmcblk0p1 ] || [ -b /dev/mmcblk0 ] && break
+    sleep 0.3
+done
+
+if [ -b /dev/mmcblk0p1 ] || [ -b /dev/mmcblk0 ]; then
+    mkdir -p functions/mass_storage.0
+    echo 1 > functions/mass_storage.0/stall
+    echo 0 > functions/mass_storage.0/lun.0/cdrom
+    echo 0 > functions/mass_storage.0/lun.0/ro
+    echo 0 > functions/mass_storage.0/lun.0/nofua
+    TARGET_DEV="/dev/mmcblk0p1"
+    [ ! -b "$TARGET_DEV" ] && TARGET_DEV="/dev/mmcblk0"
+    echo "$TARGET_DEV" > functions/mass_storage.0/lun.0/file
+    ln -sf functions/mass_storage.0 configs/c.1/
+fi
 ```
 
 ### O Que Acontece no Computador Host (Windows / Linux / Mac):
-1. No instante em que o cabo USB é conectado, o sistema operacional do PC detecta uma **unidade de disco removível (pendrive)** com o rótulo **`EXTMONITOR`**.
+1. No instante em que o cabo USB é conectado e o gadget inicializa, o sistema operacional do PC detecta uma **unidade de disco removível (pendrive)** com o rótulo **`EXTMONITOR`**.
 2. Ao abrir o Explorador de Arquivos no Windows ou o Gerenciador de Arquivos no Linux, todos os arquivos de firmware são exibidos:
    * `config.txt` (Configurações de resolução e HDMI)
    * `cmdline.txt` (Linha de comando do kernel)
-   * `initramfs.cpio.gz` (Sistema de arquivos do appliance)
+   * `mode.txt` (Modo persistente de boot: `usb-bulk` para Modo 3 direto)
+   * `initramfs.cpio.gz` (Sistema de arquivos do appliance em RAM)
    * `kernel.img` (Kernel Linux do Pi Zero 1 ARMv6)
    * `kernel7.img` (Kernel Linux do Pi Zero 2 W ARMv7)
    * Arquivos `.dtb` e overlays.
+3. **Importante sobre a Primeira Gravação:** A exposição via USB Mass Storage requer que a imagem do appliance já esteja gravada no cartão Micro-SD. Para o provisionamento inicial (bootstrap) da placa ou recuperação total, utiliza-se o leitor de cartão USB no computador (`/dev/sdb`) ou o utilitário nativo de ROM `rpiboot`.
 
 ---
 

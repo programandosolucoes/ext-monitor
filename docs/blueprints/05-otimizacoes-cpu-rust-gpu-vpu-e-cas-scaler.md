@@ -1,7 +1,7 @@
 # Blueprint 05: Otimizações de CPU em Rust, Aceleração por GPU/VPU e o Scaler CAS (Contrast Adaptive Sharpening)
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto & Antigravity  
+**Autor:** Carlos Alberto  
 **Arquivos de Referência:** `receiver/Cargo.toml`, `sender/Cargo.toml`, `receiver/src/native_v4l2.rs`  
 **Data:** Setembro de 2026  
 

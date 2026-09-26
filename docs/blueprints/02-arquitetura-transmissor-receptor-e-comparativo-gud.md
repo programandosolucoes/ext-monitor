@@ -1,7 +1,7 @@
 # Blueprint 02: Arquitetura Transmissor-Receptor e Comparativo Crítico com o Projeto GUD
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto & Antigravity  
+**Autor:** Carlos Alberto  
 **Arquivos de Referência:** `sender/src/main.rs`, `receiver/src/native_v4l2.rs`, `receiver/src/pipeline.rs`  
 **Data:** Setembro de 2026  
 

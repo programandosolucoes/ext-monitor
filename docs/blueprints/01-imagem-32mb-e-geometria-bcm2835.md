@@ -1,7 +1,7 @@
 # Blueprint 01: Geração da Imagem de 32MB e Geometria de Boot BCM2835 / BCM2710
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto & Antigravity  
+**Autor:** Carlos Alberto  
 **Arquivo de Referência:** `scripts/build-fast-appliance.sh`  
 **Data:** Setembro de 2026  
 
