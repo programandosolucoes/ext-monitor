@@ -2,15 +2,15 @@
 
 This directory contains the universal, ready-to-flash, ultra-fast bootable appliance image for the **Raspberry Pi Zero v1.2 / v1.3 / W / WH** and **Raspberry Pi Zero 2 W**.
 
-- **File:** `ext-monitor-pi0-appliance.img.gz` (Compressed download size: ~19 MB | Uncompressed size: 256 MB)
+- **File:** `ext-monitor-pi0-appliance.img.gz` (Compressed download size: ~21 MB | Uncompressed size: 32 MB)
 - **Boot Time:** < 2 seconds directly into RAM (100% tmpfs initramfs)
-- **SD Corruption Risk:** 0% (Standard 256MB FAT32 partition with 130,044 clusters, strictly read-only after boot)
+- **SD Corruption Risk:** 0% (Standard 32MB FAT16 partition, strictly read-only after boot, 100% BCM2835 Boot ROM compliant)
 - **Universal Hardware Support:** Contains device trees and kernels for both single-core ARMv6 (`BCM2835`) and quad-core ARMv7 (`BCM2710`).
-- **Built-in Services:**
-  - 100% Native Rust `ext-receiver` (VideoCore IV V4L2 M2M H.264 hardware decode directly to KMS DRM)
-  - Native Pure-Rust Zero-Gateway DHCP Server for `usb0` (Hands out `192.168.7.1` to PC with zero internet disruption)
-  - Embedded Web Control Dashboard on HTTP port 8080 (`http://192.168.7.2:8080`)
-  - Miracast / MS-MICE RTSP server on TCP port 7236 (Native Windows 10/11 `Win + K` wireless casting)
+- **3 Concurrent Post-Boot Modes:**
+  - **Mode 1 (Hybrid Network & Miracast):** Linux Wayland streaming via UDP port 5000 + Windows 10/11 native casting via RTSP port 7236 (`Win + K`) + Zero-Gateway DHCP server assigning `192.168.7.1` to PC + Web Dashboard at `http://192.168.7.2:8080`.
+  - **Mode 2 (USB Bulk Direct):** Zero-network 480 Mbps direct streaming over USB FunctionFS (`/dev/usb-ffs/display`).
+  - **Mode 3 (USB Serial Console):** Permanent CDC ACM serial terminal (`/dev/ttyGS0` on Pi, `/dev/ttyACM0` on Host) for instant recovery and diagnostics without Wi-Fi.
+- **Hardware Acceleration:** Native V4L2 M2M hardware H.264 decode on VideoCore IV (`/dev/video10`) directly into DRM KMS (`/dev/dri/card0`) at 60 FPS with ~0% CPU.
 
 ---
 

@@ -50,14 +50,14 @@ A anatomia física do **Raspberry Pi Zero v1.3 / W** exige atenção rigorosa à
 
 ---
 
-## 3. Segredos do Bootloader de Silício da Broadcom e Particionamento FAT32
+## 3. Segredos do Bootloader de Silício da Broadcom e Resolução em FAT16 de 32MB
 
-Durante os testes de campo com Carlos Alberto, desvendamos uma particularidade crucial da arquitetura interna da Broadcom que impede o boot de imagens excessivamente compactadas:
+Durante os testes de campo com Carlos Alberto, desvendamos uma particularidade crucial da arquitetura interna da Broadcom que impedia o boot de imagens compactadas:
 
-### O Limite de 65.525 Clusters da Microsoft e do Boot ROM
-* **O Problema:** O Boot ROM gravado no silício físico do SoC Broadcom (BCM2835 do Pi Zero 1 e BCM2710 do Pi Zero 2 W) possui um parser estrito da especificação FAT32 da Microsoft. Pela norma, um volume só é considerado legitimamente FAT32 se contiver **pelo menos 65.525 clusters**.
-* **O Sintoma:** Ao criar partições mínimas de 31MB ou 32MB, ferramentas como `mformat` ou `mkfs.vfat` geram cerca de ~62.000 clusters. Ao ligar a placa, o Boot ROM do silício detecta a incongruência, classifica a partição como corrompida e **aborta a leitura do cartão SD antes mesmo de exibir o arco-íris**, caindo em modo de recuperação USB (`idProduct=2763 BCM2708 Boot` no Pi Zero 1, ou `idProduct=2764 BCM2710 Boot` no Pi Zero 2 W).
-* **A Solução Definitiva:** A partição de boot `bootfs` foi padronizada em **256 MB** com formato FAT32 oficial (`130.044 clusters` - o dobro do mínimo exigido). O comando `fsck.vfat -v -n` valida com **zero erros e zero alertas de clusters**.
+### O Limite de 65.525 Clusters da Microsoft e a Resolução FAT16
+* **O Problema no FAT32:** O Boot ROM gravado no silício físico do SoC Broadcom (BCM2835 do Pi Zero 1 e BCM2710 do Pi Zero 2 W) possui um parser estrito da especificação FAT32 da Microsoft. Pela norma, um volume só é considerado legitimamente FAT32 se contiver **pelo menos 65.525 clusters**. Em 32MB, uma partição FAT32 só atinge ~62.000 clusters, levando o chip a abortar o boot antes mesmo do arco-íris e cair em modo USB recovery (`BCM2708 Boot`).
+* **A Resolução Definitiva com FAT16:** Ao declarar e formatar a partição de 32MB como **FAT16** (`disk type="FAT16"` com `mformat` sem a flag `-F`), a restrição mínima de clusters é eliminada, pois o FAT16 é a especificação nativa e correta para mídias de 16MB a 2GB. O Boot ROM da Broadcom carrega a partição FAT16 de 32MB instantaneamente no primeiro segundo de alimentação!
+* **Acomodação dos 3 Modos:** Com o initramfs enxuto contendo os 69 módulos essenciais de USB Gadget (CDC ACM, RNDIS/ECM, FunctionFS) e aceleração V4L2 M2M VideoCore IV, todos os arquivos ocupam apenas **22 MB**, deixando quase 10 MB livres dentro da partição de 32MB.
 
 ---
 
