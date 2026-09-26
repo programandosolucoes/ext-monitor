@@ -4,10 +4,16 @@ disable_splash=1
 boot_delay=0
 disable_overscan=1
 disable_fw_kms_setup=1
+kernel=zImage
 
 # VideoCore IV Hardware Acceleration & KMS Display
 dtoverlay=vc4-kms-v3d,noaudio,nocomposite
 gpu_mem=128
 
 # USB OTG Gadget Peripheral Controller
-dtoverlay=dwc2,dr_mode=otg
+dtoverlay=dwc2,dr_mode=peripheral
+
+# HDMI Universal TV & Monitor Compatibility
+hdmi_force_hotplug=1
+hdmi_drive=2
+config_hdmi_boost=7
