@@ -65,10 +65,21 @@ sudo dd if=ext-monitor-pi0-appliance.img of=/dev/sdX bs=4M status=progress conv=
 
 ---
 
-## 🔌 First Boot & Verification
-1. Insert the micro-SD card into the Raspberry Pi Zero.
+## 🔌 First Boot, Verification & Troubleshooting
+
+### Normal Boot Sequence
+1. Insert the micro-SD card into the Raspberry Pi Zero (v1.3 Single-Core or Zero 2 W).
 2. Connect the mini-HDMI cable to your monitor or TV.
 3. Connect a Micro-USB cable from the Pi's **center USB (OTG) port** to your laptop or PC.
-4. The VideoCore IV rainbow firmware test screen appears immediately on your display, followed by Linux boot in **under 2 seconds**.
-5. Your PC automatically receives IP `192.168.7.1` (Zero-Gateway DHCP) with zero disruption to your Wi-Fi/Ethernet internet connection.
-6. Open your browser to `http://192.168.7.2:8080` to access the live dashboard!
+4. **Stage 1 (VideoCore IV Firmware):** The 4-color rainbow test screen appears immediately on your display, confirming power, BCM2835 Boot ROM FAT32 mount (`>= 65,525 clusters`), and HDMI signal synchronization.
+5. **Stage 2 (Linux Kernel & Userspace):** The Linux kernel initializes KMS/DRM, loads USB gadget drivers, and starts `ext-receiver`.
+6. **Stage 3 (USB Network Connection):** The Pi asserts the USB D+ pullup resistor. Your host PC automatically detects the USB network adapter and receives IP `192.168.7.1` (Zero-Gateway DHCP) with zero disruption to your Wi-Fi/Ethernet internet connection.
+7. Open your browser to `http://192.168.7.2:8080` to access the live dashboard!
+
+### 🔍 Diagnostic Notes:
+- **Rainbow Screen Appears, but Host PC Doesn't Detect USB Network Device:**
+  - In standard Raspberry Pi OS kernels, the USB gadget stack (`CONFIG_USB_CONFIGFS=m`, `libcomposite`, `u_ether`, `usb_f_ecm`) is built as loadable `.ko` kernel modules.
+  - If the initramfs lacks `/lib/modules/$(uname -r)/`, the gadget cannot register with configfs and the hardware D+ pullup is never asserted. Ensure kernel modules are embedded in the initramfs or run with a kernel featuring monolithic gadget support (`CONFIG_USB_ETH=y`).
+- **Target Hardware Reference:**
+  - Tested and verified on **Raspberry Pi Zero v1.3 Single-Core (ARMv6 BCM2835 @ 1.0 GHz, 512MB RAM)**.
+
