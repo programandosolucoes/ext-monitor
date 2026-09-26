@@ -181,15 +181,28 @@ fn handle_http_client(
             if let Some(idx) = req_str.find("\r\n\r\n") {
                 let body = &req_str[idx + 4..];
                 let mut m1_change = None;
+                let mut m3_change = None;
                 if let Ok(mut cfg) = CONFIG.lock() {
                     if let Some(m1) = extract_json_bool(body, "mode1") {
                         cfg.mode1 = m1;
                         m1_change = Some(m1);
                     }
                     if let Some(m2) = extract_json_bool(body, "mode2") { cfg.mode2 = m2; }
-                    if let Some(m3) = extract_json_bool(body, "mode3") { cfg.mode3 = m3; }
+                    if let Some(m3) = extract_json_bool(body, "mode3") {
+                        cfg.mode3 = m3;
+                        m3_change = Some(m3);
+                    }
                 }
-                if let Some(m1) = m1_change {
+                if let Some(true) = m3_change {
+                    println!("\x1b[1;32m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) requested via Web UI!");
+                    let run = running.clone();
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
+                            eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
+                        }
+                    });
+                } else if let Some(m1) = m1_change {
                     if !m1 {
                         println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) turned OFF by user flag.");
                         pipeline_mgr.pause();
@@ -284,12 +297,59 @@ fn handle_http_client(
         }
         ("POST", "/api/mode") => {
             println!("\x1b[1;33m[web-server]\x1b[0m Received mode switch request via Web UI.");
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = &req_str[idx + 4..];
+                if body.contains("usb-bulk") || body.contains("bulk") || body.contains("\"mode\":3") || body.contains("\"mode\":\"3\"") {
+                    println!("\x1b[1;32m[web-server]\x1b[0m Switching to Mode 3 (USB Bulk Direct)...");
+                    let run = running.clone();
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
+                            eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
+                        }
+                    });
+                } else if body.contains("network") || body.contains("udp") || body.contains("\"mode\":1") || body.contains("\"mode\":\"1\"") {
+                    println!("\x1b[1;32m[web-server]\x1b[0m Switching to Mode 1 (Network UDP 5000)...");
+                    let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                    let _ = pipeline_mgr.resume(default_kind);
+                }
+            }
             send_response(
                 &mut stream,
                 "200 OK",
                 "application/json",
                 b"{\"status\":\"switched\"}",
             );
+        }
+        ("POST", "/api/system/update") => {
+            println!("\x1b[1;34m[web-server]\x1b[0m OTA Firmware/Appliance update requested via Web API.");
+            let update_url = if let Some(idx) = req_str.find("\r\n\r\n") {
+                extract_json_str(&req_str[idx + 4..], "url").unwrap_or("http://192.168.7.1:8000/initramfs.cpio.gz")
+            } else {
+                "http://192.168.7.1:8000/initramfs.cpio.gz"
+            };
+            let url_clone = update_url.to_string();
+            thread::spawn(move || {
+                println!("[ota-update] Mounting /mnt/boot...");
+                let _ = std::process::Command::new("mkdir").args(&["-p", "/mnt/boot"]).output();
+                let _ = std::process::Command::new("mount").args(&["-t", "vfat", "/dev/mmcblk0p1", "/mnt/boot"]).output();
+                println!("[ota-update] Fetching {}...", url_clone);
+                let res = std::process::Command::new("wget")
+                    .args(&["-q", "-O", "/mnt/boot/initramfs.cpio.gz", &url_clone])
+                    .output();
+                if let Ok(st) = res {
+                    if st.status.success() {
+                        println!("[ota-update] Update written successfully! Syncing and rebooting in 1s...");
+                        let _ = std::process::Command::new("sync").output();
+                        let _ = std::process::Command::new("umount").arg("/mnt/boot").output();
+                        thread::sleep(Duration::from_secs(1));
+                        let _ = std::process::Command::new("/sbin/reboot").output();
+                        return;
+                    }
+                }
+                eprintln!("[ota-update] Update download failed!");
+            });
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"updating\"}");
         }
         ("GET", "/api/network") => {
             let net_json = get_network_status_json();

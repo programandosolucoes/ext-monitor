@@ -20,6 +20,7 @@ pub const USB_PRODUCT_ID_1: u16 = 0x0104; // Multifunction Gadget
 pub const USB_VENDOR_ID_2: u16 = 0x1d50;  // OpenMoko
 pub const USB_PRODUCT_ID_2: u16 = 0x614d; // ExtMonitor Composite
 
+#[allow(dead_code)]
 pub const USB_DEFAULT_INTERFACE: u8 = 0;
 pub const USB_DEFAULT_ENDPOINT_OUT: u8 = 0x01;  // Bulk OUT
 
@@ -42,19 +43,23 @@ pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), Stri
                 );
 
                 // Dynamically discover Bulk OUT interface and endpoint
+                // Prioritize Vendor-Specific (Class 0xFF) FunctionFS display interface
+                // to prevent accidentally claiming CDC ACM (Serial) or CDC ECM (Network)
                 let mut target_iface = None;
                 let mut target_ep = None;
 
                 if let Ok(config_desc) = device.active_config_descriptor() {
                     for iface in config_desc.interfaces() {
                         for iface_desc in iface.descriptors() {
-                            for ep_desc in iface_desc.endpoint_descriptors() {
-                                if ep_desc.transfer_type() == rusb::TransferType::Bulk
-                                    && ep_desc.direction() == rusb::Direction::Out
-                                {
-                                    target_iface = Some(iface_desc.interface_number());
-                                    target_ep = Some(ep_desc.address());
-                                    break;
+                            if iface_desc.class_code() == 0xFF {
+                                for ep_desc in iface_desc.endpoint_descriptors() {
+                                    if ep_desc.transfer_type() == rusb::TransferType::Bulk
+                                        && ep_desc.direction() == rusb::Direction::Out
+                                    {
+                                        target_iface = Some(iface_desc.interface_number());
+                                        target_ep = Some(ep_desc.address());
+                                        break;
+                                    }
                                 }
                             }
                             if target_iface.is_some() {
@@ -67,7 +72,15 @@ pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), Stri
                     }
                 }
 
-                let iface_num = target_iface.unwrap_or(USB_DEFAULT_INTERFACE);
+                let iface_num = match target_iface {
+                    Some(i) => i,
+                    None => {
+                        return Err(format!(
+                            "Pi Zero USB device found (VID: {:04x}, PID: {:04x}), but FunctionFS Display Interface (Class 0xFF) is not active. Ensure ext-receiver has USB Bulk mode enabled.",
+                            desc.vendor_id(), desc.product_id()
+                        ));
+                    }
+                };
                 let ep_out = target_ep.unwrap_or(USB_DEFAULT_ENDPOINT_OUT);
 
                 let handle = device

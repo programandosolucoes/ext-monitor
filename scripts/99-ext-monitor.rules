@@ -10,9 +10,9 @@
 ACTION=="add|change", SUBSYSTEM=="net", KERNEL=="enx*|usb*", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="614d", RUN+="/sbin/ip link set dev %k txqueuelen 100", RUN+="/sbin/ip link set dev %k mtu 1500"
 ACTION=="add|change", SUBSYSTEM=="net", KERNEL=="enx*|usb*", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", RUN+="/sbin/ip link set dev %k txqueuelen 100", RUN+="/sbin/ip link set dev %k mtu 1500"
 
-# Disparo do serviço de conexão automática de usuário ao conectar ou retornar de suspensão
-ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="614d", TAG+="systemd", RUN+="/usr/bin/systemctl --no-block --user restart ext-monitor-autoconnect.service"
-ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d6b", ATTR{idProduct}=="0104", TAG+="systemd", RUN+="/usr/bin/systemctl --no-block --user restart ext-monitor-autoconnect.service"
+# Disparo do serviço de conexão automática de usuário ao conectar ou retornar de suspensão e permissões USB
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="614d", MODE="0666", TAG+="uaccess", TAG+="systemd", RUN+="/usr/bin/systemctl --no-block --user restart ext-monitor-autoconnect.service"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1d6b", ATTR{idProduct}=="0104", MODE="0666", TAG+="uaccess", TAG+="systemd", RUN+="/usr/bin/systemctl --no-block --user restart ext-monitor-autoconnect.service"
 
 ACTION=="remove", SUBSYSTEM=="usb", ENV{PRODUCT}=="1d50/614d/*", RUN+="/usr/bin/systemctl --no-block --user stop ext-monitor-autoconnect.service"
 ACTION=="remove", SUBSYSTEM=="usb", ENV{PRODUCT}=="1d6b/104/*", RUN+="/usr/bin/systemctl --no-block --user stop ext-monitor-autoconnect.service"

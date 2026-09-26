@@ -230,15 +230,76 @@ fn bind_udc_if_needed() {
     }
 }
 
-/// Main loop for Mode 2 USB Bulk Direct receiver
-pub fn run_usb_bulk_receiver(
+/// Configures FunctionFS in Linux USB Gadget ConfigFS if not already mounted
+pub fn ensure_functionfs_gadget() -> std::io::Result<()> {
+    if Path::new(FFS_EP0).exists() {
+        return Ok(());
+    }
+
+    let gadget_dir = if Path::new("/sys/kernel/config/usb_gadget/ext_composite").exists() {
+        "/sys/kernel/config/usb_gadget/ext_composite"
+    } else if Path::new("/sys/kernel/config/usb_gadget/g_display").exists() {
+        "/sys/kernel/config/usb_gadget/g_display"
+    } else {
+        "/sys/kernel/config/usb_gadget/ext_composite"
+    };
+
+    println!("\x1b[1;34m[usb-bulk]\x1b[0m Configuring FunctionFS gadget at {}...", gadget_dir);
+
+    // 1. Unbind UDC before altering functions
+    let udc_file = format!("{}/UDC", gadget_dir);
+    if Path::new(&udc_file).exists() {
+        let _ = std::fs::write(&udc_file, "");
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    // 2. Ensure functions/ffs.display exists
+    let func_path = format!("{}/functions/ffs.display", gadget_dir);
+    let _ = std::fs::create_dir_all(&func_path);
+
+    // 3. Symlink functions/ffs.display into configs/c.1/
+    let cfg_link = format!("{}/configs/c.1/ffs.display", gadget_dir);
+    if !Path::new(&cfg_link).exists() {
+        let _ = std::os::unix::fs::symlink(&func_path, &cfg_link);
+    }
+
+    // 4. Ensure mountpoint /dev/usb-ffs/display exists
+    let _ = std::fs::create_dir_all(FFS_DIR);
+
+    // 5. Mount FunctionFS if not mounted
+    let mounts = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
+    if !mounts.contains(FFS_DIR) {
+        let status = std::process::Command::new("mount")
+            .args(&["-t", "functionfs", "display", FFS_DIR])
+            .status();
+        if let Ok(st) = status {
+            if !st.success() {
+                // Try libc::mount as fallback
+                let src = std::ffi::CString::new("display").unwrap();
+                let tgt = std::ffi::CString::new(FFS_DIR).unwrap();
+                let fstype = std::ffi::CString::new("functionfs").unwrap();
+                unsafe {
+                    libc::mount(src.as_ptr(), tgt.as_ptr(), fstype.as_ptr(), 0, std::ptr::null());
+                }
+            }
+        }
+    }
+
+    println!("\x1b[1;32m[usb-bulk]\x1b[0m FunctionFS gadget mounted at {}", FFS_DIR);
+    Ok(())
+}
+
+/// Activates USB Bulk Mode: sets up FunctionFS, writes ep0 descriptors, binds UDC, and starts decoder pipeline
+pub fn activate_usb_bulk(
     running: Arc<AtomicBool>,
     pipeline_mgr: Arc<PipelineManager>,
 ) -> std::io::Result<()> {
+    let _ = ensure_functionfs_gadget();
+
     if !Path::new(FFS_EP0).exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            format!("Endpoint {} not found. FunctionFS gadget is not mounted.", FFS_EP0),
+            format!("Endpoint {} not found. FunctionFS gadget could not be mounted.", FFS_EP0),
         ));
     }
 
@@ -271,10 +332,23 @@ pub fn run_usb_bulk_receiver(
     println!("\x1b[1;32m[usb-bulk]\x1b[0m Connecting Bulk OUT endpoint directly to VideoCore IV decoder...");
     pipeline_mgr.start(PipelineKind::UsbBulkPipe { fd: raw_fd })?;
 
+    Ok(())
+}
+
+/// Main loop for Mode 2/3 USB Bulk Direct receiver
+#[allow(dead_code)]
+pub fn run_usb_bulk_receiver(
+    running: Arc<AtomicBool>,
+    pipeline_mgr: Arc<PipelineManager>,
+) -> std::io::Result<()> {
+    activate_usb_bulk(running.clone(), pipeline_mgr.clone())?;
+
     while running.load(Ordering::SeqCst) {
         if pipeline_mgr.has_exited() {
             println!("\x1b[1;33m[usb-bulk]\x1b[0m Restarting USB Bulk decode pipeline...");
-            let _ = pipeline_mgr.start(PipelineKind::UsbBulkPipe { fd: raw_fd });
+            if let Ok(ep1) = OpenOptions::new().read(true).open(FFS_EP1) {
+                let _ = pipeline_mgr.start(PipelineKind::UsbBulkPipe { fd: ep1.into_raw_fd() });
+            }
         }
         thread::sleep(Duration::from_millis(500));
     }

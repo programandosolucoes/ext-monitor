@@ -91,14 +91,26 @@ Latência: < 15ms            Latência: ~30ms                Latência: < 1ms
 ---
 
 ### 3.3 Modo 3: USB Bulk Direct (FunctionFS / Raw Endpoints)
-* **Público-Alvo:** Ambientes de computação embarcada ou redes corporativas restritas onde pilhas TCP/IP ou firewalls bloqueiam tráfego UDP local.
-* **Mecanismo:** A transferência de pacotes de vídeo ocorre diretamente através de chamadas de leitura e escrita nos arquivos de dispositivo do USB Gadget FunctionFS (`/dev/ffs-display/ep1`), contornando por completo a pilha de rede e DHCP do sistema operacional.
+* **Público-Alvo:** Ambientes de computação de ultra-baixa latência (< 1ms no transporte) ou onde pilhas de rede locais/firewalls bloqueiem tráfego UDP.
+* **Mecanismo:**
+  1. A transferência de pacotes de vídeo ocorre diretamente através de chamadas assíncronas de escrita em endpoint USB 2.0 High-Speed Bulk OUT (`ep1` em `/dev/usb-ffs/display/ep1`).
+  2. **Isolamento de Interfaces:** O transmissor `ext-sender` (`sender/src/usb_transport.rs`) inspeciona os descritores de configuração ativa filtrando estritamente pela classe `bInterfaceClass == 0xFF` (Vendor Specific / FunctionFS). Isso previne categoricamente que o fluxo de vídeo capture ou colida com as interfaces de controle do terminal serial CDC ACM (`/dev/ttyACM0`) ou da placa de rede CDC ECM (`usb0`).
+  3. **Auto-Montagem e Ativação Dinâmica:** O receptor `ext-receiver` (`receiver/src/usb_bulk.rs`) conta com `ensure_functionfs_gadget()`, que verifica a existência de `/dev/usb-ffs/display/ep0` e cria dinamicamente o diretório e links no ConfigFS se necessário, escrevendo os descritores em `ep0` e vinculando o controlador UDC.
+  4. **Modo de Boot Persistente (`mode.txt`):** Se o arquivo `/mnt/boot/mode.txt` contiver `usb-bulk` ou `3`, o script de inicialização do appliance (`/init`) passa automaticamente a flag `--mode=usb-bulk` para o `ext-receiver`, iniciando diretamente no Modo 3 desde o primeiro segundo de alimentação.
+  5. **Comando de Teste no Host:**
+     ```bash
+     ./scripts/start.sh extend auto 30 false economy --transport=usb
+     ```
 
 ---
 
 ## 4. Chaves de Controle e Persistência de Estado (F5)
 
 O Web Dashboard (`http://192.168.7.2:8080`) disponibiliza interruptores do tipo toggle switch para isolamento granular de modos:
-1. **Comutação Isolada:** Ao desligar os Modos 2 e 3, o receptor encerra os serviços Miracast e FunctionFS, liberando 100% da largura de banda e memória RAM do SoC para o Modo 1.
+1. **Comutação Isolada e Concorrente:** Ao acionar a chave do Modo 3 (USB Bulk), o painel envia `POST /api/modes` com `mode3: true`. O receptor ativa a pipeline de decodificação `PipelineKind::UsbBulkPipe` sem derrubar a interface de rede USB `usb0` ou o servidor HTTP na porta 8080, permitindo monitorar o status do hardware e métricas em tempo real.
 2. **Persistência Completa de Sessão:** Toda alteração de chave (Ligar/Desligar) ou perfil de cor (24-bit TrueColor vs 256 cores) é persistida em `localStorage` no navegador e transmitida via `POST /api/modes` e `POST /api/config`. Ao pressionar F5, a interface reidrata instantaneamente o estado exato configurado pelo usuário sem resetar para padrões.
+3. **API REST para Automação:**
+   * `POST /api/modes`: Comuta flags dos modos (`mode1`, `mode2`, `mode3`).
+   * `POST /api/mode`: Endpoint direto para comutação rápida (`{"mode": "usb-bulk"}` ou `{"mode": "network"}`).
+   * `POST /api/system/update`: Aciona atualização de imagem de firmware OTA (`initramfs.cpio.gz`) pela rede local com gravação direta no micro-SD e reboot seguro.
 
