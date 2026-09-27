@@ -220,8 +220,49 @@ fn handle_http_client(
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"rebooting\"}");
             thread::spawn(|| {
                 thread::sleep(Duration::from_millis(500));
-                let _ = std::process::Command::new("/sbin/reboot").output();
+                let _ = std::process::Command::new("/sbin/reboot").arg("-f").output();
+                unsafe {
+                    libc::sync();
+                    libc::reboot(libc::RB_AUTOBOOT);
+                }
             });
+        }
+        ("GET", "/api/screenshot") => {
+            if let Ok(mut fb) = std::fs::File::open("/dev/fb0") {
+                let mut data = vec![0u8; 1280 * 720 * 2];
+                if fb.read_exact(&mut data).is_ok() {
+                    send_response(&mut stream, "200 OK", "application/octet-stream", &data);
+                    return;
+                }
+            }
+            send_response(&mut stream, "500 Internal Server Error", "text/plain", b"Failed to capture fb0");
+        }
+        ("GET", "/api/dmesg") => {
+            let out = std::process::Command::new("dmesg").output().map(|o| o.stdout).unwrap_or_default();
+            send_response(&mut stream, "200 OK", "text/plain; charset=utf-8", &out);
+        }
+        ("GET", "/api/logs") => {
+            let logs = std::fs::read("/var/log/ext-receiver.log").unwrap_or_else(|_| b"No /var/log/ext-receiver.log found".to_vec());
+            send_response(&mut stream, "200 OK", "text/plain; charset=utf-8", &logs);
+        }
+        ("POST", "/api/exec") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let cmd_str = req_str[idx + 4..].trim();
+                let out = std::process::Command::new("/bin/sh")
+                    .args(&["-c", cmd_str])
+                    .output();
+                let resp = match out {
+                    Ok(o) => {
+                        let mut res = o.stdout;
+                        res.extend_from_slice(&o.stderr);
+                        res
+                    }
+                    Err(e) => format!("Error: {}", e).into_bytes(),
+                };
+                send_response(&mut stream, "200 OK", "text/plain; charset=utf-8", &resp);
+                return;
+            }
+            send_response(&mut stream, "400 Bad Request", "text/plain", b"Missing body");
         }
         ("GET", "/api/sdcard/status") => {
             let is_inserted = fs::metadata("/dev/mmcblk0").is_ok();

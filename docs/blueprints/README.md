@@ -12,11 +12,11 @@
 
 Esta pasta reúne a documentação de engenharia reversa, decisões de arquitetura e especificações de baixo nível que tornaram possível transformar um dispositivo de computação de US$ 10 (Raspberry Pi Zero de núcleo único a 1.0 GHz) em um monitor secundário profissional de 60 FPS com latência inferior a 15 milissegundos.
 
-Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até a recuperação autônoma de suspensão de energia no Linux Wayland — estão formalizados nos 9 blueprints técnicos a seguir:
+Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até a recuperação autônoma de suspensão de energia no Linux Wayland e a refatoração modular com enquadramento RFC 6184/4571 — estão formalizados nos 10 blueprints técnicos a seguir:
 
 ---
 
-## 2. Mapa dos 9 Blueprints de Engenharia
+## 2. Mapa dos 10 Blueprints de Engenharia
 
 | # | Blueprint Técnico | Arquivo | Foco de Engenharia |
 | :---: | :--- | :--- | :--- |
@@ -29,6 +29,7 @@ Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silí
 | **07** | **Cartão Micro-SD em RAM, Proteção e Upgrade via USB** | [`07-cartao-sd-em-ram-e-upgrade-usb.md`](07-cartao-sd-em-ram-e-upgrade-usb.md) | Eliminação de corrupção flash, partição exposta como pendrive `EXTMONITOR` na USB, upgrade em 3 métodos e entrega de binários. |
 | **08** | **Manual de Instalação, Portabilidade e Script de Setup Host** | [`08-manual-de-instalacao-e-portabilidade-host.md`](08-manual-de-instalacao-e-portabilidade-host.md) | Conexão em 1 clique via `curl connect.sh`, instalador multi-distro, regras udev de baixa latência e console serial `/dev/ttyACM0`. |
 | **09** | **Testes Empíricos em Hardware e Diagnósticos de Boot** | [`09-testes-empiricos-e-diagnosticos-hardware.md`](09-testes-empiricos-e-diagnosticos-hardware.md) | Validação no Pi Zero v1.3 Monocore, diagnóstico da tela arco-íris, cronometria de boot de 1.8s e benchmarks térmicos/cores. |
+| **10** | **Refatoração Modular Clean Code, Enquadramento AU e V4L2 M2M** | [`10-refatoracao-modular-clean-code-v4l2-m2m-e-enquadramento-au.md`](10-refatoracao-modular-clean-code-v4l2-m2m-e-enquadramento-au.md) | Decomposição SRP, Builder Pattern, correção ABI 32-bit ARM ioctls (`0xC0CC5605`), remontagem RFC 6184/4571 e conversão SIMD YUV->RGB565. |
 
 ---
 

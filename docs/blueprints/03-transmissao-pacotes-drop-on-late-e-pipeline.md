@@ -1,9 +1,9 @@
 # Blueprint 03: Transmissão de Pacotes, Fragmentação NALU e o Algoritmo Drop-on-Late
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto  
-**Arquivos de Referência:** `sender/src/main.rs`, `receiver/src/native_v4l2.rs`, `receiver/src/rtp.rs`  
-**Data:** Setembro de 2026  
+**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Arquivos de Referência:** `sender/src/pipeline.rs`, `receiver/src/stream/rtp.rs`, `receiver/src/stream/annexb.rs`, `receiver/src/ingress/udp.rs`, `receiver/src/ingress/usb.rs`  
+**Data:** Setembro de 2026 (Atualizado com Enquadramento de Access Units RFC 6184 / RFC 4571)  
 
 ---
 
@@ -13,7 +13,7 @@ A integridade e fluidez de um monitor estendido dependem criticamente do comport
 
 Se o protocolo acumular quadros em buffers para garantir que nenhum frame seja perdido (como faz o TCP ou streamers de vídeo sob demanda como Netflix e YouTube), o cursor do mouse sofrerá o efeito "elástico" (buffer bloat), tornando a operação do computador insuportável para o usuário.
 
-Este blueprint detalha as regras de empacotamento RTP, a fragmentação FU-A e o algoritmo de descarte de quadros atrasados (**Drop-on-Late Leaky Queue**).
+Este blueprint detalha as regras de empacotamento RTP, a fragmentação FU-A (RFC 6184), o enquadramento de fluxo RFC 4571 para USB Bulk e o algoritmo de descarte de quadros atrasados (**Drop-on-Late Leaky Queue**).
 
 ---
 

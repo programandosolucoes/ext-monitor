@@ -113,7 +113,9 @@ pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), Stri
     ))
 }
 
+#[allow(dead_code)]
 pub const USB_MAGIC: [u8; 4] = *b"EXMO";
+#[allow(dead_code)]
 pub const FLAG_EOF: u8 = 0x01; // End of Frame marker bit
 
 /// Spawns background worker thread pumping framed H.264 data into the USB Bulk OUT endpoint

@@ -253,11 +253,19 @@ pub fn ensure_functionfs_gadget() -> std::io::Result<()> {
         thread::sleep(Duration::from_millis(100));
     }
 
-    // 2. Ensure functions/ffs.display exists
+    // 2. Free DWC2 hardware endpoints by unlinking Mass Storage (BCM2835 has max 7 data EPs)
+    // ACM (Serial) + ECM (Network/Dashboard/UDP/Miracast) + FunctionFS (USB Bulk) = 7 EPs exactly.
+    let ms_link = format!("{}/configs/c.1/mass_storage.0", gadget_dir);
+    if Path::new(&ms_link).exists() {
+        let _ = std::fs::remove_file(&ms_link);
+        println!("\x1b[1;33m[usb-bulk]\x1b[0m Unlinked Mass Storage to free DWC2 endpoints while preserving Network & Serial.");
+    }
+
+    // 3. Ensure functions/ffs.display exists
     let func_path = format!("{}/functions/ffs.display", gadget_dir);
     let _ = std::fs::create_dir_all(&func_path);
 
-    // 3. Symlink functions/ffs.display into configs/c.1/
+    // 4. Symlink functions/ffs.display into configs/c.1/
     let cfg_link = format!("{}/configs/c.1/ffs.display", gadget_dir);
     if !Path::new(&cfg_link).exists() {
         let _ = std::os::unix::fs::symlink(&func_path, &cfg_link);
@@ -294,6 +302,15 @@ pub fn activate_usb_bulk(
     running: Arc<AtomicBool>,
     pipeline_mgr: Arc<PipelineManager>,
 ) -> std::io::Result<()> {
+    // If ep1 is already active (e.g. configured at boot by /init), directly open it
+    if Path::new(FFS_EP1).exists() {
+        println!("\x1b[1;32m[usb-bulk]\x1b[0m Bulk OUT endpoint {} already active. Opening directly...", FFS_EP1);
+        let ep1 = OpenOptions::new().read(true).open(FFS_EP1)?;
+        let raw_fd = ep1.into_raw_fd();
+        pipeline_mgr.start(PipelineKind::UsbBulkPipe { fd: raw_fd })?;
+        return Ok(());
+    }
+
     let _ = ensure_functionfs_gadget();
 
     if !Path::new(FFS_EP0).exists() {
@@ -323,9 +340,20 @@ pub fn activate_usb_bulk(
     });
 
     println!("\x1b[1;34m[usb-bulk]\x1b[0m Opening Bulk OUT data endpoint at {}...", FFS_EP1);
-    let ep1 = OpenOptions::new()
-        .read(true)
-        .open(FFS_EP1)?;
+    let mut ep1_opt = None;
+    for _ in 0..30 {
+        if let Ok(file) = OpenOptions::new().read(true).open(FFS_EP1) {
+            ep1_opt = Some(file);
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    let ep1 = ep1_opt.ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Timeout waiting for FunctionFS endpoint {}", FFS_EP1),
+        )
+    })?;
 
     let raw_fd = ep1.into_raw_fd();
 
