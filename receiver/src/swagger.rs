@@ -67,9 +67,73 @@ pub const OPENAPI_JSON: &str = r##"{
     {
       "name": "Client Downloads",
       "description": "Host drivers, portable binaries, and auto-connect scripts"
+    },
+    {
+      "name": "Web Dashboard & Documentation",
+      "description": "Interactive HTML control panel and OpenAPI schema endpoints"
     }
   ],
   "paths": {
+    "/": {
+      "get": {
+        "tags": ["Web Dashboard & Documentation"],
+        "summary": "Embedded Web Control Dashboard",
+        "description": "Returns the complete single-page application (HTML/CSS/JS) embedded in binary memory for device telemetry, display preview, and hot-tuning.",
+        "operationId": "getDashboard",
+        "responses": {
+          "200": {
+            "description": "Dashboard HTML document",
+            "content": {
+              "text/html; charset=utf-8": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swagger": {
+      "get": {
+        "tags": ["Web Dashboard & Documentation"],
+        "summary": "Swagger UI Interactive Documentation",
+        "description": "Serves this dark-themed interactive API explorer and documentation interface.",
+        "operationId": "getSwaggerUI",
+        "responses": {
+          "200": {
+            "description": "Swagger UI HTML document",
+            "content": {
+              "text/html; charset=utf-8": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "tags": ["Web Dashboard & Documentation"],
+        "summary": "OpenAPI 3.0.3 Specification Document",
+        "description": "Returns the complete OpenAPI 3.0.3 machine-readable JSON schema specification.",
+        "operationId": "getOpenApiSpec",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.0.3 JSON schema",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/status": {
       "get": {
         "tags": ["Status & Telemetry"],
