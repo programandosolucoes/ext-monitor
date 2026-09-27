@@ -597,6 +597,9 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         <button class="tab-btn" onclick="switchTab('manual')" id="tabBtn_manual">
             <span>📖</span> <span data-i18n="tabManual">Operation Manual</span>
         </button>
+        <a href="/swagger" target="_blank" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:0.5rem;" id="tabBtn_swagger">
+            <span>⚡</span> <span>Swagger API</span>
+        </a>
     </nav>
 
     <main class="container">

@@ -10,7 +10,7 @@ use crate::decoder::v4l2_types::*;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct V4l2DecoderSession {
     _video_file: File,
@@ -305,8 +305,9 @@ impl V4l2DecoderSession {
         // 3. Submit chunk to hardware
         self.submit_to_buffer(idx, chunk);
 
-        // 4. Drain newly decoded frames immediately
-        self.drain_decoded_frames(&mut on_frame);
+        // 4. Wait briefly (up to 4ms) for hardware VPU to finish decoding and display immediately!
+        // This eliminates the 1-frame latency gap and completely removes mouse trails!
+        self.wait_and_drain(Duration::from_millis(4), &mut on_frame);
     }
 
     #[allow(dead_code)]
@@ -433,6 +434,25 @@ impl V4l2DecoderSession {
             if q_ret != 0 {
                 let err = std::io::Error::last_os_error();
                 eprintln!("\x1b[1;31m[v4l2-m2m]\x1b[0m CAPTURE VIDIOC_QBUF[{}] failed: {}", cap_buf.index, err);
+            }
+        }
+    }
+
+    /// Waits up to `timeout` for the hardware VPU to finish decoding and drains all ready frames.
+    /// Uses libc::poll on video_fd (which natively supports POLLIN on CAPTURE queue)
+    pub fn wait_and_drain<F: FnMut(&[u8])>(&mut self, timeout: Duration, mut on_frame: F) {
+        self.drain_decoded_frames(&mut on_frame);
+
+        let ms = timeout.as_millis().min(20) as i32;
+        if ms > 0 {
+            let mut pfd = libc::pollfd {
+                fd: self.video_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            let ret = unsafe { libc::poll(&mut pfd, 1, ms) };
+            if ret > 0 && (pfd.revents & libc::POLLIN) != 0 {
+                self.drain_decoded_frames(&mut on_frame);
             }
         }
     }
