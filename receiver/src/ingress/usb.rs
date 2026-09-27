@@ -30,9 +30,6 @@ pub struct UsbBulkIngress;
 impl UsbBulkIngress {
     /// Runs the USB Bulk ingress decode and display loop until `running` becomes false
     pub fn run(read_fd: RawFd, running: Arc<AtomicBool>) {
-        let mut stream_file = unsafe { File::from_raw_fd(read_fd) };
-        let mut buffer = [0u8; 65536]; // 64 KB read buffer to ingest complete transfers
-
         let mut display = match FramebufferSink::open(1280, 720) {
             Ok(d) => d,
             Err(e) => {
@@ -63,16 +60,34 @@ impl UsbBulkIngress {
         let mut total_bytes = 0u64;
         let mut last_log = std::time::Instant::now();
 
-        while running.load(Ordering::SeqCst) {
-            match stream_file.read(&mut buffer) {
-                Ok(0) => {
-                    decoder.drain_decoded_frames(|frame_rgb565| {
-                        display.render_frame(frame_rgb565);
-                    });
-                    thread::sleep(Duration::from_millis(1));
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(16);
+        let run_read = running.clone();
+        let read_handle = thread::spawn(move || {
+            let mut stream_file = unsafe { File::from_raw_fd(read_fd) };
+            let mut buffer = [0u8; 65536];
+
+            while run_read.load(Ordering::SeqCst) {
+                match stream_file.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let chunk = buffer[..n].to_vec();
+                        if tx.send(chunk).is_err() {
+                            break;
+                        }
+                    }
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        eprintln!("\x1b[1;31m[usb-ingress]\x1b[0m USB Bulk stream read error: {}", e);
+                        break;
+                    }
                 }
-                Ok(n) => {
-                    let chunk = &buffer[..n];
+            }
+        });
+
+        while running.load(Ordering::SeqCst) {
+            match rx.recv_timeout(Duration::from_millis(5)) {
+                Ok(chunk_vec) => {
+                    let chunk = &chunk_vec[..];
 
                     // Auto-detect framing format on first chunk if needed
                     match framing_mode {
@@ -111,7 +126,7 @@ impl UsbBulkIngress {
                         }
                     }
 
-                    total_bytes += n as u64;
+                    total_bytes += chunk.len() as u64;
                     if last_log.elapsed() >= Duration::from_secs(5) {
                         let mb = (total_bytes as f64) / (1024.0 * 1024.0);
                         println!(
@@ -121,16 +136,22 @@ impl UsbBulkIngress {
                         last_log = std::time::Instant::now();
                     }
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {
-                    continue;
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    // USB endpoint idle: flush any ready decoded frames from VideoCore IV DPB to screen immediately
+                    decoder.drain_decoded_frames(|frame_rgb565| {
+                        display.render_frame(frame_rgb565);
+                    });
                 }
-                Err(e) => {
-                    eprintln!("\x1b[1;31m[usb-ingress]\x1b[0m USB Bulk stream read error: {}", e);
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    decoder.drain_decoded_frames(|frame_rgb565| {
+                        display.render_frame(frame_rgb565);
+                    });
                     break;
                 }
             }
         }
 
+        let _ = read_handle.join();
         println!("\x1b[1;33m[usb-ingress]\x1b[0m Ingress worker stopped.");
     }
 }

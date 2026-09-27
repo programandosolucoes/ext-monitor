@@ -140,6 +140,16 @@ fn handle_http_client(
             let body = if method == "HEAD" { &[][..] } else { UDEV_RULES.as_bytes() };
             send_response(&mut stream, "200 OK", "text/plain", body);
         }
+        ("GET", "/swagger") | ("GET", "/swagger/") | ("GET", "/docs") | ("GET", "/docs/") |
+        ("HEAD", "/swagger") | ("HEAD", "/swagger/") | ("HEAD", "/docs") | ("HEAD", "/docs/") => {
+            let body = if method == "HEAD" { &[][..] } else { crate::swagger::SWAGGER_HTML.as_bytes() };
+            send_response(&mut stream, "200 OK", "text/html; charset=utf-8", body);
+        }
+        ("GET", "/api/openapi.json") | ("GET", "/swagger.json") |
+        ("HEAD", "/api/openapi.json") | ("HEAD", "/swagger.json") => {
+            let body = if method == "HEAD" { &[][..] } else { crate::swagger::OPENAPI_JSON.as_bytes() };
+            send_response(&mut stream, "200 OK", "application/json; charset=utf-8", body);
+        }
         ("GET", "/api/status") => {
             let is_paused = pipeline_mgr.is_paused();
             let is_active = pipeline_mgr.current_kind().is_some();

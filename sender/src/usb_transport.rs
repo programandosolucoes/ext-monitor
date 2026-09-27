@@ -190,6 +190,8 @@ pub fn spawn_usb_bulk_writer(
                             "\x1b[1;34m[usb-transport]\x1b[0m Total transmitted via USB Bulk: {:.2} MB (Zero-Network)",
                             mb
                         );
+                        use std::io::Write;
+                        let _ = std::io::stdout().flush();
                         last_log = std::time::Instant::now();
                     }
                 }

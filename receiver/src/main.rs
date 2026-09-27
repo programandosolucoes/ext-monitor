@@ -26,6 +26,7 @@ mod native_v4l2;
 mod pipeline;
 mod stream;
 mod usb_bulk;
+pub mod swagger;
 mod web;
 mod web_ui;
 mod wfd;
