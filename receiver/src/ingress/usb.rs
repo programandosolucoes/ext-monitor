@@ -10,7 +10,7 @@
 
 use crate::decoder::V4l2DecoderSession;
 use crate::display::FramebufferSink;
-use crate::stream::{Rfc4571Assembler, RtpDepayloader};
+use crate::stream::{AnnexBAssembler, Rfc4571Assembler, RtpDepayloader};
 use std::fs::File;
 use std::io::{self, Read};
 use std::os::unix::io::{FromRawFd, RawFd};
@@ -47,6 +47,7 @@ impl UsbBulkIngress {
         };
 
         let mut framing_mode = IngressFramingMode::AutoDetect;
+        let mut annexb_assembler = AnnexBAssembler::new();
         let mut rfc_assembler = Rfc4571Assembler::new();
         let mut rtp_depayloader = RtpDepayloader::new();
 
@@ -95,9 +96,13 @@ impl UsbBulkIngress {
                             if chunk.len() >= 4 && (chunk.starts_with(&[0, 0, 0, 1]) || chunk.starts_with(&[0, 0, 1])) {
                                 println!("\x1b[1;32m[usb-ingress]\x1b[0m Pure Native H.264 Annex-B Direct Stream active (Lossless, Zero-Artifacts).");
                                 framing_mode = IngressFramingMode::AnnexB;
-                                decoder.decode_chunk(chunk, |frame_rgb565| {
-                                    display.render_frame(frame_rgb565);
-                                });
+                                annexb_assembler.push(chunk, &mut completed_frames);
+                                for frame in &completed_frames {
+                                    decoder.decode_chunk(frame, |frame_rgb565| {
+                                        display.render_frame(frame_rgb565);
+                                    });
+                                }
+                                completed_frames.clear();
                             } else {
                                 println!("\x1b[1;36m[usb-ingress]\x1b[0m Detected RFC 4571 length-framed RTP stream (Ultra-Low Latency).");
                                 framing_mode = IngressFramingMode::Rfc4571;
@@ -111,9 +116,13 @@ impl UsbBulkIngress {
                             }
                         }
                         IngressFramingMode::AnnexB => {
-                            decoder.decode_chunk(chunk, |frame_rgb565| {
-                                display.render_frame(frame_rgb565);
-                            });
+                            annexb_assembler.push(chunk, &mut completed_frames);
+                            for frame in &completed_frames {
+                                decoder.decode_chunk(frame, |frame_rgb565| {
+                                    display.render_frame(frame_rgb565);
+                                });
+                            }
+                            completed_frames.clear();
                         }
                         IngressFramingMode::Rfc4571 => {
                             rfc_assembler.push(chunk, &mut rtp_depayloader, &mut completed_frames);
@@ -137,12 +146,26 @@ impl UsbBulkIngress {
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    // USB endpoint idle: flush any ready decoded frames from VideoCore IV DPB to screen immediately
+                    // USB endpoint idle: flush any assembled AU and ready decoded frames to screen immediately
+                    annexb_assembler.flush(&mut completed_frames);
+                    for frame in &completed_frames {
+                        decoder.decode_chunk(frame, |frame_rgb565| {
+                            display.render_frame(frame_rgb565);
+                        });
+                    }
+                    completed_frames.clear();
                     decoder.drain_decoded_frames(|frame_rgb565| {
                         display.render_frame(frame_rgb565);
                     });
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    annexb_assembler.flush(&mut completed_frames);
+                    for frame in &completed_frames {
+                        decoder.decode_chunk(frame, |frame_rgb565| {
+                            display.render_frame(frame_rgb565);
+                        });
+                    }
+                    completed_frames.clear();
                     decoder.drain_decoded_frames(|frame_rgb565| {
                         display.render_frame(frame_rgb565);
                     });
