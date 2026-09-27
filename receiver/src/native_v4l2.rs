@@ -22,15 +22,15 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 // --- Linux V4L2 Constants & IOCTLs (ARM 32-bit Architecture) ---
 const VIDIOC_QUERYCAP: libc::c_ulong = 0x80685600;
 const VIDIOC_S_FMT_204: libc::c_ulong = 0xc0cc5605;
 const VIDIOC_REQBUFS: libc::c_ulong = 0xc0145608;
-const VIDIOC_QUERYBUF: libc::c_ulong = 0xc0445609;
-const VIDIOC_QBUF: libc::c_ulong = 0xc044560f;
-const VIDIOC_DQBUF: libc::c_ulong = 0xc0445611;
+const VIDIOC_QUERYBUF: libc::c_ulong = 0xc0505609;
+const VIDIOC_QBUF: libc::c_ulong = 0xc050560f;
+const VIDIOC_DQBUF: libc::c_ulong = 0xc0505611;
 const VIDIOC_STREAMON: libc::c_ulong = 0x40045612;
 const VIDIOC_STREAMOFF: libc::c_ulong = 0x40045613;
 
@@ -95,13 +95,6 @@ struct V4l2RequestBuffers {
 
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
-struct V4l2Timeval {
-    tv_sec: libc::c_long,
-    tv_usec: libc::c_long,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Default)]
 struct V4l2Plane {
     bytesused: u32,
     length: u32,
@@ -118,12 +111,14 @@ struct V4l2Buffer {
     bytesused: u32,
     flags: u32,
     field: u32,
-    timestamp: V4l2Timeval,
+    _pad: u32,
+    timestamp_sec: i64,
+    timestamp_usec: i64,
     timecode: [u32; 4],
     sequence: u32,
     memory: u32,
-    planes_ptr: u32, // Pointer to V4l2Plane array on 32-bit ARM
-    length: u32,     // Number of planes = 1
+    planes_ptr: u32, // Pointer to V4l2Plane array on 32-bit ARM (offset 64)
+    length: u32,     // Number of planes = 1 (offset 68)
     reserved2: u32,
     reserved: u32,
 }
@@ -140,6 +135,7 @@ pub struct V4l2DecoderSession {
     pub cap_ptrs: Vec<*mut u8>,
     pub cap_lens: Vec<usize>,
     pub frames_decoded: u64,
+    pub start_time: Instant,
 }
 
 impl V4l2DecoderSession {
@@ -213,9 +209,9 @@ impl V4l2DecoderSession {
             return None;
         }
 
-        // 3. REQBUFS OUTPUT (8 buffers to prevent starvation between headers and slices)
+        // 3. REQBUFS OUTPUT (16 buffers to prevent starvation between headers and slices)
         let mut req_out = V4l2RequestBuffers {
-            count: 8,
+            count: 16,
             buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
             memory: V4L2_MEMORY_MMAP,
             ..Default::default()
@@ -255,9 +251,9 @@ impl V4l2DecoderSession {
             free_out_indices.push(i);
         }
 
-        // 4. REQBUFS CAPTURE (4 buffers)
+        // 4. REQBUFS CAPTURE (6 buffers for smooth VPU drain & VSYNC pacing)
         let mut req_cap = V4l2RequestBuffers {
-            count: 4,
+            count: 6,
             buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
             memory: V4L2_MEMORY_MMAP,
             ..Default::default()
@@ -319,6 +315,7 @@ impl V4l2DecoderSession {
             cap_ptrs,
             cap_lens,
             frames_decoded: 0,
+            start_time: Instant::now(),
         })
     }
 
@@ -391,10 +388,11 @@ impl V4l2DecoderSession {
         self.reclaim_output_buffers();
         self.drain_decoded_frames();
 
-        // If no output buffer is free, wait briefly for hardware VPU to complete
+        // If no output buffer is free, wait and actively drain decoded frames until hardware frees a buffer
         if self.free_out_indices.is_empty() {
-            for _ in 0..5 {
+            for _ in 0..30 {
                 thread::sleep(Duration::from_millis(1));
+                self.drain_decoded_frames();
                 self.reclaim_output_buffers();
                 if !self.free_out_indices.is_empty() {
                     break;
@@ -415,15 +413,50 @@ impl V4l2DecoderSession {
                 length: max_len as u32,
                 ..Default::default()
             };
+
+            let elapsed = self.start_time.elapsed();
+            let mut flags = 0x00002000; // V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC
+
+            // Check if Access Unit contains a keyframe (IDR slice = 5, SPS = 7)
+            let mut is_keyframe = false;
+            let mut i = 0;
+            while i + 4 < nal.len() {
+                if nal[i] == 0 && nal[i + 1] == 0 {
+                    let (offset, plen) = if nal[i + 2] == 1 {
+                        (i, 3)
+                    } else if i + 3 < nal.len() && nal[i + 2] == 0 && nal[i + 3] == 1 {
+                        (i, 4)
+                    } else {
+                        (0, 0)
+                    };
+                    if plen > 0 && offset + plen < nal.len() {
+                        let t = nal[offset + plen] & 0x1F;
+                        if t == 5 || t == 7 {
+                            is_keyframe = true;
+                            break;
+                        }
+                    }
+                }
+                i += 1;
+            }
+            if is_keyframe {
+                flags |= 0x00000008; // V4L2_BUF_FLAG_KEYFRAME
+            }
+
             let mut buf = V4l2Buffer {
                 index: idx,
                 buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
                 memory: V4L2_MEMORY_MMAP,
                 planes_ptr: &mut plane as *mut _ as u32,
                 length: 1,
+                timestamp_sec: elapsed.as_secs() as i64,
+                timestamp_usec: elapsed.subsec_micros() as i64,
+                flags,
                 ..Default::default()
             };
             unsafe { libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut buf) };
+        } else {
+            eprintln!("\x1b[1;31m[native-v4l2]\x1b[0m Warning: OUTPUT queue starved, dropping NAL ({} bytes)", nal.len());
         }
 
         self.drain_decoded_frames();
@@ -556,8 +589,22 @@ impl NativeV4l2Decoder {
     }
 
     fn fd_decode_worker(read_fd: RawFd, running: Arc<AtomicBool>) {
+        // Set read_fd to non-blocking mode to support poll with timeout
+        unsafe {
+            let flags = libc::fcntl(read_fd, libc::F_GETFL);
+            if flags >= 0 {
+                libc::fcntl(read_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+            }
+        }
+
         let mut stream_file = unsafe { File::from_raw_fd_unchecked(read_fd) };
         let mut buf = [0u8; 16384];
+        let mut stream_buffer = Vec::with_capacity(262144);
+        let mut nal_buffer = Vec::with_capacity(65536);
+        let mut parsed_nals = Vec::with_capacity(16);
+        let mut parser = AnnexBStreamParser::new();
+        let mut last_packet_time = Instant::now();
+        let mut pending_flush = false;
 
         let mut session = match V4l2DecoderSession::new() {
             Some(s) => s,
@@ -567,26 +614,269 @@ impl NativeV4l2Decoder {
             }
         };
 
-        println!("\x1b[1;32m[native-v4l2]\x1b[0m Reading raw H.264 stream from USB Bulk fd {} -> Displaying to HDMI...", read_fd);
+        println!("\x1b[1;32m[native-v4l2]\x1b[0m Reading H.264 stream with RFC 4571 Framing & RTP Marker Bit from USB Bulk fd {} -> Displaying to HDMI...", read_fd);
+
+        let mut pfd = libc::pollfd {
+            fd: read_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
 
         while running.load(Ordering::SeqCst) {
-            match stream_file.read(&mut buf) {
-                Ok(0) => {
-                    thread::sleep(Duration::from_millis(10));
+            pfd.revents = 0;
+            let poll_ret = unsafe { libc::poll(&mut pfd, 1, 5) }; // 5ms poll timeout
+
+            if poll_ret > 0 && (pfd.revents & libc::POLLIN) != 0 {
+                match stream_file.read(&mut buf) {
+                    Ok(0) => {
+                        session.drain_decoded_frames();
+                        thread::sleep(Duration::from_millis(2));
+                    }
+                    Ok(n) => {
+                        last_packet_time = Instant::now();
+                        pending_flush = true;
+                        stream_buffer.extend_from_slice(&buf[..n]);
+
+                        // Process RFC 4571 RTP frames: 2-byte big-endian length + RTP packet (version 2 = 0x80)
+                        while stream_buffer.len() >= 4 {
+                            // Check if stream_buffer matches RFC 4571 RTP packet (V=2 -> 0x80)
+                            if (stream_buffer[2] & 0xC0) == 0x80 {
+                                let packet_len = u16::from_be_bytes([stream_buffer[0], stream_buffer[1]]) as usize;
+                                if packet_len >= 12 && packet_len <= 65535 {
+                                    if stream_buffer.len() < 2 + packet_len {
+                                        break; // Incomplete packet, wait for next USB chunk
+                                    }
+                                    let rtp_packet = &stream_buffer[2..2 + packet_len];
+                                    let is_marker = (rtp_packet[1] & 0x80) != 0;
+                                    let payload = &rtp_packet[12..];
+
+                                    parsed_nals.clear();
+                                    parse_rtp_h264_payload(payload, &mut nal_buffer, &mut parsed_nals);
+                                    for nal in &parsed_nals {
+                                        session.decode_nal(nal);
+                                    }
+
+                                    if is_marker {
+                                        // End of video frame signaled by RTP Marker bit
+                                        session.drain_decoded_frames();
+                                        pending_flush = false;
+                                    }
+
+                                    stream_buffer.drain(0..2 + packet_len);
+                                    continue;
+                                }
+                            } else if stream_buffer.len() >= 12 && &stream_buffer[0..4] == b"EXMO" {
+                                let flags = stream_buffer[4];
+                                let payload_len = u32::from_be_bytes([stream_buffer[8], stream_buffer[9], stream_buffer[10], stream_buffer[11]]) as usize;
+                                if stream_buffer.len() < 12 + payload_len {
+                                    break;
+                                }
+                                let payload = &stream_buffer[12..12 + payload_len];
+                                session.decode_nal(payload);
+                                if (flags & 0x01) != 0 {
+                                    session.drain_decoded_frames();
+                                    pending_flush = false;
+                                }
+                                stream_buffer.drain(0..12 + payload_len);
+                                continue;
+                            }
+
+                            // Raw Annex-B fallback: process discrete NALs
+                            parsed_nals.clear();
+                            parser.push_and_extract(&stream_buffer, &mut parsed_nals);
+                            for nal in &parsed_nals {
+                                session.decode_nal(nal);
+                            }
+                            stream_buffer.clear();
+                            break;
+                        }
+                    }
+                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                        session.drain_decoded_frames();
+                        // CRITICAL: FunctionFS data endpoints lack kernel poll handler.
+                        // Sleeping 500µs prevents 100% ARM CPU busy-loop saturation.
+                        thread::sleep(Duration::from_micros(500));
+                    }
+                    Err(e) => {
+                        eprintln!("\x1b[1;31m[native-v4l2]\x1b[0m USB Bulk stream read error: {}", e);
+                        break;
+                    }
                 }
-                Ok(n) => {
-                    session.decode_nal(&buf[..n]);
+            } else if poll_ret == 0 {
+                session.drain_decoded_frames();
+                thread::sleep(Duration::from_micros(500));
+            } else {
+                session.drain_decoded_frames();
+                thread::sleep(Duration::from_micros(500));
+            }
+
+            // Flush DPB hardware pipeline if idle: inject AUD (Access Unit Delimiter) to commit any trapped frame
+            if pending_flush && last_packet_time.elapsed() >= Duration::from_millis(20) {
+                parsed_nals.clear();
+                parser.flush_pending(&mut parsed_nals);
+                for nal in &parsed_nals {
+                    session.decode_nal(nal);
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    session.drain_decoded_frames();
-                    thread::sleep(Duration::from_millis(2));
-                }
-                Err(e) => {
-                    eprintln!("\x1b[1;31m[native-v4l2]\x1b[0m USB Bulk stream read error: {}", e);
-                    break;
-                }
+                // H.264 Access Unit Delimiter (AUD NAL type 9) commits any pending slice in VideoCore IV VPU
+                static AUD_DELIMITER: [u8; 6] = [0x00, 0x00, 0x00, 0x01, 0x09, 0xF0];
+                session.decode_nal(&AUD_DELIMITER);
+                session.drain_decoded_frames();
+                pending_flush = false;
             }
         }
+    }
+}
+
+/// Helper to assemble discrete, complete Annex-B Access Units (full video frames) from a continuous byte stream
+pub struct AnnexBStreamParser {
+    accumulator: Vec<u8>,
+    current_frame: Vec<u8>,
+    has_slice: bool,
+}
+
+impl AnnexBStreamParser {
+    pub fn new() -> Self {
+        Self {
+            accumulator: Vec::with_capacity(256 * 1024),
+            current_frame: Vec::with_capacity(256 * 1024),
+            has_slice: false,
+        }
+    }
+
+    pub fn push_and_extract(&mut self, data: &[u8], frames: &mut Vec<Vec<u8>>) {
+        if data.is_empty() {
+            return;
+        }
+        self.accumulator.extend_from_slice(data);
+        self.extract_frames(frames);
+    }
+
+    pub fn flush_pending(&mut self, frames: &mut Vec<Vec<u8>>) {
+        // If accumulator contains an in-progress NAL unit without a subsequent start code,
+        // move it into current_frame so it is never trapped waiting for next mouse motion
+        if let Some((first_offset, _)) = Self::find_start_code(&self.accumulator, 0) {
+            let nal = &self.accumulator[first_offset..];
+            let start_prefix_len = if nal.starts_with(&[0, 0, 0, 1]) { 4 } else { 3 };
+            if nal.len() > start_prefix_len {
+                let nal_type = nal[start_prefix_len] & 0x1F;
+                if nal_type == 1 || nal_type == 5 {
+                    self.has_slice = true;
+                }
+                if nal.starts_with(&[0, 0, 0, 1]) {
+                    self.current_frame.extend_from_slice(nal);
+                } else {
+                    self.current_frame.extend_from_slice(&[0, 0, 0, 1]);
+                    self.current_frame.extend_from_slice(&nal[start_prefix_len..]);
+                }
+            }
+            self.accumulator.clear();
+        }
+
+        // Flush completed frame to decoder
+        if !self.current_frame.is_empty() {
+            frames.push(std::mem::take(&mut self.current_frame));
+            self.current_frame.reserve(256 * 1024);
+            self.has_slice = false;
+        }
+    }
+
+    fn extract_frames(&mut self, frames: &mut Vec<Vec<u8>>) {
+        // Discard any garbage before the first start code
+        if let Some((first_offset, _)) = Self::find_start_code(&self.accumulator, 0) {
+            if first_offset > 0 {
+                self.accumulator.drain(0..first_offset);
+            }
+        } else {
+            if self.accumulator.len() > 3 {
+                let keep_start = self.accumulator.len() - 3;
+                self.accumulator.drain(0..keep_start);
+            }
+            return;
+        }
+
+        // Loop extracting complete NAL units from the accumulator
+        loop {
+            if self.accumulator.len() < 4 {
+                break;
+            }
+
+            let start_prefix_len = if self.accumulator.starts_with(&[0, 0, 0, 1]) {
+                4
+            } else if self.accumulator.starts_with(&[0, 0, 1]) {
+                3
+            } else {
+                break;
+            };
+
+            // Search for the next start code to know where the current NAL ends
+            if let Some((next_offset, _)) = Self::find_start_code(&self.accumulator, start_prefix_len) {
+                let nal = &self.accumulator[0..next_offset];
+                
+                // Inspect NAL type and slice header
+                let header_idx = start_prefix_len;
+                if header_idx < nal.len() {
+                    let nal_type = nal[header_idx] & 0x1F;
+                    let is_first_slice = if (nal_type == 1 || nal_type == 5) && nal.len() > header_idx + 1 {
+                        (nal[header_idx + 1] & 0x80) != 0
+                    } else {
+                        false
+                    };
+
+                    let is_new_frame = nal_type == 9 // AUD
+                        || nal_type == 7 // SPS
+                        || (nal_type == 8 && self.has_slice) // PPS following existing frame
+                        || is_first_slice;
+
+                    // If this NAL starts a new frame and the current frame already has video slices:
+                    if is_new_frame && self.has_slice && !self.current_frame.is_empty() {
+                        let completed = std::mem::take(&mut self.current_frame);
+                        self.current_frame.reserve(256 * 1024);
+                        frames.push(completed);
+                        self.has_slice = false;
+                    }
+
+                    if nal_type == 1 || nal_type == 5 {
+                        self.has_slice = true;
+                    }
+                }
+
+                // Append this NAL unit (with standard 4-byte 00 00 00 01 start code) to current frame
+                if nal.starts_with(&[0, 0, 0, 1]) {
+                    self.current_frame.extend_from_slice(nal);
+                } else if nal.starts_with(&[0, 0, 1]) {
+                    self.current_frame.push(0);
+                    self.current_frame.extend_from_slice(nal);
+                } else {
+                    self.current_frame.extend_from_slice(&[0, 0, 0, 1]);
+                    self.current_frame.extend_from_slice(nal);
+                }
+
+                self.accumulator.drain(0..next_offset);
+            } else {
+                // Next start code not found yet. Current NAL is incomplete, wait for more data.
+                break;
+            }
+        }
+    }
+
+    fn find_start_code(data: &[u8], start: usize) -> Option<(usize, usize)> {
+        if data.len() < start + 3 {
+            return None;
+        }
+        let limit = data.len();
+        let mut i = start;
+        while i + 2 < limit {
+            if data[i] == 0 && data[i + 1] == 0 {
+                if data[i + 2] == 1 {
+                    return Some((i, 3));
+                }
+                if i + 3 < limit && data[i + 2] == 0 && data[i + 3] == 1 {
+                    return Some((i, 4));
+                }
+            }
+            i += 1;
+        }
+        None
     }
 }
 

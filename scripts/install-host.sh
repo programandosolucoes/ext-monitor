@@ -83,7 +83,7 @@ if [ -d "$DESKTOP_DIR" ]; then
 [Desktop Entry]
 Name=Ext-Monitor (Segunda Tela Pi Zero)
 Comment=Estende sua área de trabalho para a TV/monitor via Raspberry Pi Zero
-Exec=/usr/local/bin/ext-monitor-start extend auto 30 false economy --bitrate=800
+Exec=/usr/local/bin/ext-monitor-start extend auto 30 false full --bitrate=3000
 Icon=video-display
 Terminal=true
 Type=Application

@@ -50,4 +50,4 @@ notify-send -u normal -i video-display "Pi Zero Monitor" "Raspberry Pi Zero onli
 # Executa o inicializador com as configurações recomendadas
 echo "[*] [UDEV Autoconnect] Disparando ext-sender na sessão do usuário..."
 cd "$REPO_DIR" || exit 1
-exec ./scripts/start.sh extend auto 12 hud 256
+exec ./scripts/start.sh extend auto 30 hud full

@@ -17,7 +17,7 @@ TARGET_PORT="${TARGET_PORT:-5000}"
 BITRATE="${BITRATE:-0}"
 
 # Check for flags, custom IP arguments, and color profiles
-COLOR_FLAG=""
+COLOR_FLAG="full"
 EXTRA_FLAGS=()
 for arg in "$@"; do
     if [ "$arg" = "hud" ] || [ "$arg" = "--hud" ]; then
@@ -29,6 +29,8 @@ for arg in "$@"; do
         fi
     elif [ "$arg" = "gray" ] || [ "$arg" = "--gray" ] || [ "$arg" = "bw" ] || [ "$arg" = "--bw" ]; then
         COLOR_FLAG="gray"
+    elif [ "$arg" = "full" ] || [ "$arg" = "--full" ] || [ "$arg" = "24bit" ] || [ "$arg" = "--24bit" ] || [ "$arg" = "truecolor" ] || [ "$arg" = "--truecolor" ]; then
+        COLOR_FLAG="full"
     elif [[ "$arg" =~ ^--bitrate=([0-9]+)$ ]]; then
         BITRATE="${BASH_REMATCH[1]}"
     elif [[ "$arg" =~ ^-b=([0-9]+)$ ]]; then

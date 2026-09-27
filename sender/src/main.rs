@@ -161,10 +161,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ColorProfile::TrueColor
     };
 
-    let mut drop_only = if args.iter().any(|a| a == "--no-drop-only" || a == "--drop-only=false") {
-        false
-    } else {
+    let mut drop_only = if args.iter().any(|a| a == "--drop-only" || a == "--drop-only=true") {
         true
+    } else {
+        false // Continuous frame delivery: guarantees smooth playback (e.g. YouTube) without freezing when mouse leaves screen
     };
     let mut skip_to_first = if args.iter().any(|a| a == "--no-skip-to-first" || a == "--skip-to-first=false") {
         false
@@ -204,7 +204,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\x1b[1;33m[*] Transport Mode: USB Bulk Direct (Mode 2 - Zero Network Stack)\x1b[0m");
         match usb_transport::open_usb_display_device() {
             Ok((handle, iface_num, ep_out)) => {
-                unsafe { libc::pipe(pipe_fds.as_mut_ptr()); }
+                unsafe {
+                    libc::pipe(pipe_fds.as_mut_ptr());
+                    const F_SETPIPE_SZ: libc::c_int = 1031;
+                    libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 1024 * 1024);
+                }
                 let read_fd = pipe_fds[0];
                 let write_fd = pipe_fds[1];
                 let _ = usb_transport::spawn_usb_bulk_writer(handle, read_fd, running.clone(), iface_num, ep_out);
@@ -354,9 +358,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("\x1b[1;32m[+] PipeWire Node ID for {}:\x1b[0m {}", monitor_to_record, node_id);
 
-        // Spawn hardware streaming pipeline with autoconnect=false
+        // Spawn hardware streaming pipeline with direct node_id connection
         println!("\x1b[1;33m[*] Starting {:?} hardware streaming pipeline via {} ({} FPS, HUD: {}, Color: {:?}, drop-only: {}, skip-to-first: {}, IDR: {})...\x1b[0m", encoder, stream_engine.name(), fps, hud_showing, color_profile, drop_only, skip_to_first, key_int_max);
-        let mut child = match spawn_streamer(stream_engine, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, drop_only, skip_to_first, key_int_max, pipe_write_fd) {
+        let mut child = match spawn_streamer(stream_engine, node_id, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, drop_only, skip_to_first, key_int_max, pipe_write_fd) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("\x1b[1;31m[!] Failed to spawn streamer: {}. Retrying in 2s...\x1b[0m", e);
@@ -476,7 +480,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\x1b[1;36m[*] Hot-applying configuration (FPS: {}, Color: {:?}, HUD: {}, drop-only: {}, skip-to-first: {}, IDR: {})...\x1b[0m", fps, color_profile, hud_showing, drop_only, skip_to_first, key_int_max);
                 let _ = child.kill();
                 let _ = child.wait();
-                child = match spawn_streamer(stream_engine, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, drop_only, skip_to_first, key_int_max, pipe_write_fd) {
+                child = match spawn_streamer(stream_engine, node_id, target_ip, target_port, bitrate, encoder, fps, hud_showing, color_profile, drop_only, skip_to_first, key_int_max, pipe_write_fd) {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("\x1b[1;31m[!] Failed to restart streamer: {}\x1b[0m", e);
@@ -652,6 +656,7 @@ fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
 
 fn spawn_streamer(
     engine: StreamEngine,
+    node_id: u32,
     target_ip: &str,
     target_port: u16,
     bitrate: u32,
@@ -680,7 +685,7 @@ fn spawn_streamer(
             Ok(StreamerHandle::Child(child))
         }
         StreamEngine::GStreamer => {
-            let child = spawn_gst_streamer(target_ip, target_port, bitrate, encoder, fps, hud, color_profile, drop_only, skip_to_first, key_int_max, usb_pipe_fd)?;
+            let child = spawn_gst_streamer(node_id, target_ip, target_port, bitrate, encoder, fps, hud, color_profile, drop_only, skip_to_first, key_int_max, usb_pipe_fd)?;
             Ok(StreamerHandle::Child(child))
         }
     }
@@ -758,6 +763,7 @@ fn spawn_ffmpeg_streamer(
 }
 
 fn spawn_gst_streamer(
+    node_id: u32,
     target_ip: &str,
     target_port: u16,
     bitrate: u32,
@@ -773,17 +779,27 @@ fn spawn_gst_streamer(
     let mut cmd = Command::new("gst-launch-1.0");
     cmd.arg("-v");
 
-    // 1. PipeWire source with minimal buffers to eliminate latency
+    // 1. PipeWire source with direct ScreenCast stream connection
+    let keepalive_ms = (1000 / fps).max(10);
     cmd.arg("pipewiresrc")
-        .arg("autoconnect=false")
+        .arg(format!("path={}", node_id))
         .arg("stream-properties=props,node.name=ext-hdmi-sender")
         .arg("do-timestamp=true")
+        .arg(format!("keepalive-time={}", keepalive_ms))
         .arg("min-buffers=2")
         .arg("max-buffers=2")
         .arg("always-copy=false")
+        .arg("!")
+        .arg("queue")
+        .arg("max-size-buffers=2")
+        .arg("max-size-bytes=0")
+        .arg("max-size-time=0")
+        .arg("leaky=downstream")
+        .arg("!")
+        .arg(format!("video/x-raw,max-framerate={}/1", fps))
         .arg("!");
 
-    // 2. Framerate normalization with frame skipping (drop-only preserves static screen and saves bitrate)
+    // 2. Framerate normalization with continuous frame delivery (guarantees smooth playback like YouTube even when mouse leaves screen)
     cmd.arg("videorate")
         .arg(format!("drop-only={}", drop_only))
         .arg(format!("skip-to-first={}", skip_to_first))
@@ -795,16 +811,16 @@ fn spawn_gst_streamer(
     if hud {
         println!("\x1b[1;35m[+] Injecting Advanced On-Screen Diagnostic Telemetry HUD with Glass Transparency...\x1b[0m");
         let avg_pct = if color_profile == ColorProfile::Economy256 { 50 } else { 75 };
-        let hud_text = format!(
-            "text=\"[ PI ZERO EXTENDED MONITOR • ACTIVE ]\nPanel:    1600x900@59.95Hz (Native 1:1)\nStream:   {} FPS | Drop-on-Late (3x LIFO)\nColor:    {}\nRate:     Adaptive VBR ({}k cap / {}% avg)\nVPU:      Broadcom VideoCore IV @ 500MHz (+25% OC)\nCPU:      ARM1176 Load ~22% | RAM: ~141 MiB\nNetwork:  USB OTG (RTT 0.34ms, txq: 100)\nSync:     IDR Interval {} frames (drop-only={})\nWeb:      http://{}:8080 (Auto-hide in 60s)\"",
+        let hud_content = format!(
+            "text=\"[ PI ZERO EXTENDED MONITOR • ACTIVE ]\\nPanel:    1600x900@59.95Hz (Native 1:1)\\nStream:   {} FPS | Drop-on-Late (3x LIFO)\\nColor:    {}\\nRate:     Adaptive VBR ({}k cap / {}% avg)\\nVPU:      Broadcom VideoCore IV @ 500MHz (+25% OC)\\nCPU:      ARM1176 Load ~22% | RAM: ~141 MiB\\nNetwork:  USB OTG (RTT 0.34ms, txq: 100)\\nSync:     IDR Interval {} frames (drop-only={})\\nWeb:      http://{}:8080 (Auto-hide in 60s)\"",
             fps, color_profile.name(), bitrate, avg_pct, key_int_max, drop_only, target_ip
         );
         cmd.arg("textoverlay")
-            .arg(hud_text)
+            .arg(hud_content)
             .arg("valignment=top")
             .arg("halignment=right")
             .arg("line-alignment=left")
-            .arg("font-desc=\"Monospace Bold 10\"")
+            .arg("font-desc=Monospace Bold 10")
             .arg("color=0xFF00FF66")
             .arg("outline-color=0x80000000")
             .arg("draw-outline=true")
@@ -814,10 +830,10 @@ fn spawn_gst_streamer(
             .arg("ypad=12")
             .arg("!")
             .arg("clockoverlay")
-            .arg("time-format=\"%H:%M:%S\"")
+            .arg("time-format=%H:%M:%S")
             .arg("valignment=top")
             .arg("halignment=left")
-            .arg("font-desc=\"Monospace Bold 11\"")
+            .arg("font-desc=Monospace Bold 11")
             .arg("color=0xFF00E5FF")
             .arg("outline-color=0x80000000")
             .arg("draw-outline=true")
@@ -830,7 +846,7 @@ fn spawn_gst_streamer(
             .arg("valignment=top")
             .arg("halignment=left")
             .arg("deltay=28")
-            .arg("font-desc=\"Monospace Bold 10\"")
+            .arg("font-desc=Monospace Bold 10")
             .arg("color=0xFFFFFFFF")
             .arg("outline-color=0x80000000")
             .arg("draw-outline=true")
@@ -859,6 +875,8 @@ fn spawn_gst_streamer(
             }
 
             cmd.arg("vapostproc")
+                .arg("!")
+                .arg("video/x-raw(memory:VAMemory),width=1280,height=720")
                 .arg("!")
                 .arg("vah264enc")
                 .arg(format!("bitrate={}", bitrate))
@@ -894,9 +912,11 @@ fn spawn_gst_streamer(
         }
         EncoderApi::Nvenc => {
             println!("\x1b[1;36m[+] Initializing NVIDIA NVENC Zero-Latency GPU Pipeline...\x1b[0m");
-            cmd.arg("videoconvert")
+            cmd.arg("videoscale")
                 .arg("!")
-                .arg("video/x-raw,format=NV12")
+                .arg("videoconvert")
+                .arg("!")
+                .arg("video/x-raw,format=NV12,width=1280,height=720")
                 .arg("!")
                 .arg("nvh264enc")
                 .arg(format!("bitrate={}", bitrate))
@@ -909,9 +929,11 @@ fn spawn_gst_streamer(
         }
         EncoderApi::Qsv => {
             println!("\x1b[1;36m[+] Initializing Intel QuickSync (QSV) GPU Pipeline...\x1b[0m");
-            cmd.arg("videoconvert")
+            cmd.arg("videoscale")
                 .arg("!")
-                .arg("video/x-raw,format=NV12")
+                .arg("videoconvert")
+                .arg("!")
+                .arg("video/x-raw,format=NV12,width=1280,height=720")
                 .arg("!")
                 .arg("qsvh264enc")
                 .arg(format!("bitrate={}", bitrate))
@@ -923,9 +945,11 @@ fn spawn_gst_streamer(
         }
         EncoderApi::Software => {
             println!("\x1b[1;36m[+] Initializing CPU Software x264 (Zero-Latency Ultrafast)...\x1b[0m");
-            cmd.arg("videoconvert")
+            cmd.arg("videoscale")
                 .arg("!")
-                .arg("video/x-raw,format=I420")
+                .arg("videoconvert")
+                .arg("!")
+                .arg("video/x-raw,format=I420,width=1280,height=720")
                 .arg("!")
                 .arg("x264enc")
                 .arg(format!("bitrate={}", bitrate))
@@ -934,30 +958,39 @@ fn spawn_gst_streamer(
                 .arg("b-frames=0")
                 .arg("ref-frames=1")
                 .arg(format!("key-int-max={}", key_int_max))
+                .arg("byte-stream=true")
+                .arg("aud=true")
+                .arg("sliced-threads=false")
                 .arg("!");
         }
     }
 
-    // 6. Post-Encoder Leaky Queue & Output Sink (UDP RTP or USB Bulk Pipe)
-    cmd.arg("h264parse")
-        .arg("config-interval=-1")
-        .arg("!")
-        .arg("queue")
-        .arg("max-size-buffers=1")
-        .arg("max-size-bytes=0")
-        .arg("max-size-time=0")
-        .arg("leaky=downstream")
+    // 6. Post-Encoder RTP Payloader & Output Sink (RFC 4571 framed for USB, direct UDP for Network)
+    cmd.arg("rtph264pay")
+        .arg("config-interval=1")
+        .arg("pt=96")
+        .arg("aggregate-mode=none")
         .arg("!");
 
     if let Some(fd) = usb_pipe_fd {
-        cmd.arg("fdsink")
+        // RFC 4571: 2-byte length-delimited RTP streaming over USB Bulk Pipe
+        cmd.arg("rtpstreampay")
+            .arg("!")
+            .arg("queue")
+            .arg("max-size-buffers=8")
+            .arg("max-size-bytes=0")
+            .arg("max-size-time=0")
+            .arg("leaky=downstream")
+            .arg("!")
+            .arg("fdsink")
             .arg(format!("fd={}", fd))
             .arg("sync=false");
     } else {
-        cmd.arg("rtph264pay")
-            .arg("config-interval=1")
-            .arg("pt=96")
-            .arg("aggregate-mode=none")
+        cmd.arg("queue")
+            .arg("max-size-buffers=4")
+            .arg("max-size-bytes=0")
+            .arg("max-size-time=0")
+            .arg("leaky=downstream")
             .arg("!")
             .arg("udpsink")
             .arg(format!("host={}", target_ip))
@@ -1011,20 +1044,21 @@ fn ensure_gnome_displays() {
             1
         };
 
-        let is_logical = stdout.contains("('HDMI-1', 'LRX'") || stdout.contains("[('HDMI-1'");
+        let is_logical = (stdout.contains("('HDMI-1', 'LRX'") || stdout.contains("[('HDMI-1'"))
+            && stdout.contains("'1280x720@60.000'");
         (serial, is_logical)
     } else {
         (1, false)
     };
 
     if is_configured {
-        println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1 in extended mode.\x1b[0m");
+        println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1 in extended mode (1280x720@60).\x1b[0m");
         return;
     }
 
-    println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side, serial={})...\x1b[0m", serial);
+    println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side 1280x720@60, serial={})...\x1b[0m", serial);
     let apply_cmd = format!(
-        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '1600x900@59.946', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '1280x720@60.000', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
         serial
     );
     let _ = Command::new("bash").arg("-c").arg(&apply_cmd).status();
@@ -1070,7 +1104,7 @@ fn is_pipewire_node_alive(node_id: u32) -> bool {
 fn is_sender_linked() -> bool {
     if let Ok(output) = Command::new("pw-link").arg("-l").output() {
         let s = String::from_utf8_lossy(&output.stdout);
-        return s.contains("ext-hdmi-sender:input_1");
+        return s.contains("ext-hdmi-sender") || s.contains("gst-launch");
     }
     true
 }

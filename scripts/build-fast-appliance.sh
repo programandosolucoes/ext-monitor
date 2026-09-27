@@ -63,7 +63,7 @@ Instruções Rápidas:
 2. Para instalar o driver de sistema de forma permanente:
      sudo ./install-host.sh
 3. Ou para iniciar imediatamente sem instalar nada no sistema:
-     ./start.sh extend auto 30 false economy --bitrate=400
+     ./start.sh extend auto 30 false full --bitrate=3000
 ========================================================================
 EOF
     chmod +x "${TMP_CLIENT}"/*.sh "${TMP_CLIENT}/ext-sender" "${TMP_CLIENT}/show-welcome-window.py" 2>/dev/null || true

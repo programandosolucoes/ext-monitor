@@ -113,7 +113,10 @@ pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), Stri
     ))
 }
 
-/// Spawns background worker thread pumping raw H.264 data into the USB Bulk OUT endpoint
+pub const USB_MAGIC: [u8; 4] = *b"EXMO";
+pub const FLAG_EOF: u8 = 0x01; // End of Frame marker bit
+
+/// Spawns background worker thread pumping framed H.264 data into the USB Bulk OUT endpoint
 pub fn spawn_usb_bulk_writer(
     handle: DeviceHandle<Context>,
     pipe_read_fd: RawFd,
@@ -123,12 +126,12 @@ pub fn spawn_usb_bulk_writer(
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         println!(
-            "\x1b[1;32m[usb-transport]\x1b[0m USB Bulk streaming thread active on Endpoint 0x{:02x}...",
+            "\x1b[1;32m[usb-transport]\x1b[0m USB Bulk streaming thread active on Endpoint 0x{:02x} (RFC 4571 Framed RTP + ZLP)...",
             ep_out
         );
 
         let mut file = unsafe { std::fs::File::from_raw_fd(pipe_read_fd) };
-        let mut buffer = [0u8; 16384]; // 16 KB chunks for high throughput on USB 2.0 High-Speed bus
+        let mut buffer = [0u8; 65536]; // 64 KB chunk size matching OS pipe capacity
 
         let mut total_bytes = 0u64;
         let mut last_log = std::time::Instant::now();
@@ -141,19 +144,42 @@ pub fn spawn_usb_bulk_writer(
                 }
                 Ok(n) => {
                     let mut offset = 0;
+                    let mut retries = 0;
                     while offset < n && running.load(Ordering::SeqCst) {
                         let slice = &buffer[offset..n];
                         match handle.write_bulk(ep_out, slice, Duration::from_millis(500)) {
                             Ok(written) => {
                                 offset += written;
                                 total_bytes += written as u64;
+                                retries = 0;
+                            }
+                            Err(rusb::Error::Pipe) => {
+                                eprintln!("\x1b[1;33m[usb-transport]\x1b[0m Endpoint halted (stall), clearing halt...");
+                                let _ = handle.clear_halt(ep_out);
+                                retries += 1;
+                                if retries > 3 {
+                                    break; // Drop remaining to unblock video pipe
+                                }
+                                thread::sleep(Duration::from_millis(5));
+                            }
+                            Err(rusb::Error::Timeout) => {
+                                retries += 1;
+                                if retries > 2 {
+                                    // Drop remaining part of this frame chunk to prevent pipe deadlock
+                                    break;
+                                }
+                                thread::sleep(Duration::from_millis(5));
                             }
                             Err(e) => {
-                                eprintln!("\x1b[1;31m[usb-transport]\x1b[0m write_bulk USB error: {}", e);
-                                thread::sleep(Duration::from_millis(50));
-                                break;
+                                eprintln!("\x1b[1;31m[usb-transport]\x1b[0m USB write error: {}. Exiting writer thread.", e);
+                                return;
                             }
                         }
+                    }
+
+                    // Critical USB Bulk Protocol Rule: If transfer is exact multiple of 512, send ZLP
+                    if n % 512 == 0 && offset == n {
+                        let _ = handle.write_bulk(ep_out, &[], Duration::from_millis(50));
                     }
 
                     if last_log.elapsed() >= Duration::from_secs(5) {
@@ -166,7 +192,7 @@ pub fn spawn_usb_bulk_writer(
                     }
                 }
                 Err(e) => {
-                    eprintln!("\x1b[1;31m[usb-transport]\x1b[0m Error reading from video pipe: {}", e);
+                    eprintln!("\x1b[1;31m[usb-transport]\x1b[0m Pipe read error: {}. Exiting.", e);
                     break;
                 }
             }

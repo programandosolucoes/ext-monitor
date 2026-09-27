@@ -42,7 +42,7 @@ static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
     fps: 30,
     bitrate: 400,
     color: String::new(),
-    drop_only: true,
+    drop_only: false,
     skip_to_first: true,
     key_int_max: 30,
     mode1: true,
@@ -148,13 +148,13 @@ fn handle_http_client(
         }
         ("GET", "/api/config") => {
             let json = if let Ok(cfg) = CONFIG.lock() {
-                let col = if cfg.color.is_empty() { "256" } else { &cfg.color };
+                let col = if cfg.color.is_empty() { "full" } else { &cfg.color };
                 format!(
                     "{{\"fps\":{},\"bitrate\":{},\"color\":\"{}\",\"drop_only\":{},\"skip_to_first\":{},\"key_int_max\":{},\"mode1\":{},\"mode2\":{},\"mode3\":{}}}",
                     cfg.fps, cfg.bitrate, col, cfg.drop_only, cfg.skip_to_first, cfg.key_int_max, cfg.mode1, cfg.mode2, cfg.mode3
                 )
             } else {
-                "{\"fps\":30,\"bitrate\":400,\"color\":\"256\",\"drop_only\":true,\"skip_to_first\":true,\"key_int_max\":30,\"mode1\":true,\"mode2\":true,\"mode3\":true}".to_string()
+                "{\"fps\":30,\"bitrate\":400,\"color\":\"full\",\"drop_only\":false,\"skip_to_first\":true,\"key_int_max\":30,\"mode1\":true,\"mode2\":true,\"mode3\":true}".to_string()
             };
             send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
         }
