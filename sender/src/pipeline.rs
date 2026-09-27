@@ -93,7 +93,7 @@ impl PipelineBuilder {
 
     fn spawn_gstreamer(&self) -> io::Result<Child> {
         let mut cmd = Command::new("gst-launch-1.0");
-        cmd.arg("-v");
+        cmd.arg("-q");
 
         // 1. PipeWire source with clean pw-link port registration
         cmd.arg("pipewiresrc")
@@ -113,23 +113,13 @@ impl PipelineBuilder {
             .arg(format!("video/x-raw,max-framerate={}/1", self.fps))
             .arg("!");
 
-        // 2. Continuous 30 FPS Live Stream Generator (Zero-CPU, Zero-Spinlock)
-        if self.drop_only {
-            cmd.arg("videorate")
-                .arg("drop-only=true")
-                .arg(format!("skip-to-first={}", self.skip_to_first))
-                .arg("!")
-                .arg(format!("video/x-raw,framerate={}/1", self.fps))
-                .arg("!");
-        } else {
-            // Seamless live frame repeater: keeps stream running at solid 30 FPS without futex spinlocks
-            cmd.arg("imagefreeze")
-                .arg("allow-replace=true")
-                .arg("is-live=true")
-                .arg("!")
-                .arg(format!("video/x-raw,framerate={}/1", self.fps))
-                .arg("!");
-        }
+        // 2. Framerate normalization & continuous stream generator (Zero-Spinlock, Ultra-Low Latency)
+        cmd.arg("videorate")
+            .arg(format!("drop-only={}", self.drop_only))
+            .arg(format!("skip-to-first={}", self.skip_to_first))
+            .arg("!")
+            .arg(format!("video/x-raw,framerate={}/1", self.fps))
+            .arg("!");
 
         // 3. Diagnostic On-Screen HUD if active
         if self.hud {

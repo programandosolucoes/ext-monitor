@@ -117,7 +117,10 @@ fn main() {
             if is_idle || has_crashed {
                 if is_usb_bulk_mode {
                     println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring USB Bulk pipeline...");
-                    let _ = usb_bulk::activate_usb_bulk(running.clone(), pipeline_mgr.clone());
+                    if let Err(e) = usb_bulk::activate_usb_bulk(running.clone(), pipeline_mgr.clone()) {
+                        eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to restore USB Bulk: {} (retrying in 2s)", e);
+                        thread::sleep(Duration::from_secs(2));
+                    }
                 } else {
                     let default_kind = PipelineKind::RawH264Rtp { port: udp_port };
                     println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring default Linux UDP pipeline (port {})...", udp_port);
