@@ -113,13 +113,23 @@ impl PipelineBuilder {
             .arg(format!("video/x-raw,max-framerate={}/1", self.fps))
             .arg("!");
 
-        // 2. Framerate normalization (smooth continuous frame delivery)
-        cmd.arg("videorate")
-            .arg(format!("drop-only={}", self.drop_only))
-            .arg(format!("skip-to-first={}", self.skip_to_first))
-            .arg("!")
-            .arg(format!("video/x-raw,framerate={}/1", self.fps))
-            .arg("!");
+        // 2. Continuous 30 FPS Live Stream Generator (Zero-CPU, Zero-Spinlock)
+        if self.drop_only {
+            cmd.arg("videorate")
+                .arg("drop-only=true")
+                .arg(format!("skip-to-first={}", self.skip_to_first))
+                .arg("!")
+                .arg(format!("video/x-raw,framerate={}/1", self.fps))
+                .arg("!");
+        } else {
+            // Seamless live frame repeater: keeps stream running at solid 30 FPS without futex spinlocks
+            cmd.arg("imagefreeze")
+                .arg("allow-replace=true")
+                .arg("is-live=true")
+                .arg("!")
+                .arg(format!("video/x-raw,framerate={}/1", self.fps))
+                .arg("!");
+        }
 
         // 3. Diagnostic On-Screen HUD if active
         if self.hud {
@@ -224,6 +234,8 @@ impl PipelineBuilder {
                 }
 
                 cmd.arg("vapostproc")
+                    .arg("!")
+                    .arg("video/x-raw(memory:VAMemory),width=1280,height=720")
                     .arg("!")
                     .arg("vah264enc")
                     .arg(format!("bitrate={}", self.bitrate))
