@@ -1,9 +1,9 @@
 # Blueprint 02: Arquitetura Transmissor-Receptor e Comparativo Crítico com o Projeto GUD
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto  
-**Arquivos de Referência:** `sender/src/main.rs`, `receiver/src/native_v4l2.rs`, `receiver/src/pipeline.rs`  
-**Data:** Setembro de 2026  
+**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Arquivos de Referência:** `sender/src/main.rs`, `sender/src/pipeline.rs`, `sender/src/screencast.rs`, `receiver/src/decoder/v4l2_m2m.rs`, `receiver/src/stream/rtp.rs`, `receiver/src/display/framebuffer.rs`  
+**Data:** Setembro de 2026 (Atualizado com Refatoração Modular e Enquadramento AU)  
 
 ---
 
@@ -20,21 +20,21 @@ A arquitetura foi desenhada para superar a maior limitação do Raspberry Pi Zer
 |  [ GNOME Mutter Wayland ]                                                         |
 |         │ (Captura de tela virtual HDMI-1 sem dongle físico)                      |
 |         ▼                                                                         |
-|  [ D-Bus Screencast API ] -> Obtém File Descriptor DMA-BUF                        |
+|  [ D-Bus Screencast API ] -> Obtém File Descriptor DMA-BUF (screencast.rs)         |
 |         │                                                                         |
 |         ▼                                                                         |
-|  [ PipeWire Daemon ] -------> Roteamento zero-copy de buffers                     |
+|  [ PipeWire Daemon ] -------> Roteamento zero-copy de buffers (pipewire.rs)       |
 |         │                                                                         |
 |         ▼                                                                         |
-|  [ ext-sender (Rust) ]                                                            |
+|  [ ext-sender (Rust Modular) ]                                                    |
 |         │                                                                         |
 |         ├──> GPU Hardware Encoder: AMD VA-API (vah264enc) / NVENC / Intel QSV     |
 |         │    Perfil: Constrained Baseline | Entropia: CAVLC | IDR: 1 seg          |
-|         │    Bitrate: 400 kbps - 2.5 Mbps (Adaptativo)                            |
+|         │    Bitrate: 400 kbps - 2.5 Mbps (Adaptativo via pipeline.rs)            |
 |         │                                                                         |
-|         ├──> RTP Packetizer: Fragmentador FU-A / NAL slicing                      |
+|         ├──> RTP Packetizer: Fragmentador FU-A / NAL slicing com Marker (M=1)     |
 |         │                                                                         |
-|         └──> UDP Socket (DSCP CS6 / ToS 0xC0) -> Barramento USB CDC-ECM           |
+|         └──> UDP Socket / USB Bulk Writer -> Barramento USB CDC-ECM ou FunctionFS |
 +-----------------------------------------------------------------------------------+
                                           │
                         Cabo Micro-USB OTG (480 Mbps)
@@ -46,11 +46,12 @@ A arquitetura foi desenhada para superar a maior limitação do Raspberry Pi Zer
 |                                                                                   |
 |  [ Linux Kernel (initramfs 100% RAM) ]                                            |
 |         │                                                                         |
-|  [ UDP Socket (Porta 5000, SO_RCVBUF = 2MB, No-Delay) ]                           |
+|  [ Ingress Worker (UDP port 5000 / FunctionFS ep1) ]                              |
 |         │                                                                         |
 |  [ ext-receiver (Rust Nativo - ARMv6 Hard-Float) ]                                |
 |         │                                                                         |
-|         ├──> RTP Depacketizer (Montador de NALUs STAP-A & FU-A)                   |
+|         ├──> RtpDepayloader (Remontador de Access Units RFC 6184 / RFC 4571)      |
+|         │    Só emite o frame com Marker=1 (Elimina faixas verdes e fatias rotas) |
 |         │                                                                         |
 |         ├──> Leaky Queue (Descarte proativo de pacotes atrasados - Drop-on-Late)  |
 |         │                                                                         |
@@ -58,6 +59,10 @@ A arquitetura foi desenhada para superar a maior limitação do Raspberry Pi Zer
 |                     │                                                             |
 |                     ├──> Hardware VPU Pipeline (Decodificação H.264 por silício)  |
 |                     │    Uso de CPU ARM: < 1.0% | Temperatura: ~44°C              |
+|                     │                                                             |
+|                     ├──> Color Space Converter (SIMD YUV420/NV12 -> RGB565)       |
+|                     │                                                             |
+|                     └──> FramebufferSink (/dev/fb0 - Blit Direto Zero-Copy HDMI)  |
 |                     │                                                             |
 |                     └──> Blit Não-Bloqueante MMIO (/dev/fb0)                      |
 |                                 │                                                 |

@@ -8,6 +8,7 @@
 
 use crate::decoder::v4l2_types::*;
 use std::fs::{File, OpenOptions};
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::time::Instant;
 
@@ -46,9 +47,14 @@ impl V4l2DecoderSession {
         let video_file = OpenOptions::new()
             .read(true)
             .write(true)
+            .custom_flags(libc::O_NONBLOCK)
             .open("/dev/video10")
             .ok()?;
         let video_fd = video_file.as_raw_fd();
+        unsafe {
+            let flags = libc::fcntl(video_fd, libc::F_GETFL, 0);
+            libc::fcntl(video_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
 
         // 0. Enumerate and log supported formats on /dev/video10
         println!("\x1b[1;34m[v4l2-m2m]\x1b[0m Probing formats on /dev/video10:");
@@ -262,7 +268,48 @@ impl V4l2DecoderSession {
         })
     }
 
-    /// Queues a complete Access Unit (H.264 frame) into the hardware decoder
+    /// Feeds an encoded chunk/AU and drains decoded frames, ensuring the CAPTURE queue never starves the OUTPUT queue
+    pub fn decode_chunk<F: FnMut(&[u8])>(&mut self, chunk: &[u8], mut on_frame: F) {
+        if chunk.is_empty() || self.out_ptrs.is_empty() {
+            return;
+        }
+
+        // 1. Drain ready decoded frames to free up VPU capture slots
+        self.drain_decoded_frames(&mut on_frame);
+        self.reclaim_output_buffers();
+
+        // 2. Acquire a free output buffer, actively draining capture frames while waiting
+        let idx = match self.free_out_indices.pop() {
+            Some(i) => i,
+            None => {
+                let mut acquired = None;
+                for _ in 0..100 {
+                    self.drain_decoded_frames(&mut on_frame);
+                    self.reclaim_output_buffers();
+                    if let Some(i) = self.free_out_indices.pop() {
+                        acquired = Some(i);
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_micros(500));
+                }
+                match acquired {
+                    Some(i) => i,
+                    None => {
+                        eprintln!("\x1b[1;31m[v4l2-m2m]\x1b[0m Hardware VPU buffer wait timeout ({} bytes)", chunk.len());
+                        return;
+                    }
+                }
+            }
+        };
+
+        // 3. Submit chunk to hardware
+        self.submit_to_buffer(idx, chunk);
+
+        // 4. Drain newly decoded frames immediately
+        self.drain_decoded_frames(&mut on_frame);
+    }
+
+    #[allow(dead_code)]
     pub fn queue_encoded_access_unit(&mut self, au: &[u8]) -> bool {
         if au.is_empty() || self.out_ptrs.is_empty() {
             return false;
@@ -274,7 +321,7 @@ impl V4l2DecoderSession {
             Some(i) => i,
             None => {
                 // All output buffers are queued. Wait briefly for hardware to release one.
-                for _ in 0..10 {
+                for _ in 0..50 {
                     std::thread::sleep(std::time::Duration::from_millis(1));
                     self.reclaim_output_buffers();
                     if let Some(i) = self.free_out_indices.pop() {
@@ -373,8 +420,19 @@ impl V4l2DecoderSession {
             }
 
             // Re-queue capture buffer immediately
-            unsafe {
-                libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut cap_buf);
+            let mut requeue_plane = V4l2Plane::default();
+            let mut requeue_buf = V4l2Buffer {
+                index: cap_buf.index,
+                buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+                memory: V4L2_MEMORY_MMAP,
+                planes_ptr: &mut requeue_plane as *mut _ as u32,
+                length: 1,
+                ..Default::default()
+            };
+            let q_ret = unsafe { libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut requeue_buf) };
+            if q_ret != 0 {
+                let err = std::io::Error::last_os_error();
+                eprintln!("\x1b[1;31m[v4l2-m2m]\x1b[0m CAPTURE VIDIOC_QBUF[{}] failed: {}", cap_buf.index, err);
             }
         }
     }

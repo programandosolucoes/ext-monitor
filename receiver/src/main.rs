@@ -16,11 +16,15 @@
 //! License: MIT
 //! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
 
+mod decoder;
+mod display;
 mod drm;
 pub mod dhcp;
 mod i18n;
+mod ingress;
 mod native_v4l2;
 mod pipeline;
+mod stream;
 mod usb_bulk;
 mod web;
 mod web_ui;
