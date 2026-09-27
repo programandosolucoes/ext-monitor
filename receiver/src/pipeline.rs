@@ -354,7 +354,12 @@ impl PipelineManager {
                 }
             }
         } else {
-            false
+            let native_guard = self.native_decoder.lock().unwrap();
+            if let Some(ref dec) = *native_guard {
+                dec.has_exited()
+            } else {
+                false
+            }
         }
     }
 }
