@@ -247,6 +247,75 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         }
         .slider-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem; }
 
+        /* Interactive Cyberpunk Tooltips */
+        .tip-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: help;
+        }
+        .tip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(0, 229, 255, 0.15);
+            border: 1px solid rgba(0, 229, 255, 0.45);
+            color: var(--accent-cyan);
+            font-size: 10px;
+            font-weight: 700;
+            margin-left: 6px;
+            transition: var(--transition);
+            user-select: none;
+        }
+        .tip-wrap:hover .tip-icon {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.8);
+            transform: scale(1.15);
+        }
+        .tip-box {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%) translateY(4px);
+            width: 280px;
+            padding: 0.7rem 0.85rem;
+            background: rgba(12, 18, 32, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 0.78rem;
+            font-weight: 400;
+            line-height: 1.45;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75), 0 0 15px rgba(0, 229, 255, 0.2);
+            z-index: 1000;
+            pointer-events: none;
+            transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+            text-align: left;
+            white-space: normal;
+        }
+        .tip-box::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: rgba(12, 18, 32, 0.98) transparent transparent transparent;
+        }
+        .tip-wrap:hover .tip-box {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
         /* iOS / Cyberpunk Toggle Switch */
         .switch {
             position: relative;
@@ -539,7 +608,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-header">
-                        <span class="stat-title" data-i18n="statTemp">SoC Temperature</span>
+                        <span class="stat-title tip-wrap">
+                            <span data-i18n="statTemp">SoC Temperature</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipTemp">Temperatura interna do processador BCM2835. Monitorada a cada 2s. Ideal: abaixo de 65°C.</span>
+                        </span>
                         <span class="stat-badge badge-green" id="badgeTemp">Normal</span>
                     </div>
                     <div class="stat-value" id="valTemp">44.9°C</div>
@@ -547,7 +620,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 </div>
                 <div class="stat-card">
                     <div class="stat-header">
-                        <span class="stat-title" data-i18n="statCpu">CPU Load</span>
+                        <span class="stat-title tip-wrap">
+                            <span data-i18n="statCpu">CPU Load</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipCpu">Carga da CPU ARM11. Permanece menor que 2% porque a decodificação H.264 ocorre na GPU VideoCore IV.</span>
+                        </span>
                         <span class="stat-badge badge-cyan" data-i18n="badgeVpuOffload">VPU Offload</span>
                     </div>
                     <div class="stat-value" id="valCpu">0.67%</div>
@@ -555,7 +632,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 </div>
                 <div class="stat-card">
                     <div class="stat-header">
-                        <span class="stat-title" data-i18n="statRam">Free RAM</span>
+                        <span class="stat-title tip-wrap">
+                            <span data-i18n="statRam">Free RAM</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipRam">Memória RAM livre dos 512 MB SDRAM. O appliance opera 100% em RAM sem tocar no micro-SD.</span>
+                        </span>
                         <span class="stat-badge badge-purple" data-i18n="badgeRamApp">100% RAM</span>
                     </div>
                     <div class="stat-value" id="valRam">318 MB</div>
@@ -563,7 +644,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 </div>
                 <div class="stat-card">
                     <div class="stat-header">
-                        <span class="stat-title" data-i18n="statStream">Stream State</span>
+                        <span class="stat-title tip-wrap">
+                            <span data-i18n="statStream">Stream State</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipStream">Status de recebimento e decodificação do fluxo de vídeo transmitido para a porta HDMI.</span>
+                        </span>
                         <span class="stat-badge badge-green" id="badgeStream">Active</span>
                     </div>
                     <div class="stat-value" id="valState">ONLINE</div>
@@ -664,7 +749,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 <!-- Bitrate Control with 400kbps preset -->
                 <div class="control-group">
                     <div class="control-label">
-                        <span data-i18n="bitrateLabel">Streaming Bitrate (VBR)</span>
+                        <span class="tip-wrap">
+                            <span data-i18n="bitrateLabel">Streaming Bitrate (VBR)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipBitrate">Taxa de bits de codificação. 400k economiza 85% para texto/código. 3000k a 6000k entrega vídeo fluido em 1080p/720p.</span>
+                        </span>
                         <span class="control-value" id="valBitrate">400 kbps</span>
                     </div>
                     <div class="slider-wrap">
@@ -692,7 +781,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 <!-- Framerate (FPS) -->
                 <div class="control-group">
                     <div class="control-label">
-                        <span data-i18n="fpsLabel">Framerate (FPS)</span>
+                        <span class="tip-wrap">
+                            <span data-i18n="fpsLabel">Framerate (FPS)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipFps">Taxa de quadros por segundo. 15 FPS para ultra-economia, 30 FPS padrão balanceado, 60 FPS fluidez total.</span>
+                        </span>
                         <span class="control-value" id="valFps">30 FPS</span>
                     </div>
                     <div class="btn-grid" id="fpsGrid">
@@ -705,12 +798,16 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 <!-- Color Profile -->
                 <div class="control-group">
                     <div class="control-label">
-                        <span data-i18n="colorLabel">Color Profile</span>
-                        <span class="control-value" id="valColor">256-Color (Economy)</span>
+                        <span class="tip-wrap">
+                            <span data-i18n="colorLabel">Color Profile</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipColor">24-bit TrueColor para fidelidade RGB nativa. 256 Cores quantiza para economia máxima de barramento.</span>
+                        </span>
+                        <span class="control-value" id="valColor">24-bit TrueColor</span>
                     </div>
                     <div class="btn-grid" id="colorGrid">
-                        <button class="btn-toggle" data-color="full" onclick="setColor('full')" data-i18n="colorFull">24-bit TrueColor</button>
-                        <button class="btn-toggle active" data-color="256" onclick="setColor('256')" data-i18n="color256">256 Cores (QP 30-44)</button>
+                        <button class="btn-toggle active" data-color="full" onclick="setColor('full')" data-i18n="colorFull">24-bit TrueColor</button>
+                        <button class="btn-toggle" data-color="256" onclick="setColor('256')" data-i18n="color256">256 Cores (QP 30-44)</button>
                         <button class="btn-toggle" data-color="gray" onclick="setColor('gray')" data-i18n="colorGray">Monocromático</button>
                     </div>
                 </div>
@@ -718,7 +815,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 <!-- Frame Skipping & Damage-Only Preservation -->
                 <div class="control-group">
                     <div class="control-label">
-                        <span data-i18n="dropOnlyLabel">Preservação de Salto de Quadros (Damage-Only)</span>
+                        <span class="tip-wrap">
+                            <span data-i18n="dropOnlyLabel">Preservação de Salto de Quadros (Damage-Only)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipDropOnly">Quando Ativo, só transmite ao detectar alteração. Desativado mantém envio a 30 FPS contínuos para vídeos do YouTube nunca pausarem.</span>
+                        </span>
                         <span class="control-value" id="valDropOnly">drop-only=true (Ativo)</span>
                     </div>
                     <div class="btn-grid" id="dropOnlyGrid">
@@ -733,7 +834,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 <!-- Skip to First Frame -->
                 <div class="control-group">
                     <div class="control-label">
-                        <span data-i18n="skipFirstLabel">Entrega Imediata no Primeiro Quadro (skip-to-first)</span>
+                        <span class="tip-wrap">
+                            <span data-i18n="skipFirstLabel">Entrega Imediata no Primeiro Quadro (skip-to-first)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipSkipFirst">Elimina atrasos acumulados, entregando imediatamente o primeiro quadro assim que o mouse se move.</span>
+                        </span>
                         <span class="control-value" id="valSkipFirst">skip-to-first=true (Ativo)</span>
                     </div>
                     <div class="btn-grid" id="skipFirstGrid">
@@ -745,7 +850,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 <!-- IDR Keyframe Interval / Periodic Refresh -->
                 <div class="control-group">
                     <div class="control-label">
-                        <span data-i18n="keyIntLabel">Varredura Periódica / Intervalo IDR (Refresh Clean)</span>
+                        <span class="tip-wrap">
+                            <span data-i18n="keyIntLabel">Varredura Periódica / Intervalo IDR (Refresh Clean)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipKeyInt">Frequência de quadros-chave I-Frame para autolimpeza de ruídos visuais e recuperação de perdas.</span>
+                        </span>
                         <span class="control-value" id="valKeyInt">30 quadros (~1.0s)</span>
                     </div>
                     <div class="slider-wrap">
@@ -887,13 +996,44 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 <div class="card-header">
                     <div class="card-title">
                         <span>📖</span>
-                        <span data-i18n="manualHeader">Manual de Operação e Conexão sem IP</span>
+                        <span data-i18n="manualHeader">Manual de Operação e Especificações Técnicas</span>
                     </div>
-                    <span class="card-badge badge-cyan" data-i18n="badgeFullDocs">Documentação</span>
+                    <span class="card-badge badge-cyan" data-i18n="badgeFullDocs">Documentação Completa</span>
                 </div>
 
                 <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
-                    <h3 style="color: #fff; margin: 1rem 0 0.5rem 0;" data-i18n="docSerialTitle">1. Reconfiguração sem IP via Serial USB (/dev/ttyACM0)</h3>
+                    <!-- Section 1: Architecture -->
+                    <h3 style="color: #fff; margin: 1rem 0 0.5rem 0;" data-i18n="docArchTitle">1. Arquitetura de Hardware e GPU VideoCore IV</h3>
+                    <p data-i18n="docArchDesc">
+                        O Raspberry Pi Zero utiliza o SoC Broadcom BCM2835 (ARM1176JZF-S a 1.0 GHz) integrado à GPU VideoCore IV a 500 MHz. O ext-monitor opera com pipeline 100% de hardware em userspace: o stream H.264 é alimentado diretamente no decodificador V4L2 M2M (<span style="font-family: monospace; color: var(--accent-cyan);">/dev/video10</span>), que grava os quadros renderizados por DMA direto no framebuffer HDMI (<span style="font-family: monospace; color: #7ee787;">/dev/fb0</span>). Isso garante latência inferior a 15 ms e consumo de CPU inferior a 2%.
+                    </p>
+
+                    <!-- Section 2: USB Protocol & RFC 4571 Framing -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docUsbProtoTitle">2. Protocolo USB Bulk, RFC 4571 e Marcador de Fim de Quadro (EOF / ZLP)</h3>
+                    <p data-i18n="docUsbProtoDesc1">
+                        No barramento USB 2.0 High-Speed (480 Mbps), pacotes de dados trafegam em micro-frames de até 512 bytes (<span style="font-family: monospace; color: var(--accent-cyan);">wMaxPacketSize</span>). Em fluxos H.264 Annex-B brutos, decodificadores precisavam aguardar o start code (<span style="font-family: monospace; color: var(--accent-cyan);">00 00 00 01</span>) do quadro seguinte para saber que o quadro atual terminou, causando congelamento quando o mouse parava ou vídeos estáticos entravam em pausa.
+                    </p>
+                    <p data-i18n="docUsbProtoDesc2" style="margin-top: 0.5rem;">
+                        O ext-monitor resolve isso implementando o padrão oficial <strong style="color: #fff;">RFC 4571</strong> com enquadramento de comprimento de 2 bytes e preservação do <strong style="color: var(--accent-cyan);">Bit Marcador RTP (Marker Bit / EOF)</strong>. No instante em que o último pedaço de um quadro chega pela USB, o receptor dispara a descarga imediata no display HDMI, eliminando qualquer dependência de movimento de mouse e permitindo reprodução estável de YouTube sem congelar. Além disso, pacotes múltiplos de 512 bytes disparam um ZLP (<span style="font-family: monospace; color: #7ee787;">Zero-Length Packet</span>), liberando a FIFO de hardware DWC2 sem travamentos.
+                    </p>
+
+                    <!-- Section 3: Audio Routing -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docAudioTitle">3. Roteamento de Áudio Multi-Modo (Normal vs. Híbrido)</h3>
+                    <p data-i18n="docAudioDesc1">
+                        O ext-monitor suporta roteamento de áudio digital estéreo para as caixas de som da TV HDMI através de 4 tecnologias de transporte:
+                    </p>
+                    <ul style="margin: 0.6rem 0 0.6rem 1.5rem; line-height: 1.5;">
+                        <li><strong style="color: #fff;">Modo 1 (Rede IP):</strong> Sink virtual PipeWire no PC transmitindo RTP Opus/PCM na porta UDP 5002 direto para o codec HDMI do Pi Zero.</li>
+                        <li><strong style="color: #fff;">Modo 2 (Windows Miracast):</strong> Protocolo nativo Wi-Fi Display (WFD) roteando áudio AAC/LPCM estéreo via RTSP TCP 7236.</li>
+                        <li><strong style="color: #fff;">Modo 3 (USB Audio Gadget - UAC2):</strong> Placa de som USB plug-and-play exposta pelo Composite Gadget no PC com encaminhamento PCM direto ao barramento I2S da TV.</li>
+                        <li><strong style="color: #fff;">Modo 4 (Bluetooth A2DP Sink):</strong> Receptor de áudio Bluetooth para pareamento com smartphones, tablets ou computadores secundários.</li>
+                    </ul>
+                    <p data-i18n="docAudioDesc2">
+                        <strong>Operação Normal vs Híbrida:</strong> No modo <em>Normal</em>, o vídeo e o som do seu PC tocam juntos na TV. No modo <em>Híbrido</em>, você pode escolher manter o áudio tocando nos alto-falantes locais do notebook enquanto apenas o vídeo vai para a TV, ou tocar músicas via Bluetooth do celular na TV enquanto o PC exibe seu editor de código.
+                    </p>
+
+                    <!-- Section 4: Serial Recovery -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docSerialTitle">4. Console de Recuperação Serial USB (/dev/ttyACM0)</h3>
                     <p data-i18n="docSerialDesc">
                         Caso o modo de rede seja desativado ou você esteja em um computador sem suporte a CDC-ECM, o Pi Zero expõe um console serial de recuperação independente no PC através do arquivo de dispositivo <span style="font-family: monospace; color: var(--accent-cyan);">/dev/ttyACM0</span> a 115200 baud.
                     </p>
@@ -902,18 +1042,26 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                         <button class="copy-btn" onclick="copyCommand('cmdSerial')" data-i18n="btnCopy">Copiar</button>
                     </div>
 
-                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docLinuxTitle">2. Operação Normal no Linux Wayland (GNOME)</h3>
+                    <!-- Section 5: Linux Wayland -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docLinuxTitle">5. Operação Normal no Linux Wayland (GNOME)</h3>
                     <p data-i18n="docLinuxDesc">
                         Basta conectar o cabo na porta USB de dados (a porta central). O PC receberá automaticamente o IP 192.168.7.1 pelo DHCP nativo em Rust. Em seguida execute o conector:
                     </p>
                     <div class="cmd-box">
-                        <span class="cmd-text" id="cmdStart">./scripts/start.sh extend auto 30 false economy --bitrate=400</span>
+                        <span class="cmd-text" id="cmdStart">./scripts/start.sh extend auto 30 false full --bitrate=3000</span>
                         <button class="copy-btn" onclick="copyCommand('cmdStart')" data-i18n="btnCopy">Copiar</button>
                     </div>
 
-                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docWinTitle">3. Operação no Windows 10/11 (Miracast Sem Drivers)</h3>
+                    <!-- Section 6: Windows Miracast -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docWinTitle">6. Operação no Windows 10/11 (Miracast Sem Drivers)</h3>
                     <p data-i18n="docWinDesc">
                         Conecte o Pi Zero na porta USB. Pressione as teclas <strong style="color: #fff;">Win + K</strong> no teclado do Windows e selecione <em>'Pi Zero Wireless Display'</em>. A segunda tela será ativada instantaneamente sem instalar drivers adicionais.
+                    </p>
+
+                    <!-- Section 7: RAM Architecture -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docSdTitle">7. Arquitetura 100% RAM & Atualização sem Retirar o Cartão</h3>
+                    <p data-i18n="docSdDesc">
+                        O appliance roda 100% em initramfs RAM disk. Para atualizar o binário do receptor, basta montar a partição FAT de boot com <span style="font-family: monospace; color: var(--accent-cyan);">mount -t vfat /dev/mmcblk0p1 /mnt</span>, gravar a nova imagem e desmontar, sem necessidade de desligar o dispositivo.
                     </p>
 
                     <!-- Comparison Table -->
@@ -924,7 +1072,7 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                                 <th data-i18n="thMethod">Método</th>
                                 <th data-i18n="thProtocol">Protocolo</th>
                                 <th data-i18n="thLatency">Latência</th>
-                                <th data-i18n="thBestFor">Caso de Uso</th>
+                                <th data-i18n="thBestFor">Caso de Uso Ideal</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -942,9 +1090,9 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                             </tr>
                             <tr>
                                 <td style="color: #fff; font-weight: 700;">USB Bulk Direto</td>
-                                <td>FunctionFS (Raw Pipe)</td>
+                                <td>FunctionFS RFC 4571</td>
                                 <td style="color: #7ee787; font-weight: 700;">&lt; 1 ms</td>
-                                <td>Comunicação direta por hardware sem IP</td>
+                                <td>Comunicação direta por hardware sem IP com Marker Bit</td>
                             </tr>
                         </tbody>
                     </table>
@@ -976,8 +1124,8 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         // State
         let currentFps = 30;
         let currentBitrate = 400;
-        let currentColor = '256';
-        let currentDropOnly = true;
+        let currentColor = 'full';
+        let currentDropOnly = false;
         let currentSkipToFirst = true;
         let currentKeyIntMax = 30;
         let isPaused = false;
@@ -999,6 +1147,10 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 badgeVpuOffload: "VPU Offload",
                 statCpuDesc: "Hardware GPU V4L2 M2M Active",
                 badgeRamApp: "100% RAM",
+                tipTemp: "Broadcom BCM2835 internal silicon temperature. Polled every 2s. Recommended: below 65°C.",
+                tipCpu: "ARM11 CPU load. Stays below 2% because H.264 decoding is 100% offloaded to VideoCore IV VPU.",
+                tipRam: "Free RAM out of 512 MB SDRAM. The entire system runs in RAM (initramfs) with zero SD card wear.",
+                tipStream: "Real-time state of the video decoding engine streaming to the HDMI TV screen.",
                 displayHeader: "HDMI Television & Display Telemetry",
                 displayDesc: "The VideoCore IV hardware VPU decodes H.264 video streams directly to the HDMI scanout plane without touching the CPU.",
                 btnShowHud: "✦ Show HUD on TV (60s)",
@@ -1011,19 +1163,25 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 ctrlHeader: "Display & Stream Optimization",
                 badgeZeroCopy: "VideoCore IV DMA",
                 bitrateLabel: "Streaming Bitrate (VBR)",
+                tipBitrate: "Video encoding bitrate per second. 400k saves 85% bandwidth for text and code. 3000k to 6000k delivers smooth 60 FPS motion.",
                 fpsLabel: "Framerate (FPS)",
+                tipFps: "Target framerate. 15 FPS for ultra-cool SoC, 30 FPS recommended balance, 60 FPS maximum fluidity.",
                 colorLabel: "Color Profile",
+                tipColor: "24-bit TrueColor provides 1:1 RGB fidelity. 256 Colors uses adaptive QP (30-44) to minimize USB bus bandwidth.",
                 colorFull: "24-bit TrueColor",
                 color256: "256 Cores (QP 30-44)",
                 colorGray: "Monochrome",
                 dropOnlyLabel: "Frame Skipping (Damage-Only Preserving)",
+                tipDropOnly: "When Enabled, only transmits when damage is detected. Disabled forces continuous 30 FPS so YouTube videos never freeze when mouse leaves.",
                 dropOnlyTrue: "Enabled (95% bandwidth savings on idle)",
                 dropOnlyFalse: "Disabled (Continuous frame duplication)",
                 dropOnlyDesc: "When enabled, videorate drops duplicate frames while the screen is static, allocating 100% of bitrate to mouse and typing updates.",
                 skipFirstLabel: "Instant Motion Delivery (skip-to-first)",
+                tipSkipFirst: "Eliminates backlog delay by delivering the very first frame of motion immediately without queue latency.",
                 skipFirstTrue: "Enabled (Zero latency on first motion)",
                 skipFirstFalse: "Disabled (Strict timestamp alignment)",
                 keyIntLabel: "Periodic Refresh / IDR Keyframe Interval (Clean Sweep)",
+                tipKeyInt: "Frequency of full IDR I-Frames to sweep and recover from visual artifacts or packet drops.",
                 keyIntDesc: "Injects a full IDR keyframe periodically to sweep and clear visual artifacts on HDMI/TV.",
                 btnApply: "💾 Apply Settings",
                 btnPauseStream: "⏸ Pause Display",
@@ -1053,14 +1211,24 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 btnMountSd: "Mount Partition (/mnt/boot)",
                 btnUnmountSd: "Unmount Partition",
                 sdUpgradeManualTitle: "How to Upgrade Firmware without Removing Card:",
-                manualHeader: "Operation Manual & Zero-IP Diagnostics",
-                badgeFullDocs: "Documentation",
-                docSerialTitle: "1. Zero-IP Reconfiguration via USB Serial (/dev/ttyACM0)",
+                manualHeader: "Operation Manual & Technical Specifications",
+                badgeFullDocs: "Complete Documentation",
+                docArchTitle: "1. Hardware Architecture & VideoCore IV GPU",
+                docArchDesc: "Raspberry Pi Zero utilizes the Broadcom BCM2835 SoC (ARM1176JZF-S @ 1.0 GHz) integrated with the VideoCore IV GPU @ 500 MHz. The ext-monitor runs a 100% userspace hardware pipeline: H.264 video streams are fed directly into the V4L2 M2M decoder (/dev/video10), which writes rendered frames via DMA directly to the HDMI scanout plane (/dev/fb0). This guarantees < 15ms latency and < 2% CPU usage.",
+                docUsbProtoTitle: "2. Direct USB Bulk Protocol, RFC 4571 & End-of-Frame Marker Bit (EOF / ZLP)",
+                docUsbProtoDesc1: "On the USB 2.0 High-Speed bus (480 Mbps), packets travel in micro-frames up to 512 bytes (wMaxPacketSize). In raw H.264 Annex-B streams, decoders had to wait for the next frame's start code (00 00 00 01) to verify completion, causing stalls when mouse movement stopped.",
+                docUsbProtoDesc2: "ext-monitor resolves this by implementing standard RFC 4571 2-byte length-delimited framing with RTP Marker Bit (EOF) signaling. As soon as a frame finishes transmitting over USB, the receiver drains and renders it immediately on HDMI, eliminating mouse dependency and ensuring smooth YouTube playback. Furthermore, transfers that are exact multiples of 512 bytes trigger a Zero-Length Packet (ZLP), preventing DWC2 hardware FIFO stalls.",
+                docAudioTitle: "3. Multi-Mode Audio Routing (Normal vs. Hybrid)",
+                docAudioDesc1: "ext-monitor supports stereo digital audio routing to HDMI TV speakers across 4 transport technologies:",
+                docAudioDesc2: "Normal vs Hybrid Mode: In Normal mode, both PC video and audio play together on the TV. In Hybrid mode, you can keep audio playing on local PC speakers while video streams to TV, or pair a smartphone via Bluetooth to play music on the TV while the PC displays code.",
+                docSerialTitle: "4. Zero-IP Reconfiguration via USB Serial (/dev/ttyACM0)",
                 docSerialDesc: "If network is disabled or misconfigured, the Pi Zero exposes a recovery serial console on /dev/ttyACM0 at 115200 baud.",
-                docLinuxTitle: "2. Standard Linux Wayland (GNOME) Streaming",
+                docLinuxTitle: "5. Standard Linux Wayland (GNOME) Streaming",
                 docLinuxDesc: "Plug into the center USB port. The PC gets IP 192.168.7.1 automatically. Then run start.sh:",
-                docWinTitle: "3. Windows 10/11 Miracast (Zero Drivers)",
+                docWinTitle: "6. Windows 10/11 Miracast (Zero Drivers)",
                 docWinDesc: "Plug into USB, press Win + K on Windows, select 'Pi Zero Wireless Display'.",
+                docSdTitle: "7. 100% RAM Architecture & Firmware Upgrade without SD Card Removal",
+                docSdDesc: "The appliance runs 100% in an initramfs RAM disk. To upgrade receiver binaries, simply mount the boot FAT partition with 'mount -t vfat /dev/mmcblk0p1 /mnt', write the new image, and unmount without rebooting or touching the SD card.",
                 protoHeader: "Protocol Comparison Table",
                 thMethod: "Method",
                 thProtocol: "Protocol",
@@ -1086,6 +1254,10 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 badgeVpuOffload: "GPU VPU Offload",
                 statCpuDesc: "Hardware GPU V4L2 M2M Ativo",
                 badgeRamApp: "100% em RAM",
+                tipTemp: "Temperatura interna do processador BCM2835. Monitorada a cada 2s. Ideal: abaixo de 65°C.",
+                tipCpu: "Carga da CPU ARM11. Permanece menor que 2% porque a decodificação H.264 ocorre na GPU VideoCore IV.",
+                tipRam: "Memória RAM livre dos 512 MB SDRAM. O appliance opera 100% em RAM sem tocar no micro-SD.",
+                tipStream: "Status de recebimento e decodificação do fluxo de vídeo transmitido para a porta HDMI.",
                 displayHeader: "Telemetria do Monitor HDMI & TV",
                 displayDesc: "A VPU de hardware VideoCore IV decodifica o stream H.264 direto na memória de scanout da TV sem tocar na CPU.",
                 btnShowHud: "✦ Exibir HUD na TV (60s)",
@@ -1098,19 +1270,25 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 ctrlHeader: "Otimização de Exibição e Stream",
                 badgeZeroCopy: "VideoCore IV DMA",
                 bitrateLabel: "Taxa de Bits (VBR)",
+                tipBitrate: "Taxa de bits de codificação. 400k economiza 85% para texto/código. 3000k a 6000k entrega vídeo fluido em 1080p/720p.",
                 fpsLabel: "Taxa de Quadros (FPS)",
+                tipFps: "Taxa de quadros por segundo. 15 FPS para ultra-economia, 30 FPS padrão balanceado, 60 FPS fluidez total.",
                 colorLabel: "Perfil de Cor",
+                tipColor: "24-bit TrueColor para fidelidade RGB nativa. 256 Cores quantiza para economia máxima de barramento.",
                 colorFull: "24-bit TrueColor",
                 color256: "256 Cores (QP 30-44)",
                 colorGray: "Monocromático",
                 dropOnlyLabel: "Preservação de Salto de Quadros (Damage-Only)",
+                tipDropOnly: "Quando Ativo, só transmite ao detectar alteração. Desativado mantém envio a 30 FPS contínuos para vídeos do YouTube nunca pausarem.",
                 dropOnlyTrue: "Ativo (Economia 95% em tela estática)",
                 dropOnlyFalse: "Desativado (Envio contínuo forçado)",
                 dropOnlyDesc: "Quando ativo, o pipeline não duplica quadros com a tela estática. O bitrate é 100% alocado para momentos de movimento (digitação/mouse).",
                 skipFirstLabel: "Entrega Imediata no Primeiro Quadro (skip-to-first)",
+                tipSkipFirst: "Elimina atrasos acumulados, entregando imediatamente o primeiro quadro assim que o mouse se move.",
                 skipFirstTrue: "Ativo (Latência zero ao mover)",
                 skipFirstFalse: "Desativado (Sincronismo rígido)",
                 keyIntLabel: "Varredura Periódica / Intervalo IDR (Refresh Clean)",
+                tipKeyInt: "Frequência de quadros-chave I-Frame para autolimpeza de ruídos visuais e recuperação de perdas.",
                 keyIntDesc: "Injeta um quadro-chave IDR completo periodicamente para limpar qualquer resíduo visual na TV ou monitor HDMI.",
                 btnApply: "💾 Aplicar Alterações",
                 btnPauseStream: "⏸ Pausar Exibição",
@@ -1140,14 +1318,24 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 btnMountSd: "Montar Partição (/mnt/boot)",
                 btnUnmountSd: "Desmontar Partição",
                 sdUpgradeManualTitle: "Como Atualizar o Appliance sem Retirar o Cartão:",
-                manualHeader: "Manual de Operação e Conexão sem IP",
-                badgeFullDocs: "Documentação",
-                docSerialTitle: "1. Reconfiguração sem IP via Serial USB (/dev/ttyACM0)",
+                manualHeader: "Manual de Operação e Especificações Técnicas",
+                badgeFullDocs: "Documentação Completa",
+                docArchTitle: "1. Arquitetura de Hardware e GPU VideoCore IV",
+                docArchDesc: "O Raspberry Pi Zero utiliza o SoC Broadcom BCM2835 (ARM1176JZF-S a 1.0 GHz) integrado à GPU VideoCore IV a 500 MHz. O ext-monitor opera com pipeline 100% de hardware em userspace: o stream H.264 é alimentado diretamente no decodificador V4L2 M2M (/dev/video10), que grava os quadros renderizados por DMA direto no framebuffer HDMI (/dev/fb0). Isso garante latência inferior a 15 ms e consumo de CPU inferior a 2%.",
+                docUsbProtoTitle: "2. Protocolo USB Bulk, RFC 4571 e Marcador de Fim de Quadro (EOF / ZLP)",
+                docUsbProtoDesc1: "No barramento USB 2.0 High-Speed (480 Mbps), pacotes de dados trafegam em micro-frames de até 512 bytes (wMaxPacketSize). Em fluxos H.264 Annex-B brutos, decodificadores precisavam aguardar o start code (00 00 00 01) do quadro seguinte para saber que o quadro atual terminou, causando congelamento quando o mouse parava ou vídeos estáticos entravam em pausa.",
+                docUsbProtoDesc2: "O ext-monitor resolve isso implementando o padrão oficial RFC 4571 com enquadramento de comprimento de 2 bytes e preservação do Bit Marcador RTP (Marker Bit / EOF). No instante em que o último pedaço de um quadro chega pela USB, o receptor dispara a descarga imediata no display HDMI, eliminando qualquer dependência de movimento de mouse e permitindo reprodução estável de YouTube sem congelar. Além disso, pacotes múltiplos de 512 bytes disparam um ZLP (Zero-Length Packet), liberando a FIFO de hardware DWC2 sem travamentos.",
+                docAudioTitle: "3. Roteamento de Áudio Multi-Modo (Normal vs. Híbrido)",
+                docAudioDesc1: "O ext-monitor suporta roteamento de áudio digital estéreo para as caixas de som da TV HDMI através de 4 tecnologias de transporte:",
+                docAudioDesc2: "Operação Normal vs Híbrida: No modo Normal, o vídeo e o som do seu PC tocam juntos na TV. No modo Híbrido, você pode escolher manter o áudio tocando nos alto-falantes locais do notebook enquanto apenas o vídeo vai para a TV, ou tocar músicas via Bluetooth do celular na TV enquanto o PC exibe seu editor de código.",
+                docSerialTitle: "4. Reconfiguração sem IP via Serial USB (/dev/ttyACM0)",
                 docSerialDesc: "Caso a rede seja desativada, o Pi Zero expõe um console serial independente no PC em /dev/ttyACM0 a 115200 baud.",
-                docLinuxTitle: "2. Operação Normal no Linux Wayland (GNOME)",
+                docLinuxTitle: "5. Operação Normal no Linux Wayland (GNOME)",
                 docLinuxDesc: "Conecte o cabo na porta USB central. O PC recebe IP 192.168.7.1 pelo DHCP nativo. Em seguida execute o conector:",
-                docWinTitle: "3. Operação no Windows 10/11 (Miracast Sem Drivers)",
+                docWinTitle: "6. Operação no Windows 10/11 (Miracast Sem Drivers)",
                 docWinDesc: "Conecte na USB, pressione Win + K no Windows e selecione 'Pi Zero Wireless Display'.",
+                docSdTitle: "7. Arquitetura 100% RAM & Atualização sem Retirar o Cartão",
+                docSdDesc: "O appliance roda 100% em initramfs RAM disk. Para atualizar o binário do receptor, basta montar a partição FAT de boot com 'mount -t vfat /dev/mmcblk0p1 /mnt', gravar a nova imagem e desmontar, sem necessidade de desligar o dispositivo.",
                 protoHeader: "Tabela Comparativa de Métodos",
                 thMethod: "Método",
                 thProtocol: "Protocolo",
@@ -1173,6 +1361,10 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 badgeVpuOffload: "VPU Offload",
                 statCpuDesc: "Hardware GPU V4L2 M2M Attivo",
                 badgeRamApp: "100% RAM",
+                tipTemp: "Temperatura interna del silicio Broadcom BCM2835. Monitorata ogni 2s. Ideale: sotto i 65°C.",
+                tipCpu: "Carico della CPU ARM11. Rimane sotto il 2% poiché la decodifica H.264 è gestita dalla VPU VideoCore IV.",
+                tipRam: "RAM disponibile dei 512 MB SDRAM. Il sistema funziona al 100% in RAM senza usura della scheda SD.",
+                tipStream: "Stato in tempo reale della decodifica video verso l'uscita HDMI del televisore.",
                 displayHeader: "Telemetria Display HDMI & TV",
                 displayDesc: "La VPU hardware VideoCore IV decodifica il flusso H.264 direttamente nel piano HDMI senza usare la CPU.",
                 btnShowHud: "✦ Mostra HUD su TV (60s)",
@@ -1185,19 +1377,25 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 ctrlHeader: "Ottimizzazione Display e Streaming",
                 badgeZeroCopy: "VideoCore IV DMA",
                 bitrateLabel: "Bitrate di Streaming (VBR)",
+                tipBitrate: "Bitrate di codifica VBR. 400k risparmia l'85% per testo/codice. 3000k-6000k per video 60 FPS fluido.",
                 fpsLabel: "Frequenza Fotogrammi (FPS)",
+                tipFps: "Frequenza fotogrammi. 15 FPS per basso calore, 30 FPS bilanciato consigliato, 60 FPS massima fluidità.",
                 colorLabel: "Profilo Colore",
+                tipColor: "24-bit TrueColor per fedeltà RGB 1:1. 256 Colori applica QP adattivo per ridurre la banda USB.",
                 colorFull: "24-bit TrueColor",
                 color256: "256 Colori (QP 30-44)",
                 colorGray: "Monocromatico",
                 dropOnlyLabel: "Salto Fotogrammi (Damage-Only Preserving)",
+                tipDropOnly: "Quando Attivo, trasmette solo su variazioni dello schermo. Disattivato forza 30 FPS continui evitando blocchi su YouTube.",
                 dropOnlyTrue: "Attivo (Risparmio 95% su schermo statico)",
                 dropOnlyFalse: "Disattivato (Duplicazione continua)",
                 dropOnlyDesc: "Quando attivo, il pipeline non duplica fotogrammi statici, risparmiando banda per il movimento del cursore.",
                 skipFirstLabel: "Consegna Immediata Primo Fotogramma (skip-to-first)",
+                tipSkipFirst: "Elimina i ritardi accumulati consegnando istantaneamente il primo fotogramma di movimento.",
                 skipFirstTrue: "Attivo (Zero latenza al movimento)",
                 skipFirstFalse: "Disattivato (Allineamento rigido)",
                 keyIntLabel: "Scansione Periodica / Intervallo IDR (Refresh Clean)",
+                tipKeyInt: "Frequenza dei fotogrammi IDR completi per eliminare artefatti visivi e perdite di pacchetti.",
                 keyIntDesc: "Invia periodicamente un frame IDR completo per eliminare artefatti visivi sullo schermo HDMI/TV.",
                 btnApply: "💾 Applica Modifiche",
                 btnPauseStream: "⏸ Sospendi Display",
@@ -1227,14 +1425,24 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 btnMountSd: "Monta Partizione (/mnt/boot)",
                 btnUnmountSd: "Smonta Partizione",
                 sdUpgradeManualTitle: "Come Aggiornare il Firmware senza Rimuovere la Scheda:",
-                manualHeader: "Manuale Operativo e Connessione Senza IP",
-                badgeFullDocs: "Documentazione",
-                docSerialTitle: "1. Riconfigurazione Senza IP via USB Seriale (/dev/ttyACM0)",
+                manualHeader: "Manuale Operativo e Specifiche Tecniche",
+                badgeFullDocs: "Documentazione Completa",
+                docArchTitle: "1. Architettura Hardware e GPU VideoCore IV",
+                docArchDesc: "Raspberry Pi Zero utilizza il SoC Broadcom BCM2835 (ARM1176JZF-S a 1.0 GHz) con GPU VideoCore IV a 500 MHz. ext-monitor opera interamente via hardware: il flusso H.264 viene decodificato via V4L2 M2M (/dev/video10) e scritto via DMA direttamente nel framebuffer HDMI (/dev/fb0). Latenza < 15 ms e CPU < 2%.",
+                docUsbProtoTitle: "2. Protocollo USB Bulk Diretto, RFC 4571 & Marker Bit (EOF / ZLP)",
+                docUsbProtoDesc1: "Sul bus USB 2.0 High-Speed (480 Mbps), i pacchetti viaggiano in micro-frame fino a 512 byte (wMaxPacketSize). Nei flussi H.264 Annex-B grezzi, i decoder dovevano attendere lo start code successivo, bloccando l'immagine allo stop del mouse.",
+                docUsbProtoDesc2: "ext-monitor implementa lo standard RFC 4571 con prefisso a 2 byte e bit marcatore RTP (EOF). Ogni fotogramma viene visualizzato istantaneamente su HDMI senza dipendere dal movimento del mouse, garantendo riproduzione YouTube stabile. I trasferimenti multipli di 512 byte inviano un pacchetto ZLP liberando la FIFO del DWC2.",
+                docAudioTitle: "3. Routing Audio Multi-Modale (Normale vs Ibrido)",
+                docAudioDesc1: "ext-monitor supporta l'audio digitale stereo verso la TV HDMI tramite 4 modalità di trasporto:",
+                docAudioDesc2: "Modalità Normale vs Ibrida: In modalità Normale, audio e video del PC vengono riprodotti insieme sulla TV. In modalità Ibrida, puoi mantenere l'audio sugli altoparlanti del PC mentre il video va sulla TV, o riprodurre musica via Bluetooth dal telefono sulla TV.",
+                docSerialTitle: "4. Riconfigurazione Senza IP via USB Seriale (/dev/ttyACM0)",
                 docSerialDesc: "Se la rete è disabilitata, il Pi Zero offre una console seriale di ripristino su /dev/ttyACM0 a 115200 baud.",
-                docLinuxTitle: "2. Funzionamento Standard su Linux Wayland (GNOME)",
+                docLinuxTitle: "5. Funzionamento Standard su Linux Wayland (GNOME)",
                 docLinuxDesc: "Collega il cavo alla porta USB centrale. Il PC ottiene l'IP 192.168.7.1 dal DHCP. Esegui il connettore:",
-                docWinTitle: "3. Proiezione Windows 10/11 (Miracast Senza Driver)",
+                docWinTitle: "6. Proiezione Windows 10/11 (Miracast Senza Driver)",
                 docWinDesc: "Collega via USB, premi Win + K su Windows e seleziona 'Pi Zero Wireless Display'.",
+                docSdTitle: "7. Architettura 100% RAM & Aggiornamento senza rimuovere la scheda SD",
+                docSdDesc: "L'appliance funziona al 100% in RAM disk initramfs. Per aggiornare, basta montare la partizione FAT di boot con 'mount -t vfat /dev/mmcblk0p1 /mnt' e copiare i nuovi binari senza spegnere il dispositivo.",
                 protoHeader: "Tabella Comparativa Protocolli",
                 thMethod: "Metodo",
                 thProtocol: "Protocollo",
@@ -1260,6 +1468,10 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 badgeVpuOffload: "硬件 VPU 卸载",
                 statCpuDesc: "硬件 GPU V4L2 M2M 解码中",
                 badgeRamApp: "100% 内存运行",
+                tipTemp: "博通 BCM2835 核心硅片内部温度。每2秒轮询一次。建议保持在 65°C 以下。",
+                tipCpu: "ARM11 CPU 负载。得益于 VideoCore IV VPU 硬件全卸载，CPU 占用率低于 2%。",
+                tipRam: "512 MB SDRAM 中的可用内存。系统 100% 运行于 RAM 中，彻底杜绝 SD 卡读写磨损。",
+                tipStream: "向 HDMI 电视输出 H.264 视频流的实时解码引擎状态。",
                 displayHeader: "HDMI 电视与显示遥测",
                 displayDesc: "VideoCore IV 硬件 VPU 直接将 H.264 解码输出至 HDMI 屏幕，完全不消耗 CPU 资源。",
                 btnShowHud: "✦ 在电视上显示 HUD (60秒)",
@@ -1272,19 +1484,25 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 ctrlHeader: "显示与推流优化",
                 badgeZeroCopy: "VideoCore IV DMA",
                 bitrateLabel: "推流码率 (VBR)",
+                tipBitrate: "实时 VBR 编码码率。400k 为代码与文本节省 85% 带宽；3000k 至 6000k 提供流畅 60 FPS 动态画面。",
                 fpsLabel: "帧率 (FPS)",
+                tipFps: "目标帧率。15 FPS 超低发热，30 FPS 推荐平衡模式，60 FPS 游戏与鼠标极致流畅。",
                 colorLabel: "颜色配置",
+                tipColor: "24位真彩色提供 1:1 RGB 原画质；256 色采用自适应量化 (QP 30-44) 最大限度节省 USB 带宽。",
                 colorFull: "24位真彩色",
                 color256: "256 色低功耗",
                 colorGray: "单色灰度",
                 dropOnlyLabel: "跳帧保护与损伤更新 (Damage-Only)",
+                tipDropOnly: "启用时仅在检测到画面变动时传输。禁用时强制以 30 FPS 连续发送，确保 YouTube 视频在鼠标移开时永不卡顿。",
                 dropOnlyTrue: "启用 (静态屏幕节省 95% 带宽)",
                 dropOnlyFalse: "禁用 (强制连续重复帧)",
                 dropOnlyDesc: "启用后，屏幕静止时不重复发送帧，仅在鼠标移动或打字时全力传输画面更新。",
                 skipFirstLabel: "即时首帧传输 (skip-to-first)",
+                tipSkipFirst: "消除累积缓冲延迟，在鼠标动作瞬间零延迟送达首帧画面。",
                 skipFirstTrue: "启用 (动作发生时零延迟送达)",
                 skipFirstFalse: "禁用 (严格时间戳对齐)",
                 keyIntLabel: "定期全屏刷新 / IDR 关键帧间隔 (Refresh Clean)",
+                tipKeyInt: "定期注入完整 IDR 关键帧的频率，用于彻底清除屏幕残影并从传输丢包中快速恢复。",
                 keyIntDesc: "定期注入完整的 IDR 关键帧，彻底清除 HDMI/TV 显示器上的任何视觉残影。",
                 btnApply: "💾 应用配置",
                 btnPauseStream: "⏸ 暂停显示",
@@ -1314,14 +1532,24 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 btnMountSd: "挂载引导分区 (/mnt/boot)",
                 btnUnmountSd: "卸载引导分区",
                 sdUpgradeManualTitle: "无需取出 SD 卡在线更新固件方法：",
-                manualHeader: "完整操作手册与零 IP 串口配置",
-                badgeFullDocs: "技术文档",
-                docSerialTitle: "1. 通过 USB 虚拟串口 (/dev/ttyACM0) 零 IP 维护",
+                manualHeader: "完整操作手册与技术规范指南",
+                badgeFullDocs: "完整技术文档",
+                docArchTitle: "1. 硬件架构与 VideoCore IV GPU 解码",
+                docArchDesc: "树莓派 Pi Zero 搭载博通 BCM2835 SoC (ARM1176JZF-S @ 1.0 GHz) 与 500 MHz VideoCore IV GPU。ext-monitor 采用 100% 用户空间纯硬件管线：H.264 流直接喂入 V4L2 M2M 解码器 (/dev/video10)，解码后的帧通过 DMA 直接投射到 HDMI 扫描平面 (/dev/fb0)，延迟低于 15ms，CPU 占用低于 2%。",
+                docUsbProtoTitle: "2. USB Bulk 裸通道、RFC 4571 协议与帧结束标记位 (EOF / ZLP)",
+                docUsbProtoDesc1: "在 USB 2.0 高速总线 (480 Mbps) 上，数据包以最大 512 字节 (wMaxPacketSize) 传输。在传统的 H.264 Annex-B 裸流中，解码器必须等待下一帧的起始码 (00 00 00 01) 才能确认当前帧结束，导致鼠标静止或视频暂停时画面卡死。",
+                docUsbProtoDesc2: "ext-monitor 引入官方标准 RFC 4571 双字节长度封包，并完整保留 RTP Marker Bit (EOF) 信号。USB 收到数据帧最后一个切片的瞬间立即触发 HDMI 显示，彻底摆脱对鼠标移动的依赖，YouTube 播放丝滑流畅。传输长度恰为 512 整数倍时自动发送 ZLP 零长度包，彻底释放 DWC2 硬件 FIFO 避免死锁。",
+                docAudioTitle: "3. 多模式音频路由架构 (标准模式 vs 混合模式)",
+                docAudioDesc1: "ext-monitor 支持通过 4 种传输通道将电脑立体声音频输出至 HDMI 电视音响：",
+                docAudioDesc2: "标准模式 vs 混合模式：标准模式下电脑视频与音频同步输出至电视；混合模式下电脑画面投射至电视，声音由笔记本扬声器播放，或在电视显示电脑屏幕的同时，通过蓝牙播放手机音乐。",
+                docSerialTitle: "4. 通过 USB 虚拟串口 (/dev/ttyACM0) 零 IP 维护",
                 docSerialDesc: "若网络禁用或配置错误，树莓派会在电脑上提供 115200 波特率的 /dev/ttyACM0 救援控制台。",
-                docLinuxTitle: "2. Linux Wayland (GNOME) 正常连接",
+                docLinuxTitle: "5. Linux Wayland (GNOME) 正常连接",
                 docLinuxDesc: "将 USB 线插入中间的数据端口。电脑将通过内置 DHCP 自动获取 192.168.7.1，然后运行启动脚本：",
-                docWinTitle: "3. Windows 10/11 投屏 (Win + K 无需驱动)",
+                docWinTitle: "6. Windows 10/11 投屏 (Win + K 无需驱动)",
                 docWinDesc: "插入 USB 后在 Windows 上按 Win + K，选择 'Pi Zero Wireless Display' 即可。",
+                docSdTitle: "7. 100% 内存运行架构与免拔卡在线固件升级",
+                docSdDesc: "系统 100% 运行于 initramfs 内存盘中。升级接收端时只需通过 'mount -t vfat /dev/mmcblk0p1 /mnt' 挂载 FAT 引导分区写入新镜像并卸载，无需断电或拔出 SD 卡。",
                 protoHeader: "传输协议特性对比表",
                 thMethod: "传输方式",
                 thProtocol: "通信协议",

@@ -38,7 +38,7 @@ echo -e "\x1b[1;32m[+] Pi Zero detectado e respondendo em $PI_IP!\x1b[0m"
 
 # 2. Se já estiver no diretório do repositório, usa o executável local
 if [ -f "./scripts/start.sh" ] && [ -f "./target/release/ext-sender" ]; then
-    exec ./scripts/start.sh "$MODE" auto "$FPS" false economy --bitrate="$BITRATE"
+    exec ./scripts/start.sh "$MODE" auto "$FPS" false full --bitrate="$BITRATE"
 fi
 
 # 3. Caso contrário, baixa as ferramentas portáteis do próprio Pi Zero
@@ -59,9 +59,9 @@ if [ ! -f "$WORK_DIR/ext-sender" ] || [ "$1" = "--update" ]; then
 fi
 
 if [ -f "$WORK_DIR/start.sh" ]; then
-    exec "$WORK_DIR/start.sh" "$MODE" auto "$FPS" false economy --bitrate="$BITRATE"
+    exec "$WORK_DIR/start.sh" "$MODE" auto "$FPS" false full --bitrate="$BITRATE"
 elif [ -f "$WORK_DIR/ext-sender" ]; then
-    exec "$WORK_DIR/ext-sender" "$PI_IP" 5000 "$BITRATE" "$MODE" auto "$FPS" false 256
+    exec "$WORK_DIR/ext-sender" "$PI_IP" 5000 "$BITRATE" "$MODE" auto "$FPS" false full
 else
     echo -e "\x1b[1;31m[!] Falha ao obter o executável ext-sender do Pi Zero.\x1b[0m"
     exit 1
