@@ -30,6 +30,8 @@ pub struct UsbBulkIngress;
 impl UsbBulkIngress {
     /// Runs the USB Bulk ingress decode and display loop until `running` becomes false
     pub fn run(read_fd: RawFd, running: Arc<AtomicBool>) {
+        let mut stream_file = unsafe { File::from_raw_fd(read_fd) };
+
         let mut display = match FramebufferSink::open(1280, 720) {
             Ok(d) => d,
             Err(e) => {
@@ -64,7 +66,6 @@ impl UsbBulkIngress {
         let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(16);
         let run_read = running.clone();
         let read_handle = thread::spawn(move || {
-            let mut stream_file = unsafe { File::from_raw_fd(read_fd) };
             let mut buffer = [0u8; 65536];
 
             while run_read.load(Ordering::SeqCst) {

@@ -76,7 +76,12 @@ rm -rf "${TMP_CLIENT}"
 echo -e "\x1b[1;34m[*] Step 3: Packaging minimal initramfs.cpio.gz...\x1b[0m"
 (
     cd "${BUILD_DIR}/initramfs"
-    find . -print0 | cpio --null -ov --format=newc -R 0:0 2>/dev/null | gzip -9 > "${BUILD_DIR}/boot/initramfs.cpio.gz"
+    sudo mkdir -p dev
+    sudo mknod -m 600 dev/console c 5 1 2>/dev/null || true
+    sudo mknod -m 666 dev/null c 1 3 2>/dev/null || true
+    sudo mknod -m 666 dev/zero c 1 5 2>/dev/null || true
+    sudo mknod -m 666 dev/tty1 c 4 1 2>/dev/null || true
+    sudo find . -print0 | sudo cpio --null -ov --format=newc -R 0:0 2>/dev/null | gzip -9 > "${BUILD_DIR}/boot/initramfs.cpio.gz"
 )
 
 # 4. Create 32MB Disk Image matching BCM2835 Boot ROM Sector 1 geometry

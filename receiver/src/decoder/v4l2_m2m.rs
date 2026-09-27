@@ -145,9 +145,9 @@ impl V4l2DecoderSession {
             return None;
         }
 
-        // 3. REQBUFS & MMAP OUTPUT (20 buffers for smooth pipeline depth)
+        // 3. REQBUFS & MMAP OUTPUT (8 buffers for smooth pipeline depth)
         let mut req_out = V4l2RequestBuffers {
-            count: 20,
+            count: 8,
             buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
             memory: V4L2_MEMORY_MMAP,
             ..Default::default()
@@ -172,6 +172,11 @@ impl V4l2DecoderSession {
             if unsafe { libc::ioctl(video_fd, VIDIOC_QUERYBUF, &mut buf) } != 0 {
                 let err = std::io::Error::last_os_error();
                 eprintln!("\x1b[1;31m[v4l2-m2m]\x1b[0m OUTPUT VIDIOC_QUERYBUF[{}] failed: {}", i, err);
+                for (p, l) in out_ptrs.iter().zip(out_lens.iter()) {
+                    unsafe { libc::munmap(*p as *mut libc::c_void, *l); }
+                }
+                let mut r0 = V4l2RequestBuffers { count: 0, buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, memory: V4L2_MEMORY_MMAP, ..Default::default() };
+                unsafe { libc::ioctl(video_fd, VIDIOC_REQBUFS, &mut r0); }
                 return None;
             }
             let ptr = unsafe {
@@ -185,6 +190,11 @@ impl V4l2DecoderSession {
                 ) as *mut u8
             };
             if ptr.is_null() || ptr == libc::MAP_FAILED as *mut u8 {
+                for (p, l) in out_ptrs.iter().zip(out_lens.iter()) {
+                    unsafe { libc::munmap(*p as *mut libc::c_void, *l); }
+                }
+                let mut r0 = V4l2RequestBuffers { count: 0, buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, memory: V4L2_MEMORY_MMAP, ..Default::default() };
+                unsafe { libc::ioctl(video_fd, VIDIOC_REQBUFS, &mut r0); }
                 return None;
             }
             out_ptrs.push(ptr);
@@ -192,14 +202,19 @@ impl V4l2DecoderSession {
             free_out_indices.push(i);
         }
 
-        // 4. REQBUFS & MMAP CAPTURE (20 buffers)
+        // 4. REQBUFS & MMAP CAPTURE (8 buffers)
         let mut req_cap = V4l2RequestBuffers {
-            count: 20,
+            count: 8,
             buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
             memory: V4L2_MEMORY_MMAP,
             ..Default::default()
         };
         if unsafe { libc::ioctl(video_fd, VIDIOC_REQBUFS, &mut req_cap) } != 0 {
+            for (p, l) in out_ptrs.iter().zip(out_lens.iter()) {
+                unsafe { libc::munmap(*p as *mut libc::c_void, *l); }
+            }
+            let mut r0 = V4l2RequestBuffers { count: 0, buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, memory: V4L2_MEMORY_MMAP, ..Default::default() };
+            unsafe { libc::ioctl(video_fd, VIDIOC_REQBUFS, &mut r0); }
             return None;
         }
 
@@ -218,6 +233,18 @@ impl V4l2DecoderSession {
             if unsafe { libc::ioctl(video_fd, VIDIOC_QUERYBUF, &mut buf) } != 0 {
                 let err = std::io::Error::last_os_error();
                 eprintln!("\x1b[1;31m[v4l2-m2m]\x1b[0m CAPTURE VIDIOC_QUERYBUF[{}] failed: {}", i, err);
+                for (p, l) in out_ptrs.iter().zip(out_lens.iter()) {
+                    unsafe { libc::munmap(*p as *mut libc::c_void, *l); }
+                }
+                for (p, l) in cap_ptrs.iter().zip(cap_lens.iter()) {
+                    unsafe { libc::munmap(*p as *mut libc::c_void, *l); }
+                }
+                let mut r0_out = V4l2RequestBuffers { count: 0, buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, memory: V4L2_MEMORY_MMAP, ..Default::default() };
+                let mut r0_cap = V4l2RequestBuffers { count: 0, buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, memory: V4L2_MEMORY_MMAP, ..Default::default() };
+                unsafe {
+                    libc::ioctl(video_fd, VIDIOC_REQBUFS, &mut r0_out);
+                    libc::ioctl(video_fd, VIDIOC_REQBUFS, &mut r0_cap);
+                }
                 return None;
             }
             let ptr = unsafe {
@@ -231,6 +258,18 @@ impl V4l2DecoderSession {
                 ) as *mut u8
             };
             if ptr.is_null() || ptr == libc::MAP_FAILED as *mut u8 {
+                for (p, l) in out_ptrs.iter().zip(out_lens.iter()) {
+                    unsafe { libc::munmap(*p as *mut libc::c_void, *l); }
+                }
+                for (p, l) in cap_ptrs.iter().zip(cap_lens.iter()) {
+                    unsafe { libc::munmap(*p as *mut libc::c_void, *l); }
+                }
+                let mut r0_out = V4l2RequestBuffers { count: 0, buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, memory: V4L2_MEMORY_MMAP, ..Default::default() };
+                let mut r0_cap = V4l2RequestBuffers { count: 0, buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, memory: V4L2_MEMORY_MMAP, ..Default::default() };
+                unsafe {
+                    libc::ioctl(video_fd, VIDIOC_REQBUFS, &mut r0_out);
+                    libc::ioctl(video_fd, VIDIOC_REQBUFS, &mut r0_cap);
+                }
                 return None;
             }
             cap_ptrs.push(ptr);
@@ -522,6 +561,24 @@ impl Drop for V4l2DecoderSession {
             unsafe {
                 libc::munmap(*ptr as *mut libc::c_void, *len);
             }
+        }
+
+        // Release kernel CMA buffers back to the OS
+        let mut req_zero_out = V4l2RequestBuffers {
+            count: 0,
+            buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
+            memory: V4L2_MEMORY_MMAP,
+            ..Default::default()
+        };
+        let mut req_zero_cap = V4l2RequestBuffers {
+            count: 0,
+            buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+            memory: V4L2_MEMORY_MMAP,
+            ..Default::default()
+        };
+        unsafe {
+            libc::ioctl(self.video_fd, VIDIOC_REQBUFS, &mut req_zero_out);
+            libc::ioctl(self.video_fd, VIDIOC_REQBUFS, &mut req_zero_cap);
         }
         println!("\x1b[1;33m[v4l2-m2m]\x1b[0m Hardware Decoder session closed cleanly.");
     }
