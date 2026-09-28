@@ -1067,6 +1067,23 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                         O appliance roda 100% em initramfs RAM disk. Para atualizar o binário do receptor, basta montar a partição FAT de boot com <span style="font-family: monospace; color: var(--accent-cyan);">mount -t vfat /dev/mmcblk0p1 /mnt</span>, gravar a nova imagem e desmontar, sem necessidade de desligar o dispositivo.
                     </p>
 
+                    <!-- Section 8: Browser Video Occlusion Tip -->
+                    <div style="background: rgba(88, 166, 255, 0.08); border-left: 4px solid var(--accent-cyan); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: var(--accent-cyan); margin: 0 0 0.5rem 0;" data-i18n="docBrowserVideoTitle">8. 💡 Dica: Reprodução Contínua de Vídeos no Navegador (Chrome / Firefox)</h3>
+                        <p data-i18n="docBrowserVideoDesc" style="margin-bottom: 0.75rem;">
+                            No Linux Wayland, navegadores como Chrome e Firefox ativam economia de energia ('Window Occlusion Tracking') e pausam a renderização de vídeos quando o cursor sai da janela ou ela perde o foco. Para manter 60 FPS contínuos mesmo sem o cursor sobre a janela:
+                        </p>
+                        <p style="margin: 0.35rem 0 0.2rem 1rem; color: #fff;">
+                            <strong>Chrome / Chromium / Edge / Brave:</strong> <span data-i18n="docBrowserChrome">Acesse chrome://flags/#calculate-native-win-occlusion, selecione 'Disabled' e reinicie o navegador (ou use a flag --disable-backgrounding-occluded-windows).</span>
+                        </p>
+                        <p style="margin: 0.35rem 0 0.2rem 1rem; color: #fff;">
+                            <strong>Mozilla Firefox:</strong> <span data-i18n="docBrowserFirefox">Acesse about:config, busque por media.suspend-bkgnd-video.enabled e altere para 'false'.</span>
+                        </p>
+                        <p style="margin: 0.35rem 0 0.2rem 1rem; color: #fff;">
+                            <strong>Players Nativos (VLC / MPV):</strong> <span data-i18n="docBrowserNative">Reproduzem a 60 FPS contínuos por padrão, sem interrupção por foco ou posição de mouse.</span>
+                        </p>
+                    </div>
+
                     <!-- Comparison Table -->
                     <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="protoHeader">Tabela Comparativa de Métodos</h3>
                     <table class="proto-table">
@@ -1232,6 +1249,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docWinDesc: "Plug into USB, press Win + K on Windows, select 'Pi Zero Wireless Display'.",
                 docSdTitle: "7. 100% RAM Architecture & Firmware Upgrade without SD Card Removal",
                 docSdDesc: "The appliance runs 100% in an initramfs RAM disk. To upgrade receiver binaries, simply mount the boot FAT partition with 'mount -t vfat /dev/mmcblk0p1 /mnt', write the new image, and unmount without rebooting or touching the SD card.",
+                docBrowserVideoTitle: "8. 💡 Tip: Continuous Browser Video Playback (Chrome / Firefox)",
+                docBrowserVideoDesc: "On Linux Wayland, browsers like Chrome and Firefox enable aggressive power-saving ('Window Occlusion Tracking') and pause video rendering when the mouse cursor leaves the window or it loses focus. To ensure smooth 60 FPS video without cursor focus:",
+                docBrowserChrome: "Visit chrome://flags/#calculate-native-win-occlusion, set to 'Disabled' and restart (or launch with --disable-backgrounding-occluded-windows).",
+                docBrowserFirefox: "Visit about:config, search for media.suspend-bkgnd-video.enabled and toggle to 'false'.",
+                docBrowserNative: "Play at continuous 60 FPS by default without any cursor position restrictions.",
                 protoHeader: "Protocol Comparison Table",
                 thMethod: "Method",
                 thProtocol: "Protocol",
@@ -1339,6 +1361,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docWinDesc: "Conecte na USB, pressione Win + K no Windows e selecione 'Pi Zero Wireless Display'.",
                 docSdTitle: "7. Arquitetura 100% RAM & Atualização sem Retirar o Cartão",
                 docSdDesc: "O appliance roda 100% em initramfs RAM disk. Para atualizar o binário do receptor, basta montar a partição FAT de boot com 'mount -t vfat /dev/mmcblk0p1 /mnt', gravar a nova imagem e desmontar, sem necessidade de desligar o dispositivo.",
+                docBrowserVideoTitle: "8. 💡 Dica: Reprodução Contínua de Vídeos no Navegador (Chrome / Firefox)",
+                docBrowserVideoDesc: "No Linux Wayland, navegadores como Chrome e Firefox ativam economia de energia ('Window Occlusion Tracking') e pausam a renderização de vídeos quando o cursor sai da janela ou ela perde o foco. Para manter 60 FPS contínuos mesmo sem o cursor sobre a janela:",
+                docBrowserChrome: "Acesse chrome://flags/#calculate-native-win-occlusion, selecione 'Disabled' e reinicie o navegador (ou use a flag --disable-backgrounding-occluded-windows).",
+                docBrowserFirefox: "Acesse about:config, busque por media.suspend-bkgnd-video.enabled e altere para 'false'.",
+                docBrowserNative: "Reproduzem a 60 FPS contínuos por padrão, sem interrupção por foco ou posição de mouse.",
                 protoHeader: "Tabela Comparativa de Métodos",
                 thMethod: "Método",
                 thProtocol: "Protocolo",
@@ -1446,6 +1473,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docWinDesc: "Collega via USB, premi Win + K su Windows e seleziona 'Pi Zero Wireless Display'.",
                 docSdTitle: "7. Architettura 100% RAM & Aggiornamento senza rimuovere la scheda SD",
                 docSdDesc: "L'appliance funziona al 100% in RAM disk initramfs. Per aggiornare, basta montare la partizione FAT di boot con 'mount -t vfat /dev/mmcblk0p1 /mnt' e copiare i nuovi binari senza spegnere il dispositivo.",
+                docBrowserVideoTitle: "8. 💡 Suggerimento: Riproduzione Continua di Video nel Browser (Chrome / Firefox)",
+                docBrowserVideoDesc: "Su Linux Wayland, browser come Chrome e Firefox attivano il risparmio energetico ('Window Occlusion Tracking') e sospendono i video quando il mouse esce dalla finestra o perde il focus. Per mantenere 60 FPS continui:",
+                docBrowserChrome: "Apri chrome://flags/#calculate-native-win-occlusion, imposta su 'Disabled' e riavvia (o usa --disable-backgrounding-occluded-windows).",
+                docBrowserFirefox: "Apri about:config, cerca media.suspend-bkgnd-video.enabled e imposta su 'false'.",
+                docBrowserNative: "Riproducono a 60 FPS continui per impostazione predefinita, senza interruzioni per posizione del mouse.",
                 protoHeader: "Tabella Comparativa Protocolli",
                 thMethod: "Metodo",
                 thProtocol: "Protocollo",
@@ -1553,6 +1585,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docWinDesc: "插入 USB 后在 Windows 上按 Win + K，选择 'Pi Zero Wireless Display' 即可。",
                 docSdTitle: "7. 100% 内存运行架构与免拔卡在线固件升级",
                 docSdDesc: "系统 100% 运行于 initramfs 内存盘中。升级接收端时只需通过 'mount -t vfat /dev/mmcblk0p1 /mnt' 挂载 FAT 引导分区写入新镜像并卸载，无需断电或拔出 SD 卡。",
+                docBrowserVideoTitle: "8. 💡 技巧：防止外部显示器上的浏览器视频在鼠标移出时暂停 (Chrome / Firefox)",
+                docBrowserVideoDesc: "在 Linux Wayland 下，Chrome 和 Firefox 默认启用激进的节能策略 ('Window Occlusion Tracking')，当鼠标移出窗口或失去焦点时会自动挂起视频渲染。如需保持 60 FPS 持续平滑播放：",
+                docBrowserChrome: "在地址栏打开 chrome://flags/#calculate-native-win-occlusion，设为 'Disabled' 并重启浏览器（或启动时添加参数 --disable-backgrounding-occluded-windows）。",
+                docBrowserFirefox: "在地址栏打开 about:config，搜索 media.suspend-bkgnd-video.enabled 并修改为 'false'。",
+                docBrowserNative: "原生播放器默认以 60 FPS 持续渲染，完全不受鼠标焦点或窗口层叠限制。",
                 protoHeader: "传输协议特性对比表",
                 thMethod: "传输方式",
                 thProtocol: "通信协议",
