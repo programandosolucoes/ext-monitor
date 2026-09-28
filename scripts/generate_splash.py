@@ -1,165 +1,260 @@
 #!/usr/bin/env python3
+"""
+ExtMonitor Splash Screen Generator (1280x720 RGB565)
+Generates high-definition splash screens for:
+1. Loading / Boot ("Aguarde carregando...") in 4 languages
+2. Ready / Idle ("Pronto para Conexão - 3 Modos de Operação") in 4 languages
+
+Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+"""
+
 import os
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+import gzip
+from PIL import Image, ImageDraw, ImageFont
 
-def create_splash():
-    WIDTH = 1600
-    HEIGHT = 900
-    
-    bg_path = "/home/carlos/.gemini/antigravity-ide/brain/75679085-ed8d-4905-9fe8-69518ca69c49/splash_bg_1790278876510.jpg"
-    if os.path.exists(bg_path):
-        bg = Image.open(bg_path).convert("RGBA")
-        bg = bg.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-    else:
-        bg = Image.new("RGBA", (WIDTH, HEIGHT), (10, 14, 23, 255))
-    
-    # Dark frosted glass overlay
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (8, 12, 20, 200))
-    img = Image.alpha_composite(bg, overlay)
+WIDTH = 1280
+HEIGHT = 720
+
+def get_font(size, bold=True, is_cjk=False):
+    if is_cjk:
+        cjk_paths = [
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+        ]
+        for p in cjk_paths:
+            if os.path.exists(p):
+                try:
+                    return ImageFont.truetype(p, size)
+                except Exception:
+                    pass
+    paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
+
+def draw_gradient_background(draw, width, height, top_color, bottom_color):
+    for y in range(height):
+        ratio = y / float(height)
+        r = int(top_color[0] * (1 - ratio) + bottom_color[0] * ratio)
+        g = int(top_color[1] * (1 - ratio) + bottom_color[1] * ratio)
+        b = int(top_color[2] * (1 - ratio) + bottom_color[2] * ratio)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+def make_rgb565(img):
+    img = img.convert("RGB")
+    raw = bytearray()
+    for y in range(img.height):
+        for x in range(img.width):
+            r, g, b = img.getpixel((x, y))
+            r5 = (r >> 3) & 0x1F
+            g6 = (g >> 2) & 0x3F
+            b5 = (b >> 3) & 0x1F
+            val = (r5 << 11) | (g6 << 5) | b5
+            raw.append(val & 0xFF)
+            raw.append((val >> 8) & 0xFF)
+    return bytes(raw)
+
+def generate_loading_splash(output_dir):
+    img = Image.new("RGB", (WIDTH, HEIGHT))
     draw = ImageDraw.Draw(img)
-    
-    # Fonts
-    font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
-    font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 17)
-    font_badge = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 13)
-    font_card_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
-    font_body = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
-    font_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 15)
-    font_code = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 15)
-    font_code_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 12)
-    font_footer = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 13)
 
-    # Top Badge
-    badge_text = "• RASPBERRY PI ZERO W  |  HARDWARE GPU SECOND MONITOR ENGINE •"
-    bbox = font_badge.getbbox(badge_text)
-    bw, bh = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    bx, by = (WIDTH - bw) // 2, 45
-    pad_x, pad_y = 18, 6
-    draw.rounded_rectangle([bx - pad_x, by - pad_y, bx + bw + pad_x, by + bh + pad_y], radius=8, fill=(0, 229, 255, 30), outline=(0, 229, 255, 180), width=1)
-    draw.text((bx, by), badge_text, font=font_badge, fill=(0, 229, 255, 255))
+    # Deep high-tech dark background
+    draw_gradient_background(draw, WIDTH, HEIGHT, (10, 14, 23), (16, 22, 36))
 
-    # Main Title
-    title_text = "Monitor Estendido por Aceleração de Hardware GPU"
-    t_bbox = font_title.getbbox(title_text)
-    tw = t_bbox[2] - t_bbox[0]
-    draw.text(((WIDTH - tw) // 2, 85), title_text, font=font_title, fill=(255, 255, 255, 255))
+    # Ambient subtle grid lines
+    for x in range(0, WIDTH, 80):
+        draw.line([(x, 0), (x, HEIGHT)], fill=(20, 28, 45), width=1)
+    for y in range(0, HEIGHT, 80):
+        draw.line([(0, y), (WIDTH, y)], fill=(20, 28, 45), width=1)
 
-    # Subtitle
-    sub_text = "Sessão Ubuntu Wayland  •  AMD Radeon 610M VA-API  •  VideoCore IV KMS Direct Scanout"
-    s_bbox = font_sub.getbbox(sub_text)
-    sw = s_bbox[2] - s_bbox[0]
-    draw.text(((WIDTH - sw) // 2, 135), sub_text, font=font_sub, fill=(160, 180, 210, 240))
+    # Top Brand Header
+    font_brand = get_font(28, bold=True)
+    draw.text((WIDTH // 2, 80), "EXT-MONITOR PI ZERO", fill=(88, 166, 255), anchor="mm", font=font_brand)
 
-    # 3 Cards Layout
-    card_w = 460
-    card_h = 580
-    gap = 40
-    start_x = (WIDTH - (3 * card_w + 2 * gap)) // 2
-    card_y = 190
+    font_sub = get_font(16, bold=False)
+    draw.text((WIDTH // 2, 115), "Appliance Minimal 33MB • 100% Pure Rust • VideoCore IV Hardware VPU", fill=(139, 148, 158), anchor="mm", font=font_sub)
 
-    cards_data = [
-        {
-            "step": "PASSO 1",
-            "title": "Conexão & Rede USB",
-            "accent": (0, 229, 255),
-            "lines": [
-                ("1. Conecte o cabo Micro-USB:", font_bold, (255, 255, 255)),
-                ("   Use a porta USB interna de dados", font_body, (180, 200, 220)),
-                ("   (não a porta marcada PWR-IN).", font_body, (180, 200, 220)),
-                ("", font_body, (0, 0, 0)),
-                ("2. No seu computador, configure o IP:", font_bold, (255, 255, 255)),
-                ("   IP do seu PC: 192.168.7.1", font_code, (0, 255, 180)),
-                ("   Máscara:      255.255.255.0", font_code, (180, 200, 220)),
-                ("", font_body, (0, 0, 0)),
-                ("3. O Raspberry Pi responderá em:", font_bold, (255, 255, 255)),
-                ("   IP do Pi:     192.168.7.2", font_code, (0, 229, 255)),
-                ("   Porta UDP:    5000 (Vídeo)", font_code, (180, 200, 220)),
-                ("", font_body, (0, 0, 0)),
-                ("✓ Suporta também Wi-Fi ou Ethernet!", font_sub, (0, 255, 140)),
-            ]
-        },
-        {
-            "step": "PASSO 2",
-            "title": "Painel de Controle Web",
-            "accent": (0, 255, 120),
-            "lines": [
-                ("1. Abra no navegador do seu PC:", font_bold, (255, 255, 255)),
-                ("   http://192.168.7.2:8080", font_code, (0, 255, 180)),
-                ("", font_body, (0, 0, 0)),
-                ("2. Recursos disponíveis a quente:", font_bold, (255, 255, 255)),
-                ("   • Seletor de FPS (12 / 30 / 60 FPS)", font_body, (180, 200, 220)),
-                ("   • Perfil 256 Cores (Coarse QP)", font_body, (180, 200, 220)),
-                ("   • Modo Grayscale / Monocromático", font_body, (180, 200, 220)),
-                ("   • Auto-scaling de Bitrate por FPS", font_body, (180, 200, 220)),
-                ("   • Telemetria ao vivo VPU/CPU/RAM", font_body, (180, 200, 220)),
-                ("   • Botão Reativar HUD (60 seg)", font_body, (180, 200, 220)),
-                ("", font_body, (0, 0, 0)),
-                ("✓ Altere parâmetros sem reiniciar!", font_sub, (0, 255, 140)),
-            ]
-        },
-        {
-            "step": "PASSO 3",
-            "title": "Conectar sua Sessão",
-            "accent": (180, 100, 255),
-            "lines": [
-                ("1. No PC, execute no terminal (Auto):", font_bold, (255, 255, 255)),
-                ("   curl -sSL http://192.168.7.2:8080/connect.sh | bash", font_code_sm, (0, 255, 180)),
-                ("", font_body, (0, 0, 0)),
-                ("2. Ou baixe o pacote pronto no navegador:", font_bold, (255, 255, 255)),
-                ("   Acesse http://192.168.7.2:8080 e baixe", font_body, (180, 200, 220)),
-                ("   ext-monitor-client.tar.gz (1.2 MB)", font_code_sm, (0, 229, 255)),
-                ("", font_body, (0, 0, 0)),
-                ("3. Se já tiver o código clonado no PC:", font_bold, (255, 255, 255)),
-                ("   ./scripts/start.sh extend auto 12 hud 256", font_code_sm, (180, 100, 255)),
-                ("", font_body, (0, 0, 0)),
-                ("4. O monitor assumirá a sessão:", font_bold, (255, 255, 255)),
-                ("   Exibe boas-vindas e telemetria,", font_body, (180, 200, 220)),
-                ("   e oculta o HUD após 1 minuto.", font_body, (180, 200, 220)),
-            ]
-        }
+    # Center Glowing Frame
+    cx, cy = WIDTH // 2, 280
+    r_outer = 65
+    draw.ellipse([(cx - r_outer, cy - r_outer), (cx + r_outer, cy + r_outer)], outline=(31, 111, 235), width=3)
+    draw.ellipse([(cx - 50, cy - 50), (cx + 50, cy + 50)], fill=(22, 27, 34), outline=(88, 166, 255), width=2)
+    font_icon = get_font(36, bold=True)
+    draw.text((cx, cy), "⚙", fill=(56, 189, 248), anchor="mm", font=font_icon)
+
+    # Central Title
+    font_title = get_font(24, bold=True)
+    draw.text((WIDTH // 2, 380), "INICIANDO SISTEMA • INITIALIZING SYSTEM", fill=(240, 246, 252), anchor="mm", font=font_title)
+
+    # Loading bar
+    bx, by, bw, bh = WIDTH // 2 - 250, 415, 500, 10
+    draw.rounded_rectangle([(bx, by), (bx + bw, by + bh)], radius=5, fill=(33, 38, 45))
+    draw.rounded_rectangle([(bx, by), (bx + 340, by + bh)], radius=5, fill=(56, 189, 248))
+
+    # 4 Languages Loading Messages Box
+    card_x, card_y, card_w, card_h = WIDTH // 2 - 380, 460, 760, 190
+    draw.rounded_rectangle([(card_x, card_y), (card_x + card_w, card_y + card_h)], radius=12, fill=(22, 27, 34), outline=(48, 54, 61), width=1)
+
+    font_lang = get_font(15, bold=False)
+    font_lang_cjk = get_font(15, bold=False, is_cjk=True)
+    font_tag = get_font(14, bold=True)
+
+    messages = [
+        ("[PT]", "Aguarde o carregamento do hardware, drivers GPU e rede...", (56, 189, 248), False),
+        ("[EN]", "Please wait, initializing GPU, network drivers & display...", (88, 166, 255), False),
+        ("[IT]", "Attendere il caricamento di hardware, driver GPU e rete...", (163, 113, 247), False),
+        ("[ZH]", "正在加载硬件、GPU驱动和网络，请稍候...", (63, 185, 80), True),
     ]
 
-    for i, c in enumerate(cards_data):
-        cx = start_x + i * (card_w + gap)
-        # Card Background
-        card_bg = Image.new("RGBA", (card_w, card_h), (14, 20, 32, 220))
-        img.paste(card_bg, (cx, card_y), card_bg)
-        
-        # Border
-        accent = c["accent"]
-        draw.rounded_rectangle([cx, card_y, cx + card_w, card_y + card_h], radius=14, outline=(accent[0], accent[1], accent[2], 160), width=2)
-        
-        # Top Step Pill
-        draw.rounded_rectangle([cx + 20, card_y + 18, cx + 110, card_y + 44], radius=6, fill=(accent[0], accent[1], accent[2], 40), outline=(accent[0], accent[1], accent[2], 200), width=1)
-        draw.text((cx + 32, card_y + 22), c["step"], font=font_badge, fill=accent)
-        
-        # Card Title
-        draw.text((cx + 20, card_y + 55), c["title"], font=font_card_title, fill=(255, 255, 255))
-        draw.line([cx + 20, card_y + 90, cx + card_w - 20, card_y + 90], fill=(60, 80, 110, 120), width=1)
-        
-        # Content lines
-        curr_y = card_y + 105
-        for text, font, color in c["lines"]:
-            if text == "":
-                curr_y += 10
-                continue
-            draw.text((cx + 24, curr_y), text, font=font, fill=color)
-            curr_y += 24
+    for idx, (tag, text, col, is_cjk) in enumerate(messages):
+        row_y = card_y + 25 + (idx * 38)
+        draw.text((card_x + 30, row_y), tag, fill=col, font=font_tag)
+        f_to_use = font_lang_cjk if is_cjk else font_lang
+        draw.text((card_x + 105, row_y), text, fill=(201, 209, 217), font=f_to_use)
 
-    # Bottom Status Bar
-    bar_y = 810
-    draw.rounded_rectangle([start_x, bar_y, WIDTH - start_x, bar_y + 55], radius=10, fill=(12, 16, 26, 230), outline=(0, 229, 255, 100), width=1)
-    status_text = "PAINEL: 1600x900@59.95Hz (Nativo 1:1)  |  VPU BCM2835: 500 MHz  |  STATUS: Aguardando Stream UDP:5000..."
-    draw.text((start_x + 30, bar_y + 18), status_text, font=font_footer, fill=(0, 255, 160))
-    
-    web_text = "Painel Web: http://192.168.7.2:8080"
-    w_bbox = font_footer.getbbox(web_text)
-    ww = w_bbox[2] - w_bbox[0]
-    draw.text((WIDTH - start_x - ww - 30, bar_y + 18), web_text, font=font_footer, fill=(0, 229, 255))
+    # Footer
+    font_foot = get_font(14, bold=False)
+    draw.text((WIDTH // 2, 680), "Carregando serviços USB Gadget, Wi-Fi Display e Servidor Web...", fill=(110, 118, 129), anchor="mm", font=font_foot)
 
-    output_path = "/home/carlos/ide/ext-monitor/splash.png"
-    img.convert("RGB").save(output_path, "PNG", quality=95)
-    print(f"[+] Splash screen gerada com sucesso: {output_path} ({WIDTH}x{HEIGHT})")
+    # Save PNG and Raw RGB565 GZ
+    os.makedirs(output_dir, exist_ok=True)
+    png_path = os.path.join(output_dir, "splash_loading.png")
+    raw_gz_path = os.path.join(output_dir, "splash_loading.raw.gz")
+
+    img.save(png_path)
+    raw_bytes = make_rgb565(img)
+    with gzip.open(raw_gz_path, "wb") as f:
+        f.write(raw_bytes)
+
+    print(f"Generated {png_path} and {raw_gz_path} ({len(raw_bytes)} bytes raw -> {os.path.getsize(raw_gz_path)} bytes gz)")
+
+def generate_ready_splash(output_dir):
+    img = Image.new("RGB", (WIDTH, HEIGHT))
+    draw = ImageDraw.Draw(img)
+
+    # Elegant deep gradient
+    draw_gradient_background(draw, WIDTH, HEIGHT, (8, 12, 20), (14, 18, 30))
+
+    # Top Banner Header
+    font_brand = get_font(26, bold=True)
+    draw.text((40, 38), "EXT-MONITOR PI ZERO", fill=(56, 189, 248), anchor="lm", font=font_brand)
+
+    font_badge = get_font(13, bold=True)
+    badge_text = "● PRONTO PARA CONEXÃO / READY FOR CONNECTION"
+    draw.rounded_rectangle([(WIDTH - 420, 24), (WIDTH - 40, 52)], radius=6, fill=(18, 48, 28), outline=(46, 160, 67), width=1)
+    draw.text((WIDTH - 230, 38), badge_text, fill=(86, 211, 100), anchor="mm", font=font_badge)
+
+    draw.line([(40, 68), (WIDTH - 40, 68)], fill=(33, 38, 45), width=1)
+
+    # 4 Language Quadrants Layout (2 columns x 2 rows)
+    # Col 1: X = 40 to 620, Col 2: X = 660 to 1240
+    # Row 1: Y = 82 to 345, Row 2: Y = 360 to 625
+    quads = [
+        # (title, flag, [ (mode_label, mode_desc) ], x, y, width, height, border_color)
+        {
+            "lang": "PORTUGUÊS (BRASIL)",
+            "flag": "[PT]",
+            "x": 40, "y": 80, "w": 580, "h": 270,
+            "border": (31, 111, 235),
+            "modes": [
+                ("Modo 1 (Rede IP):", "Execute ./scripts/start.sh ou acesse http://192.168.7.2:8080"),
+                ("Modo 2 (Miracast):", "No Windows 10/11 tecle Win+K e selecione \"ExtMonitor-Pi0\""),
+                ("Modo 3 (USB Direto):", "Conecte cabo USB e use --transport=usb (Latência < 1ms)"),
+            ]
+        },
+        {
+            "lang": "ENGLISH",
+            "flag": "[EN]",
+            "x": 660, "y": 80, "w": 580, "h": 270,
+            "border": (56, 189, 248),
+            "modes": [
+                ("Mode 1 (Network IP):", "Run ./scripts/start.sh or open http://192.168.7.2:8080"),
+                ("Mode 2 (Miracast):", "On Windows 10/11 press Win+K and select \"ExtMonitor-Pi0\""),
+                ("Mode 3 (Direct USB):", "Connect USB cable and pass --transport=usb (< 1ms latency)"),
+            ]
+        },
+        {
+            "lang": "ITALIANO",
+            "flag": "[IT]",
+            "x": 40, "y": 365, "w": 580, "h": 270,
+            "border": (163, 113, 247),
+            "is_cjk": False,
+            "modes": [
+                ("Modo 1 (Rete IP):", "Esegui ./scripts/start.sh o apri http://192.168.7.2:8080"),
+                ("Modo 2 (Miracast):", "Su Windows 10/11 premi Win+K e seleziona \"ExtMonitor-Pi0\""),
+                ("Modo 3 (USB Diretto):", "Collega cavo USB e usa --transport=usb (Latenza < 1ms)"),
+            ]
+        },
+        {
+            "lang": "中文 (CHINESE)",
+            "flag": "[ZH]",
+            "x": 660, "y": 365, "w": 580, "h": 270,
+            "border": (63, 185, 80),
+            "is_cjk": True,
+            "modes": [
+                ("模式 1 (网络 IP):", "运行 ./scripts/start.sh 或访问 http://192.168.7.2:8080"),
+                ("模式 2 (Miracast):", "Windows 10/11 按 Win+K 并选择 \"ExtMonitor-Pi0\""),
+                ("模式 3 (USB 直连):", "连接 USB 线并使用 --transport=usb (超低延迟 < 1ms)"),
+            ]
+        },
+    ]
+
+    font_qlang = get_font(16, bold=True)
+    font_qlang_cjk = get_font(16, bold=True, is_cjk=True)
+    font_mlabel = get_font(14, bold=True)
+    font_mlabel_cjk = get_font(14, bold=True, is_cjk=True)
+    font_mdesc = get_font(13, bold=False)
+    font_mdesc_cjk = get_font(13, bold=False, is_cjk=True)
+
+    for q in quads:
+        x, y, w, h = q["x"], q["y"], q["w"], q["h"]
+        is_cjk = q.get("is_cjk", False)
+        # Background card
+        draw.rounded_rectangle([(x, y), (x + w, y + h)], radius=10, fill=(18, 22, 32), outline=(36, 44, 62), width=1)
+        # Top Accent border inside card
+        draw.line([(x + 12, y), (x + w - 12, y)], fill=q["border"], width=3)
+
+        # Header of card
+        draw.text((x + 20, y + 22), f"{q['flag']}  {q['lang']}", fill=(240, 246, 252), font=font_qlang_cjk if is_cjk else font_qlang)
+
+        # Modes list
+        start_y = y + 55
+        for m_idx, (m_label, m_desc) in enumerate(q["modes"]):
+            item_y = start_y + (m_idx * 65)
+            # Item background pill
+            draw.rounded_rectangle([(x + 15, item_y), (x + w - 15, item_y + 55)], radius=6, fill=(24, 30, 44))
+            draw.text((x + 28, item_y + 12), m_label, fill=q["border"], font=font_mlabel_cjk if is_cjk else font_mlabel)
+            draw.text((x + 28, item_y + 32), m_desc, fill=(180, 190, 205), font=font_mdesc_cjk if is_cjk else font_mdesc)
+
+    # Footer Information Bar
+    draw.line([(40, 650), (WIDTH - 40, 650)], fill=(33, 38, 45), width=1)
+    font_foot = get_font(14, bold=False)
+    foot_text = "IP: 192.168.7.2  •  Dashboard: http://192.168.7.2:8080  •  RTSP: 7236  •  VideoCore IV KMS Scanout"
+    draw.text((WIDTH // 2, 680), foot_text, fill=(110, 118, 129), anchor="mm", font=font_foot)
+
+    # Save PNG and Raw RGB565 GZ
+    os.makedirs(output_dir, exist_ok=True)
+    png_path = os.path.join(output_dir, "splash_ready.png")
+    raw_gz_path = os.path.join(output_dir, "splash_ready.raw.gz")
+
+    img.save(png_path)
+    raw_bytes = make_rgb565(img)
+    with gzip.open(raw_gz_path, "wb") as f:
+        f.write(raw_bytes)
+
+    print(f"Generated {png_path} and {raw_gz_path} ({len(raw_bytes)} bytes raw -> {os.path.getsize(raw_gz_path)} bytes gz)")
 
 if __name__ == "__main__":
-    create_splash()
+    out_dir = "/home/carlos/ide/ext-monitor/build-appliance/overlay/etc"
+    generate_loading_splash(out_dir)
+    generate_ready_splash(out_dir)
+    # Also save copies for artifacts/preview
+    generate_loading_splash("/home/carlos/ide/ext-monitor/scripts/splash")
+    generate_ready_splash("/home/carlos/ide/ext-monitor/scripts/splash")

@@ -666,15 +666,15 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                         <span>📺</span>
                         <span data-i18n="displayHeader">HDMI Television & Display Telemetry</span>
                     </div>
-                    <span class="card-badge badge-cyan">HDMI-A-1 • 1280x720</span>
+                    <span class="card-badge badge-cyan" id="monitorBadge">HDMI-A-1 • Detectando...</span>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; align-items: center;">
                     <div class="monitor-frame">
                         <div class="monitor-scanline"></div>
                         <div class="monitor-text">
-                            <p style="font-size: 1.4rem; font-weight: 700;">🖥️ SAMSUNG TV</p>
-                            <p style="margin-top: 0.3rem;">VideoCore IV Hardware VPU</p>
-                            <p style="color: #7ee787; margin-top: 0.2rem;">● LIVE ZERO-COPY 60 FPS</p>
+                            <p id="monitorName" style="font-size: 1.4rem; font-weight: 700;">🖥️ Detectando Monitor...</p>
+                            <p id="monitorVpu" style="margin-top: 0.3rem;">VideoCore IV Hardware VPU</p>
+                            <p id="monitorStatus" style="color: #7ee787; margin-top: 0.2rem;">● LIVE ZERO-COPY 60 FPS</p>
                         </div>
                     </div>
                     <div>
@@ -1892,6 +1892,25 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     if (data.temp) document.getElementById('valTemp').textContent = data.temp + '°C';
                     if (data.cpu) document.getElementById('valCpu').textContent = data.cpu;
                     if (data.ram) document.getElementById('valRam').textContent = data.ram + ' MB';
+                    if (data.monitor) {
+                        const m = data.monitor;
+                        const elName = document.getElementById('monitorName');
+                        if (elName && m.name) elName.textContent = '🖥️ ' + m.name;
+                        const elBadge = document.getElementById('monitorBadge');
+                        if (elBadge && m.preferred_mode) elBadge.textContent = 'HDMI-A-1 • ' + m.preferred_mode;
+                        const elVpu = document.getElementById('monitorVpu');
+                        if (elVpu && m.vpu) elVpu.textContent = m.vpu;
+                        const elStatus = document.getElementById('monitorStatus');
+                        if (elStatus) {
+                            if (m.connected) {
+                                elStatus.textContent = '● LIVE ZERO-COPY 60 FPS';
+                                elStatus.style.color = '#7ee787';
+                            } else {
+                                elStatus.textContent = '● DESCONECTADO (HEADLESS)';
+                                elStatus.style.color = '#f85149';
+                            }
+                        }
+                    }
                 })
                 .catch(() => {});
         }

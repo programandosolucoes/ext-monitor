@@ -7,7 +7,7 @@
 //! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
 
 use crate::decoder::V4l2DecoderSession;
-use crate::ingress::{UdpRtpIngress, UsbBulkIngress};
+use crate::ingress::{MiracastIngress, UdpRtpIngress, UsbBulkIngress};
 use std::io;
 use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,6 +17,7 @@ use std::thread::{self, JoinHandle};
 pub struct NativeV4l2Decoder {
     running: Arc<AtomicBool>,
     worker_handle: Option<JoinHandle<()>>,
+    active_fd: Option<RawFd>,
 }
 
 impl NativeV4l2Decoder {
@@ -37,6 +38,23 @@ impl NativeV4l2Decoder {
         Ok(Self {
             running,
             worker_handle: Some(worker_handle),
+            active_fd: None,
+        })
+    }
+
+    /// Starts a native background decode loop from a Miracast MPEG-TS UDP socket
+    pub fn start_miracast_stream(port: u16) -> io::Result<Self> {
+        let running = Arc::new(AtomicBool::new(true));
+        let r = running.clone();
+
+        let worker_handle = thread::spawn(move || {
+            MiracastIngress::run(port, r);
+        });
+
+        Ok(Self {
+            running,
+            worker_handle: Some(worker_handle),
+            active_fd: None,
         })
     }
 
@@ -52,6 +70,7 @@ impl NativeV4l2Decoder {
         Ok(Self {
             running,
             worker_handle: Some(worker_handle),
+            active_fd: Some(fd),
         })
     }
 
@@ -67,6 +86,11 @@ impl NativeV4l2Decoder {
     /// Terminates the native decoding worker
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
+        if let Some(fd) = self.active_fd.take() {
+            unsafe {
+                libc::close(fd);
+            }
+        }
         if let Some(handle) = self.worker_handle.take() {
             let _ = handle.join();
         }

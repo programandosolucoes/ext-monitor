@@ -466,9 +466,11 @@ fn get_system_telemetry_json(is_paused: bool, is_active: bool) -> String {
         "idle"
     };
 
+    let mon = crate::display::MonitorInfo::read_realtime();
+
     format!(
-        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\"}}",
-        temp_val, cpu_load, mem_free_mb, pipeline_state
+        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\"}}}}",
+        temp_val, cpu_load, mem_free_mb, pipeline_state, mon.connected, mon.name, mon.preferred_mode, mon.active_mode, mon.vpu
     )
 }
 

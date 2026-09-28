@@ -147,6 +147,9 @@ impl PipelineManager {
 
         let mut kind_guard = self.active_kind.lock().unwrap();
         *kind_guard = None;
+
+        // Restore clean Ready Splash Screen on stop/disconnect
+        crate::display::SplashEngine::show_ready();
     }
 
     /// Launches the requested hardware decode pipeline
@@ -176,18 +179,8 @@ impl PipelineManager {
                         *self.native_decoder.lock().unwrap() = Some(decoder);
                     }
                     PipelineKind::MiracastMp2t { port } => {
-                        // Fallback to FFmpeg or GStreamer for MPEG-TS demuxing
-                        let child = Command::new("ffplay")
-                            .arg("-vcodec").arg("h264_v4l2m2m")
-                            .arg("-flags").arg("low_delay")
-                            .arg("-framedrop")
-                            .arg("-an")
-                            .arg("-sn")
-                            .arg(format!("udp://0.0.0.0:{}", port))
-                            .stdout(Stdio::null())
-                            .stderr(Stdio::inherit())
-                            .spawn()?;
-                        *self.child.lock().unwrap() = Some(child);
+                        let decoder = NativeV4l2Decoder::start_miracast_stream(port)?;
+                        *self.native_decoder.lock().unwrap() = Some(decoder);
                     }
                 }
             }
