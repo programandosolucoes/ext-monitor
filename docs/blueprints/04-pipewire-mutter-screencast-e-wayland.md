@@ -86,12 +86,39 @@ Um dos diagnósticos mais importantes realizados no projeto envolve o mecanismo 
 * **Se o usuário não move o mouse e nenhuma janela é alterada no monitor virtual `HDMI-1`, o Mutter simplesmente interrompe o envio de buffers para o PipeWire.**
 * O encoder de vídeo e o pipeline GStreamer interpretam a ausência de buffers como interrupção da transmissão, podendo sofrer timeout ou fechamento de portas de rede.
 
-### 4.2 A Solução: Janela de Atividade de Baixo Custo (`show-welcome-window.py`)
-Para manter o canal PipeWire ativo e o decodificador do Raspberry Pi Zero sincronizado mesmo quando a tela estendida está em repouso:
-1. Um pequeno script em Python/GTK ou thread nativa (`scripts/show-welcome-window.py`) exibe um relógio ou micro-indicador visual na tela `HDMI-1`.
-2. O relógio atualiza um bloco de 10x10 pixels a cada **500 milissegundos**.
-3. Essa micro-alteração de pixels gera um evento de dano (*damage event*) legítimo no Mutter.
-4. O Mutter dispara um novo buffer DMA-BUF para o PipeWire, garantindo que o fluxo H.264 permaneça fluindo continuamente sem nenhum congelamento ou perda de conexão.
+### 4.2 A Solução em Nível de Pipeline: `keepalive-time` no PipeWire
+Para manter o fluxo fluindo continuamente sem necessitar de scripts adicionais ou janelas extras:
+* O elemento `pipewiresrc` do GStreamer possui a propriedade `keepalive-time=<ms>` (onde ms = `1000 / FPS`, ex: `16` para 60 FPS ou `33` para 30 FPS).
+* Quando ativado, caso o compositor Mutter não despache novos buffers DMA-BUF por ausência de dano, o PipeWire **reenvia periodicamente o último quadro a cada intervalo configurado**.
+* Isso mantém o clock de decodificação de hardware do Raspberry Pi Zero sincronizado e ativo de forma contínua e sem consumo extra de CPU.
+
+### 4.3 O Fenômeno de "Occlusion Tracking" e Suspensão de Vídeo em Navegadores (Chrome / Firefox no Wayland)
+Um dos comportamentos mais peculiares diagnosticados em ambientes Wayland modernos ocorre durante a reprodução de vídeos (como YouTube) em monitores virtuais estendidos:
+1. **O Sintoma:** O vídeo reproduz perfeitamente quando o cursor do mouse está sobre a janela do navegador na tela estendida. No entanto, se o usuário move o cursor para fora da janela (por exemplo, voltando para a tela principal do notebook), **a imagem do vídeo congela imediatamente**, enquanto o restante da interface continua respondendo. Ao retornar o mouse para dentro da janela, o vídeo descongela instantaneamente.
+2. **A Causa Raiz:** O pipeline de vídeo e o Raspberry Pi **não estão congelando** (o decodificador continua ativo recebendo o fluxo de frames). O congelamento é provocado pelo **próprio motor do navegador web**:
+   - **Google Chrome / Chromium:** Possui o recurso de economia de energia e bateria chamado **"Window Occlusion Tracking"** (`CalculateNativeWinOcclusion`). Sob o Wayland, quando a janela do navegador não possui foco ativo ou o cursor do mouse não está sobre sua superfície (`wl_pointer.leave`), o Chrome classifica a janela como "occlusa/invisível" e suspende o laço de renderização do elemento `<video>`.
+   - **Mozilla Firefox:** Implementa a diretiva interna `media.suspend-bkgnd-video.enabled = true`, que pausa a decodificação de vídeo quando a janela perde o foco do usuário.
+
+### 4.4 Procedimento para Desativação do Perfil de Economia no Navegador
+Para assegurar que vídeos reproduzam em 60 FPS contínuos no monitor secundário mesmo sem foco do mouse:
+
+* **No Google Chrome / Chromium / Brave / Edge:**
+  1. Digite na barra de navegação: `chrome://flags/#calculate-native-win-occlusion`
+  2. Altere o valor de **Default** para **Disabled**.
+  3. Clique em **Relaunch** (Reiniciar).
+  4. *Alternativa via linha de comando:* Inicie o navegador com a flag:
+     ```bash
+     google-chrome --disable-backgrounding-occluded-windows &
+     ```
+
+* **No Mozilla Firefox:**
+  1. Digite na barra de navegação: `about:config`
+  2. Confirme o aviso de segurança.
+  3. Pesquise pela chave: `media.suspend-bkgnd-video.enabled`
+  4. Alterne o valor de `true` para **`false`**.
+
+* **Em Players Nativos de Vídeo (MPV, VLC, Celluloid):**
+  - Players de mídia dedicados não implementam *occlusion tracking* e reproduzem a 60 FPS ininterruptos por padrão, independentemente da posição do mouse.
 
 ---
 

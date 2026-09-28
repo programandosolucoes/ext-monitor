@@ -95,19 +95,21 @@ impl PipelineBuilder {
         let mut cmd = Command::new("gst-launch-1.0");
         cmd.arg("-q");
 
-        // 1. PipeWire source with clean pw-link port registration
+        let keepalive_ms = (1000 / self.fps).max(16);
         cmd.arg("pipewiresrc")
             .arg("autoconnect=false")
             .arg("stream-properties=props,node.name=ext-hdmi-sender")
             .arg("do-timestamp=true")
             .arg("min-buffers=2")
-            .arg("max-buffers=2")
+            .arg("max-buffers=4")
+            .arg(format!("keepalive-time={}", keepalive_ms))
             .arg("always-copy=false")
             .arg("!");
 
-        // 2. Framerate normalization & continuous stream generator (Zero-Spinlock, Ultra-Low Latency)
+        // 2. Framerate normalization & drop-on-late (prioritize newest frames immediately)
         cmd.arg("videorate")
-            .arg(format!("drop-only={}", self.drop_only))
+            .arg("drop-only=true")
+            .arg("new-pref=1.0")
             .arg(format!("skip-to-first={}", self.skip_to_first))
             .arg("!")
             .arg(format!("video/x-raw,framerate={}/1", self.fps))
@@ -188,7 +190,15 @@ impl PipelineBuilder {
                 .arg(format!("fd={}", fd))
                 .arg("sync=false");
         } else {
-            cmd.arg("rtph264pay")
+            cmd.arg("h264parse")
+                .arg("!")
+                .arg("queue")
+                .arg("max-size-buffers=1")
+                .arg("max-size-bytes=0")
+                .arg("max-size-time=0")
+                .arg("leaky=downstream")
+                .arg("!")
+                .arg("rtph264pay")
                 .arg("config-interval=1")
                 .arg("pt=96")
                 .arg("aggregate-mode=none")
@@ -226,7 +236,7 @@ impl PipelineBuilder {
                         cmd.arg("target-percentage=60").arg("min-qp=20").arg("max-qp=38");
                     }
                     ColorProfile::TrueColor => {
-                        cmd.arg("target-percentage=75").arg("min-qp=18").arg("max-qp=34");
+                        cmd.arg("target-percentage=95").arg("min-qp=10").arg("max-qp=22");
                     }
                 }
 
