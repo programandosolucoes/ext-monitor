@@ -75,7 +75,7 @@ fn main() {
 
     let pipeline_mgr = Arc::new(PipelineManager::new());
     if let Some(backend_arg) = args.iter().find(|a| a.starts_with("--backend=") || a.starts_with("--engine=")) {
-        let val = if backend_arg.starts_with("--backend=") { &backend_arg[10..] } else { &backend_arg[9..] };
+        let val = backend_arg.strip_prefix("--backend=").or_else(|| backend_arg.strip_prefix("--engine=")).unwrap_or("");
         pipeline_mgr.set_backend(PipelineBackend::from_str(val));
     }
 

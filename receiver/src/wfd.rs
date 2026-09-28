@@ -463,7 +463,7 @@ fn parse_rtsp_headers(raw: &str) -> (String, String, HashMap<String, String>) {
 
     let first_line = lines.next().unwrap_or("");
     let parts: Vec<&str> = first_line.split_whitespace().collect();
-    let method = parts.get(0).unwrap_or(&"").to_string();
+    let method = parts.first().unwrap_or(&"").to_string();
     let uri = parts.get(1).unwrap_or(&"").to_string();
 
     for line in lines {

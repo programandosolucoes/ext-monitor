@@ -64,6 +64,7 @@ impl AnnexBAssembler {
     }
 
     /// Returns true if there is uncommitted stream data in the assembler
+    #[allow(dead_code)]
     pub fn has_pending(&self) -> bool {
         self.has_slice || !self.accumulator.is_empty() || !self.current_au.is_empty()
     }

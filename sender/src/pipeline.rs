@@ -103,14 +103,6 @@ impl PipelineBuilder {
             .arg("min-buffers=2")
             .arg("max-buffers=2")
             .arg("always-copy=false")
-            .arg("!")
-            .arg("queue")
-            .arg("max-size-buffers=2")
-            .arg("max-size-bytes=0")
-            .arg("max-size-time=0")
-            .arg("leaky=downstream")
-            .arg("!")
-            .arg(format!("video/x-raw,max-framerate={}/1", self.fps))
             .arg("!");
 
         // 2. Framerate normalization & continuous stream generator (Zero-Spinlock, Ultra-Low Latency)
@@ -187,9 +179,10 @@ impl PipelineBuilder {
                 .arg("config-interval=-1")
                 .arg("!")
                 .arg("queue")
-                .arg("max-size-buffers=4")
+                .arg("max-size-buffers=1")
                 .arg("max-size-bytes=0")
                 .arg("max-size-time=0")
+                .arg("leaky=downstream")
                 .arg("!")
                 .arg("fdsink")
                 .arg(format!("fd={}", fd))
@@ -199,12 +192,6 @@ impl PipelineBuilder {
                 .arg("config-interval=1")
                 .arg("pt=96")
                 .arg("aggregate-mode=none")
-                .arg("!")
-                .arg("queue")
-                .arg("max-size-buffers=4")
-                .arg("max-size-bytes=0")
-                .arg("max-size-time=0")
-                .arg("leaky=downstream")
                 .arg("!")
                 .arg("udpsink")
                 .arg(format!("host={}", self.target_ip))
@@ -233,18 +220,18 @@ impl PipelineBuilder {
 
                 match self.color_profile {
                     ColorProfile::Economy256 => {
-                        cmd.arg("target-percentage=50").arg("min-qp=28").arg("max-qp=42");
+                        cmd.arg("target-percentage=50").arg("min-qp=30").arg("max-qp=44");
                     }
                     ColorProfile::Grayscale => {
                         cmd.arg("target-percentage=60").arg("min-qp=20").arg("max-qp=38");
                     }
                     ColorProfile::TrueColor => {
-                        cmd.arg("target-percentage=85").arg("min-qp=18").arg("max-qp=34");
+                        cmd.arg("target-percentage=75").arg("min-qp=18").arg("max-qp=34");
                     }
                 }
 
                 cmd.arg("mbbrc=enabled")
-                    .arg("target-usage=5")
+                    .arg("target-usage=7")
                     .arg("b-frames=0")
                     .arg("ref-frames=1")
                     .arg("aud=true")

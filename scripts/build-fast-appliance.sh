@@ -103,13 +103,14 @@ sudo umount "$MOUNT_DIR"
 rm -rf "$MOUNT_DIR"
 sudo losetup -d "$LOOP_DEV"
 
-# 5. Compress and update release artifacts
-echo -e "\x1b[1;34m[*] Step 5: Updating compressed release artifacts & checksums...\x1b[0m"
+# 5. Copy raw image and compress release artifacts
+echo -e "\x1b[1;34m[*] Step 5: Updating release artifacts (33MB raw image & compressed GZ)...\x1b[0m"
 mkdir -p "${PROJECT_ROOT}/release"
+cp -f "$OUTPUT_IMG" "${PROJECT_ROOT}/release/ext-monitor-pi0-appliance.img"
 gzip -c9 "$OUTPUT_IMG" > "${PROJECT_ROOT}/release/ext-monitor-pi0-appliance.img.gz"
 (
     cd "${PROJECT_ROOT}/release"
-    sha256sum ext-monitor-pi0-appliance.img.gz > SHA256SUMS
+    sha256sum ext-monitor-pi0-appliance.img ext-monitor-pi0-appliance.img.gz > SHA256SUMS
 )
 
 echo -e "\n\x1b[1;32m========================================================================\x1b[0m"

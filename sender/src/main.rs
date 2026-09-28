@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             unsafe {
                 libc::pipe(pipe_fds.as_mut_ptr());
                 const F_SETPIPE_SZ: libc::c_int = 1031;
-                libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 1024 * 1024);
+                libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 65536);
             }
             let read_fd = pipe_fds[0];
             let write_fd = pipe_fds[1];

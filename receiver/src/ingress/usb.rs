@@ -63,7 +63,7 @@ impl UsbBulkIngress {
         let mut total_bytes = 0u64;
         let mut last_log = std::time::Instant::now();
 
-        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(16);
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(2);
         let run_read = running.clone();
         let read_handle = thread::spawn(move || {
             let mut buffer = [0u8; 65536];
