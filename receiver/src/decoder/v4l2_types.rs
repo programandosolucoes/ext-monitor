@@ -16,6 +16,7 @@ pub const VIDIOC_DQBUF: libc::c_ulong = 0xC0445611;
 pub const VIDIOC_STREAMON: libc::c_ulong = 0x40045612;
 pub const VIDIOC_STREAMOFF: libc::c_ulong = 0x40045613;
 pub const VIDIOC_S_FMT: libc::c_ulong = 0xC0CC5605;
+pub const VIDIOC_EXPBUF: libc::c_ulong = 0xC0405610;
 #[allow(dead_code)]
 pub const VIDIOC_G_FMT: libc::c_ulong = 0xC0CC5604;
 
@@ -142,6 +143,16 @@ impl Default for V4l2Buffer {
 }
 
 #[repr(C)]
+pub struct V4l2ExportBuffer {
+    pub buf_type: u32,
+    pub index: u32,
+    pub plane: u32,
+    pub flags: u32,
+    pub fd: i32,
+    pub reserved: [u32; 11],
+}
+
+#[repr(C)]
 pub struct V4l2Capability {
     pub driver: [u8; 16],
     pub card: [u8; 32],
@@ -159,3 +170,4 @@ const _: () = assert!(std::mem::size_of::<V4l2RequestBuffers>() == 20);
 const _: () = assert!(std::mem::size_of::<V4l2Format>() == 204);
 const _: () = assert!(std::mem::size_of::<V4l2FmtDesc>() == 64);
 const _: () = assert!(std::mem::size_of::<V4l2Capability>() == 104);
+const _: () = assert!(std::mem::size_of::<V4l2ExportBuffer>() == 64);

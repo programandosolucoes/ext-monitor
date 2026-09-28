@@ -7,6 +7,8 @@
 //! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
 
 use crate::decoder::v4l2_types::*;
+use crate::display::KmsPlaneSink;
+use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -26,6 +28,10 @@ pub struct V4l2DecoderSession {
     rgb565_buf: Vec<u8>,
     width: usize,
     height: usize,
+    /// Direct DRM plane. When set, decoded buffers are scanned out like kmssink.
+    kms: Option<KmsPlaneSink>,
+    /// Capture buffers currently on the plane. The oldest is returned to the decoder first.
+    held: VecDeque<u32>,
 }
 
 impl V4l2DecoderSession {
@@ -106,17 +112,18 @@ impl V4l2DecoderSession {
             return None;
         }
 
-        // 2. Negotiate CAPTURE Format: VideoCore IV VPU natively decodes H.264 into YUV420 (YU12) or NV12.
-        // It cannot decode H.264 directly into RGB565; color_convert transforms YUV420 to RGB565 in SIMD (< 3% CPU).
+        // NV12 / YU12 are the formats a KMS plane can scan out directly.
+        // RGB565 is only a CPU-blit fallback: the VPU does not decode into it.
         let candidate_fmts = [
-            (V4L2_PIX_FMT_YUV420, "YUV420", width * height * 3 / 2),
             (V4L2_PIX_FMT_NV12, "NV12", width * height * 3 / 2),
-            (V4L2_PIX_FMT_YUV420M, "YUV420M", width * height * 3 / 2),
+            (V4L2_PIX_FMT_YUV420, "YUV420", width * height * 3 / 2),
             (V4L2_PIX_FMT_NV12M, "NV12M", width * height * 3 / 2),
+            (V4L2_PIX_FMT_YUV420M, "YUV420M", width * height * 3 / 2),
             (V4L2_PIX_FMT_RGB565, "RGB565", width * height * 2),
         ];
 
         let mut negotiated_fmt = 0u32;
+        let mut cap_stride = width;
         for &(fmt_code, fmt_name, expected_size) in &candidate_fmts {
             let mut cap_fmt = V4l2Format {
                 buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
@@ -128,12 +135,14 @@ impl V4l2DecoderSession {
             cap_pix.pixelformat = fmt_code;
             cap_pix.num_planes = 1;
             cap_pix.plane_fmt[0].sizeimage = expected_size;
-            if unsafe { libc::ioctl(video_fd, VIDIOC_S_FMT, &mut cap_fmt) } == 0 {
-                negotiated_fmt = fmt_code;
+            if unsafe { libc::ioctl(video_fd, VIDIOC_S_FMT, &mut cap_fmt) } == 0 && cap_pix.num_planes <= 1 {
+                negotiated_fmt = cap_pix.pixelformat;
+                cap_stride = cap_pix.plane_fmt[0].bytesperline.max(width);
                 println!(
-                    "\x1b[1;32m[v4l2-m2m]\x1b[0m Negotiated CAPTURE format: {} (FourCC: '{}', sizeimage: {})",
+                    "\x1b[1;32m[v4l2-m2m]\x1b[0m Negotiated CAPTURE format: {} (FourCC: '{}', stride: {}, sizeimage: {})",
                     fmt_name,
-                    String::from_utf8_lossy(&fmt_code.to_le_bytes()),
+                    String::from_utf8_lossy(&negotiated_fmt.to_le_bytes()),
+                    cap_stride,
                     cap_pix.plane_fmt[0].sizeimage
                 );
                 break;
@@ -281,6 +290,8 @@ impl V4l2DecoderSession {
             }
         }
 
+        let kms = attach_kms_plane(video_fd, req_cap.count, negotiated_fmt, width, height, cap_stride);
+
         // 5. STREAMON on both queues
         let mut out_type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         let mut cap_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -305,6 +316,8 @@ impl V4l2DecoderSession {
             rgb565_buf: vec![0u8; (width * height * 2) as usize],
             width: width as usize,
             height: height as usize,
+            kms,
+            held: VecDeque::new(),
         })
     }
 
@@ -417,8 +430,10 @@ impl V4l2DecoderSession {
         ret == 0
     }
 
-    /// Drains all available decoded frames from the CAPTURE queue and hands them to the callback
+    /// Drains decoded frames. With a KMS plane, only the newest frame is shown
+    /// and older ones are returned to the decoder (leaky, one frame in flight).
     pub fn drain_decoded_frames<F: FnMut(&[u8])>(&mut self, mut on_frame: F) {
+        let mut ready = Vec::new();
         loop {
             let mut cap_plane = V4l2Plane::default();
             let mut cap_buf = V4l2Buffer {
@@ -428,53 +443,101 @@ impl V4l2DecoderSession {
                 length: 1,
                 ..Default::default()
             };
-
-            let ret = unsafe { libc::ioctl(self.video_fd, VIDIOC_DQBUF, &mut cap_buf) };
-            if ret != 0 {
+            if unsafe { libc::ioctl(self.video_fd, VIDIOC_DQBUF, &mut cap_buf) } != 0 {
                 break;
             }
+            ready.push(cap_buf.index);
+        }
+        if ready.is_empty() {
+            return;
+        }
 
-            let cap_idx = cap_buf.index as usize;
-            if cap_idx < self.cap_ptrs.len() {
-                let plane_len = self.cap_lens[cap_idx];
-                let slice = unsafe { std::slice::from_raw_parts(self.cap_ptrs[cap_idx], plane_len) };
-
-                if self.negotiated_cap_fmt == V4L2_PIX_FMT_RGB565 {
-                    on_frame(slice);
-                } else if self.negotiated_cap_fmt == V4L2_PIX_FMT_YUV420 || self.negotiated_cap_fmt == V4L2_PIX_FMT_YUV420M {
-                    crate::decoder::color_convert::yuv420_to_rgb565(slice, &mut self.rgb565_buf, self.width, self.height);
-                    on_frame(&self.rgb565_buf);
-                } else if self.negotiated_cap_fmt == V4L2_PIX_FMT_NV12 || self.negotiated_cap_fmt == V4L2_PIX_FMT_NV12M {
-                    crate::decoder::color_convert::nv12_to_rgb565(slice, &mut self.rgb565_buf, self.width, self.height);
-                    on_frame(&self.rgb565_buf);
-                } else {
-                    on_frame(slice);
-                }
-
-                self.frames_decoded += 1;
-                if self.frames_decoded % 120 == 1 {
-                    println!(
-                        "\x1b[1;32m[v4l2-m2m]\x1b[0m Hardware VPU decoded & displayed {} frames (1280x720@60)",
-                        self.frames_decoded
-                    );
-                }
+        if self.kms.is_some() {
+            let latest = ready.pop().unwrap();
+            for idx in ready {
+                self.requeue_capture(idx);
             }
+            self.show_on_plane(latest, &mut on_frame);
+            return;
+        }
 
-            // Re-queue capture buffer immediately
-            let mut requeue_plane = V4l2Plane::default();
-            let mut requeue_buf = V4l2Buffer {
-                index: cap_buf.index,
-                buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-                memory: V4L2_MEMORY_MMAP,
-                planes_ptr: &mut requeue_plane as *mut _ as u32,
-                length: 1,
-                ..Default::default()
-            };
-            let q_ret = unsafe { libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut requeue_buf) };
-            if q_ret != 0 {
-                let err = std::io::Error::last_os_error();
-                eprintln!("\x1b[1;31m[v4l2-m2m]\x1b[0m CAPTURE VIDIOC_QBUF[{}] failed: {}", cap_buf.index, err);
+        for idx in ready {
+            self.blit_cpu(idx, &mut on_frame);
+            self.requeue_capture(idx);
+        }
+    }
+
+    fn show_on_plane<F: FnMut(&[u8])>(&mut self, idx: u32, on_frame: &mut F) {
+        let presented = match self.kms.as_mut().unwrap().present(idx as usize) {
+            Ok(shown) => shown,
+            Err(e) => {
+                eprintln!("\x1b[1;31m[kms]\x1b[0m Plane update failed ({e}). Falling back to the framebuffer.");
+                self.kms = None;
+                while let Some(old) = self.held.pop_front() {
+                    self.requeue_capture(old);
+                }
+                self.blit_cpu(idx, on_frame);
+                self.requeue_capture(idx);
+                return;
             }
+        };
+        if !presented {
+            self.requeue_capture(idx);
+            return;
+        }
+        self.held.push_back(idx);
+        while self.held.len() > 2 {
+            let old = self.held.pop_front().unwrap();
+            self.requeue_capture(old);
+        }
+        self.note_displayed();
+    }
+
+    fn blit_cpu<F: FnMut(&[u8])>(&mut self, idx: u32, on_frame: &mut F) {
+        let cap_idx = idx as usize;
+        if cap_idx >= self.cap_ptrs.len() {
+            return;
+        }
+        let plane_len = self.cap_lens[cap_idx];
+        let slice = unsafe { std::slice::from_raw_parts(self.cap_ptrs[cap_idx], plane_len) };
+        if self.negotiated_cap_fmt == V4L2_PIX_FMT_RGB565 {
+            on_frame(slice);
+        } else if self.negotiated_cap_fmt == V4L2_PIX_FMT_YUV420 || self.negotiated_cap_fmt == V4L2_PIX_FMT_YUV420M {
+            crate::decoder::color_convert::yuv420_to_rgb565(slice, &mut self.rgb565_buf, self.width, self.height);
+            on_frame(&self.rgb565_buf);
+        } else if self.negotiated_cap_fmt == V4L2_PIX_FMT_NV12 || self.negotiated_cap_fmt == V4L2_PIX_FMT_NV12M {
+            crate::decoder::color_convert::nv12_to_rgb565(slice, &mut self.rgb565_buf, self.width, self.height);
+            on_frame(&self.rgb565_buf);
+        } else {
+            on_frame(slice);
+        }
+        self.note_displayed();
+    }
+
+    fn note_displayed(&mut self) {
+        self.frames_decoded += 1;
+        if self.frames_decoded % 120 == 1 {
+            let via = if self.kms.is_some() { "KMS plane" } else { "framebuffer" };
+            println!(
+                "\x1b[1;32m[v4l2-m2m]\x1b[0m Hardware VPU decoded & displayed {} frames via {} (1280x720)",
+                self.frames_decoded, via
+            );
+        }
+    }
+
+    fn requeue_capture(&self, idx: u32) {
+        let mut plane = V4l2Plane::default();
+        let mut buf = V4l2Buffer {
+            index: idx,
+            buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+            memory: V4L2_MEMORY_MMAP,
+            planes_ptr: &mut plane as *mut _ as u32,
+            length: 1,
+            ..Default::default()
+        };
+        if unsafe { libc::ioctl(self.video_fd, VIDIOC_QBUF, &mut buf) } != 0 {
+            let err = std::io::Error::last_os_error();
+            eprintln!("\x1b[1;31m[v4l2-m2m]\x1b[0m CAPTURE VIDIOC_QBUF[{}] failed: {}", idx, err);
         }
     }
 
@@ -543,8 +606,46 @@ impl V4l2DecoderSession {
     }
 }
 
+fn attach_kms_plane(video_fd: RawFd, count: u32, fourcc: u32, width: u32, height: u32, stride: u32) -> Option<KmsPlaneSink> {
+    if fourcc != V4L2_PIX_FMT_NV12 && fourcc != V4L2_PIX_FMT_YUV420 {
+        println!("\x1b[1;33m[kms]\x1b[0m Capture format is not NV12/YU12. Using the framebuffer.");
+        return None;
+    }
+    let mut kms = match KmsPlaneSink::open(fourcc, width, height, stride) {
+        Ok(k) => k,
+        Err(e) => {
+            println!("\x1b[1;33m[kms]\x1b[0m No scanout plane ({e}). Using the framebuffer.");
+            return None;
+        }
+    };
+    for index in 0..count {
+        let mut exp = V4l2ExportBuffer {
+            buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+            index,
+            plane: 0,
+            flags: (libc::O_CLOEXEC | libc::O_RDWR) as u32,
+            fd: -1,
+            reserved: [0; 11],
+        };
+        if unsafe { libc::ioctl(video_fd, VIDIOC_EXPBUF, &mut exp) } != 0 || exp.fd < 0 {
+            let err = std::io::Error::last_os_error();
+            eprintln!("\x1b[1;33m[kms]\x1b[0m EXPBUF[{index}] failed: {err}. Using the framebuffer.");
+            return None;
+        }
+        let imported = kms.import(index as usize, exp.fd);
+        unsafe { libc::close(exp.fd); }
+        if let Err(e) = imported {
+            eprintln!("\x1b[1;33m[kms]\x1b[0m DMA-BUF import [{index}] failed: {e}. Using the framebuffer.");
+            return None;
+        }
+    }
+    println!("\x1b[1;32m[kms]\x1b[0m Scanout ready: decoder DMA-BUF on the KMS plane, no RGB conversion.");
+    Some(kms)
+}
+
 impl Drop for V4l2DecoderSession {
     fn drop(&mut self) {
+        self.kms = None;
         let mut out_type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         let mut cap_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
         unsafe {

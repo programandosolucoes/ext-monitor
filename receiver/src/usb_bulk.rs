@@ -215,17 +215,21 @@ fn bind_udc_if_needed() {
     if let Ok(entries) = std::fs::read_dir("/sys/class/udc") {
         for entry in entries.flatten() {
             let udc_name = entry.file_name().to_string_lossy().to_string();
+            let mut bound = false;
             for gadget in &["/sys/kernel/config/usb_gadget/g_display/UDC", "/sys/kernel/config/usb_gadget/ext_composite/UDC"] {
                 if Path::new(gadget).exists() {
                     let current = std::fs::read_to_string(gadget).unwrap_or_default();
                     if current.trim().is_empty() {
                         let _ = std::fs::write(gadget, &udc_name);
                         println!("\x1b[1;32m[usb-bulk]\x1b[0m Bound gadget to UDC {}", udc_name);
+                        bound = true;
                         break;
                     }
                 }
             }
-            break;
+            if bound {
+                break;
+            }
         }
     }
 }
