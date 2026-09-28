@@ -45,6 +45,7 @@ chmod +x "${BUILD_DIR}/initramfs/usr/local/bin/ext-receiver"
 # 2. Package client tools archive for one-click downloads
 echo -e "\x1b[1;34m[*] Step 2: Packaging client tools archive for web dashboard downloads...\x1b[0m"
 mkdir -p "${BUILD_DIR}/initramfs/var/www/download"
+cargo build --release -p ext-sender
 TMP_CLIENT=$(mktemp -d)
 if [ -f "${PROJECT_ROOT}/target/release/ext-sender" ]; then
     cp "${PROJECT_ROOT}/target/release/ext-sender" "${TMP_CLIENT}/ext-sender"
@@ -69,6 +70,8 @@ EOF
     chmod +x "${TMP_CLIENT}"/*.sh "${TMP_CLIENT}/ext-sender" "${TMP_CLIENT}/show-welcome-window.py" 2>/dev/null || true
     tar -czf "${BUILD_DIR}/initramfs/var/www/download/client.tar.gz" -C "${TMP_CLIENT}" .
     cp "${TMP_CLIENT}/ext-sender" "${BUILD_DIR}/initramfs/var/www/download/ext-sender"
+    cp "${PROJECT_ROOT}/scripts/connect.sh" "${BUILD_DIR}/initramfs/var/www/download/connect.sh" 2>/dev/null || true
+    cp "${PROJECT_ROOT}/scripts/99-ext-monitor.rules" "${BUILD_DIR}/initramfs/var/www/download/99-ext-monitor.rules" 2>/dev/null || true
 fi
 rm -rf "${TMP_CLIENT}"
 

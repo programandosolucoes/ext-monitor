@@ -60,6 +60,9 @@ fn main() {
     println!("\x1b[1;34m[ext-receiver]\x1b[0m 100% Native Rust | VideoCore IV V4L2 M2M | KMS DRM Output");
     println!("\x1b[1;32m========================================================================\x1b[0m");
 
+    // 0. Immediately display hardware loading splash ("Aguarde carregando..." in 4 languages)
+    display::SplashEngine::show_loading();
+
     let is_usb_bulk_mode = args.iter().any(|arg| arg == "--mode=usb-bulk" || arg == "-b");
     let udp_port = args
         .get(1)

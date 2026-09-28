@@ -7,6 +7,8 @@
 
 pub mod annexb;
 pub mod rtp;
+pub mod ts;
 
 pub use annexb::AnnexBAssembler;
 pub use rtp::{Rfc4571Assembler, RtpDepayloader};
+pub use ts::TsDemuxer;

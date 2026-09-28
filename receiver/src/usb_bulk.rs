@@ -14,6 +14,7 @@
 use crate::pipeline::{PipelineKind, PipelineManager};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::IntoRawFd;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -309,7 +310,10 @@ pub fn activate_usb_bulk(
     // If ep1 is already active (e.g. configured at boot by /init), directly open it
     if Path::new(FFS_EP1).exists() {
         println!("\x1b[1;32m[usb-bulk]\x1b[0m Bulk OUT endpoint {} already active. Opening directly...", FFS_EP1);
-        let ep1 = OpenOptions::new().read(true).open(FFS_EP1)?;
+        let ep1 = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(FFS_EP1)?;
         let raw_fd = ep1.into_raw_fd();
         pipeline_mgr.start(PipelineKind::UsbBulkPipe { fd: raw_fd })?;
         return Ok(());

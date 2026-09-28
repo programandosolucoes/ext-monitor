@@ -70,9 +70,19 @@ impl UdpRtpIngress {
             port
         );
 
+        let mut last_packet_time = std::time::Instant::now();
+        let mut splash_active = false;
+        let mut total_packets = 0u64;
+
         while running.load(Ordering::SeqCst) {
             match sock.recv(&mut buffer) {
                 Ok(n) if n > 12 => {
+                    last_packet_time = std::time::Instant::now();
+                    total_packets += 1;
+                    if splash_active {
+                        splash_active = false;
+                    }
+
                     completed_frames.clear();
                     depayloader.depayload_packet(&buffer[..n], &mut completed_frames);
 
@@ -87,6 +97,13 @@ impl UdpRtpIngress {
                     decoder.drain_decoded_frames(|frame_rgb565| {
                         display.render_frame(frame_rgb565);
                     });
+
+                    // If stream was active and now idle for > 2 seconds: return to splash screen
+                    if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(2) {
+                        println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP stream idle / disconnected -> Returning to Ready Splash Screen.");
+                        crate::display::SplashEngine::show_ready();
+                        splash_active = true;
+                    }
                     thread::sleep(Duration::from_micros(500));
                 }
                 Err(e) => {
@@ -96,6 +113,7 @@ impl UdpRtpIngress {
             }
         }
 
+        crate::display::SplashEngine::show_ready();
         println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP ingress worker stopped.");
     }
 }
