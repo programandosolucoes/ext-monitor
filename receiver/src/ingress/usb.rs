@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+#[allow(dead_code)]
 enum IngressFramingMode {
     AutoDetect,
     Rfc4571,
@@ -48,7 +49,7 @@ impl UsbBulkIngress {
             }
         };
 
-        let mut framing_mode = IngressFramingMode::AutoDetect;
+        let framing_mode = IngressFramingMode::AnnexB;
         let mut annexb_assembler = AnnexBAssembler::new();
         let mut rfc_assembler = Rfc4571Assembler::new();
         let mut rtp_depayloader = RtpDepayloader::new();
@@ -56,31 +57,40 @@ impl UsbBulkIngress {
         let mut completed_frames: Vec<Vec<u8>> = Vec::with_capacity(16);
 
         println!(
-            "\x1b[1;32m[usb-ingress]\x1b[0m Reading H.264 stream from USB Bulk fd {} -> HDMI Display active.",
+            "\x1b[1;32m[usb-ingress]\x1b[0m Reading H.264 stream from USB Bulk fd {} -> HDMI Display active (Lossless Annex-B).",
             read_fd
         );
 
         let mut total_bytes = 0u64;
         let mut last_log = std::time::Instant::now();
 
-        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(2);
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(4);
         let run_read = running.clone();
         let read_handle = thread::spawn(move || {
             let mut buffer = [0u8; 65536];
 
             while run_read.load(Ordering::SeqCst) {
                 match stream_file.read(&mut buffer) {
-                    Ok(0) => break,
+                    Ok(0) => {
+                        // FunctionFS Bulk OUT endpoint returns 0 bytes on USB Zero-Length Packets (ZLP)
+                        // or momentary bus idle. This is NOT EOF.
+                        thread::sleep(Duration::from_millis(1));
+                        continue;
+                    }
                     Ok(n) => {
                         let chunk = buffer[..n].to_vec();
                         if tx.send(chunk).is_err() {
                             break;
                         }
                     }
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted || e.kind() == io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(1));
+                        continue;
+                    }
                     Err(e) => {
                         eprintln!("\x1b[1;31m[usb-ingress]\x1b[0m USB Bulk stream read error: {}", e);
-                        break;
+                        thread::sleep(Duration::from_millis(50));
+                        continue;
                     }
                 }
             }
@@ -91,32 +101,8 @@ impl UsbBulkIngress {
                 Ok(chunk_vec) => {
                     let chunk = &chunk_vec[..];
 
-                    // Auto-detect framing format on first chunk if needed
                     match framing_mode {
-                        IngressFramingMode::AutoDetect => {
-                            if chunk.len() >= 4 && (chunk.starts_with(&[0, 0, 0, 1]) || chunk.starts_with(&[0, 0, 1])) {
-                                println!("\x1b[1;32m[usb-ingress]\x1b[0m Pure Native H.264 Annex-B Direct Stream active (Lossless, Zero-Artifacts).");
-                                framing_mode = IngressFramingMode::AnnexB;
-                                annexb_assembler.push(chunk, &mut completed_frames);
-                                for frame in &completed_frames {
-                                    decoder.decode_chunk(frame, |frame_rgb565| {
-                                        display.render_frame(frame_rgb565);
-                                    });
-                                }
-                                completed_frames.clear();
-                            } else {
-                                println!("\x1b[1;36m[usb-ingress]\x1b[0m Detected RFC 4571 length-framed RTP stream (Ultra-Low Latency).");
-                                framing_mode = IngressFramingMode::Rfc4571;
-                                rfc_assembler.push(chunk, &mut rtp_depayloader, &mut completed_frames);
-                                for frame in &completed_frames {
-                                    decoder.decode_chunk(frame, |frame_rgb565| {
-                                        display.render_frame(frame_rgb565);
-                                    });
-                                }
-                                completed_frames.clear();
-                            }
-                        }
-                        IngressFramingMode::AnnexB => {
+                        IngressFramingMode::AutoDetect | IngressFramingMode::AnnexB => {
                             annexb_assembler.push(chunk, &mut completed_frames);
                             for frame in &completed_frames {
                                 decoder.decode_chunk(frame, |frame_rgb565| {

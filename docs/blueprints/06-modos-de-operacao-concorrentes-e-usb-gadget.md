@@ -102,6 +102,15 @@ Latência: < 15ms            Latência: ~30ms                Latência: < 1ms
      ./scripts/start.sh extend auto 30 false economy --transport=usb
      ```
 
+### 3.4 Tratamento Crítico de ZLP (Zero-Length Packet) e Enquadramento no Ingress USB
+* **Diagnóstico do Loop de Ingress:**
+  * Em drivers FunctionFS (`f_fs`) no kernel Linux, uma chamada `read()` em um endpoint Bulk OUT (`/dev/usb-ffs/display/ep1`) pode retornar `0 bytes` (`Ok(0)`) quando o host conclui uma transferência múltipla de 512 bytes com um pacote ZLP (Zero-Length Packet) ou durante pausas momentâneas de renderização.
+  * **Armadilha do EOF Clássico:** Em arquivos convencionais ou sockets TCP/IP, `Ok(0)` denota encerramento de conexão (EOF). Tratar `Ok(0)` como `break` em USB FunctionFS destrói a thread de leitura, desconecta o canal MPSC, força o encerramento do decodificador V4L2 M2M e faz o supervisor de processos entrar em loop infinito de restauração.
+  * **Solução Implementada:** O laço de leitura de `receiver/src/ingress/usb.rs` trata `Ok(0)` e erros transitórios de barramento (`WouldBlock`, `Interrupted`) mantendo o laço ativo via `thread::sleep(Duration::from_millis(1)); continue;`. A thread só é encerrada se o flag global atômico `running` for desativado.
+* **Enquadramento Annex-B Nativo:**
+  * O `ext-sender` no Modo USB despacha pacotes H.264 puros via `h264parse config-interval=-1 ! fdsink`.
+  * O receptor `UsbBulkIngress` utiliza o `AnnexBAssembler` para acumular e delimitar NAL units por códigos de início (`0x00000001` ou `0x000001`), entregando Access Units (quadros completos) para o decodificador de hardware VideoCore IV sem perda de sincronismo e com latência sub-milissegundo.
+
 ---
 
 ## 4. Chaves de Controle e Persistência de Estado (F5)
