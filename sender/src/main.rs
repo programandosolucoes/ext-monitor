@@ -1,7 +1,8 @@
 //! GPU Hardware-Accelerated Virtual Second Monitor Sender for Linux Wayland
 //!
-//! Clean, modular architecture separating CLI configuration, GNOME Screencast D-Bus IPC,
-//! PipeWire graph linking, Streaming Pipeline builders, and Web Dashboard control.
+//! Dual-Engine Architecture:
+//! - Engine 1: Kernel DRM/KMS Direct Hardware Scanout (Universal zero-copy, zero freeze, multi-GPU, no D-Bus/Mutter dependency)
+//! - Engine 2: GNOME Mutter D-Bus ScreenCast + PipeWire Graph Linking
 //!
 //! License: MIT
 //! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
@@ -17,13 +18,14 @@ mod config;
 mod control;
 mod encoder;
 mod i18n;
+mod kms;
 mod native_streamer;
 mod pipeline;
 mod pipewire;
 mod screencast;
 mod usb_transport;
 
-use config::{SenderConfig, TransportKind};
+use config::{CaptureEngine, SenderConfig, TransportKind};
 use control::{ControlAction, ControlListener};
 use pipeline::{PipelineBuilder, StreamerHandle};
 use screencast::MutterScreenCastSession;
@@ -40,8 +42,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     println!("\x1b[1;32m========================================================================\x1b[0m");
-    println!("\x1b[1;32m  ext-sender: AMD GPU Offload Virtual Second Monitor Sender v0.2.0      \x1b[0m");
-    println!("\x1b[1;34m  100% Native Rust | PipeWire Zero-Copy | VA-API / NVENC / QSV Hardware  \x1b[0m");
+    println!("\x1b[1;32m  ext-sender: Universal Virtual Second Monitor Sender v0.3.0            \x1b[0m");
+    println!("\x1b[1;34m  Dual-Engine: Linux Kernel KMS Direct / GNOME Mutter Screencast        \x1b[0m");
+    println!("\x1b[1;34m  Multi-GPU (AMD/Intel/NVIDIA) | Multi-Monitor | 100% Native Rust        \x1b[0m");
     println!("\x1b[1;32m========================================================================\x1b[0m");
 
     // 2. Setup graceful signal handler
@@ -78,13 +81,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;34m[*] Display Mode:\x1b[0m {}", cfg.mode);
     println!("\x1b[1;34m[*] Encoder API:\x1b[0m {:?}", cfg.encoder);
     println!("\x1b[1;34m[*] Stream Engine:\x1b[0m {}", cfg.engine.name());
+    println!("\x1b[1;34m[*] Capture Engine:\x1b[0m {}", cfg.capture.name());
+    if cfg.audio {
+        println!("\x1b[1;34m[*] Audio Channel:\x1b[0m Enabled (UDP RTP Opus {}:{})", cfg.target_ip, cfg.audio_port);
+    } else {
+        println!("\x1b[1;33m[*] Audio Channel:\x1b[0m Disabled (--no-audio)");
+    }
 
-    let monitor_to_record = if cfg.mode == "clone" {
-        "eDP-1"
+    let mut monitor_to_record = if cfg.mode == "clone" {
+        "eDP-1".to_string()
     } else {
         pipewire::ensure_kernel_hdmi_connected();
         pipewire::ensure_gnome_displays();
-        "HDMI-1"
+        "HDMI-1".to_string()
     };
 
     println!("\x1b[1;34m[*] Recording Monitor:\x1b[0m {}", monitor_to_record);
@@ -96,20 +105,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    // 4. Main Supervisor Loop (Reconnects on Suspend/Resume or System Event)
-    while running.load(Ordering::SeqCst) {
-        println!("\x1b[1;34m[*] Connecting to GNOME Mutter ScreenCast via D-Bus...\x1b[0m");
+    // 4. Inibe protetor de tela e suspensão de energia enquanto o streaming estiver ativo
+    let _session_inhibitor = screencast::GnomeSessionInhibitor::inhibit(
+        "ext-monitor",
+        "Transmissao ativa para o monitor secundario (Pi Zero)",
+    );
 
-        let session = match MutterScreenCastSession::create_and_start(monitor_to_record) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("\x1b[1;31m[!] Screencast session creation failed: {}. Retrying in 2s...\x1b[0m", e);
-                thread::sleep(Duration::from_secs(2));
-                continue;
+    // 5. Main Supervisor Loop (Reconnects on Suspend/Resume or System Event)
+    while running.load(Ordering::SeqCst) {
+        let (_screencast_session, node_id, kms_info) = match cfg.capture {
+            CaptureEngine::Kms => {
+                println!("\x1b[1;34m[*] Motor KMS Direct: Descobrindo conector DRM/KMS para '{}'...\x1b[0m", monitor_to_record);
+                let info = match kms::KmsOutputInfo::discover(&monitor_to_record) {
+                    Ok(i) => i,
+                    Err(e) => {
+                        eprintln!("\x1b[1;31m[!] DRM/KMS discovery failed: {}. Retrying in 2s...\x1b[0m", e);
+                        thread::sleep(Duration::from_secs(2));
+                        continue;
+                    }
+                };
+                (None, 0, Some(info))
+            }
+            CaptureEngine::Mutter => {
+                println!("\x1b[1;34m[*] Conectando ao GNOME Mutter ScreenCast via D-Bus...\x1b[0m");
+                let session = match MutterScreenCastSession::create_and_start(&monitor_to_record) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("\x1b[1;31m[!] Screencast session creation failed: {}. Retrying in 2s...\x1b[0m", e);
+                        thread::sleep(Duration::from_secs(2));
+                        continue;
+                    }
+                };
+                let nid = session.node_id;
+                (Some(session), nid, None)
             }
         };
-
-        let node_id = session.node_id;
 
         let mut pipeline_builder = PipelineBuilder {
             node_id,
@@ -125,11 +155,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             key_int_max: cfg.key_int_max,
             usb_pipe_fd,
             engine: cfg.engine,
+            capture: cfg.capture,
+            kms_info: kms_info.clone(),
+            audio: cfg.audio,
+            audio_port: cfg.audio_port,
         };
 
         println!(
-            "\x1b[1;33m[*] Starting {:?} hardware streaming pipeline via {} ({} FPS, HUD: {})...\x1b[0m",
-            cfg.encoder, cfg.engine.name(), cfg.fps, cfg.hud
+            "\x1b[1;33m[*] Starting {:?} hardware streaming pipeline via {} [Capture: {:?}] ({} FPS, Stream: {}, HUD: {})...\x1b[0m",
+            cfg.encoder,
+            cfg.engine.name(),
+            cfg.capture,
+            cfg.fps,
+            if cfg.drop_only { "Economy (drop-only)" } else { "Continuous (CFR Anti-Freeze)" },
+            cfg.hud
         );
 
         let mut child: StreamerHandle = match pipeline_builder.spawn() {
@@ -141,20 +180,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        thread::sleep(Duration::from_millis(800));
-        pipewire::link_monitor_port_to_sender(node_id, monitor_to_record);
+        if cfg.capture == CaptureEngine::Mutter {
+            thread::sleep(Duration::from_millis(500));
+            pipewire::link_monitor_port_to_sender(node_id, &monitor_to_record);
+        }
 
         println!(
-            "\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at {} FPS ({})!\x1b[0m",
-            monitor_to_record, cfg.fps, cfg.color_profile.name()
+            "\x1b[1;32m[+] Monitor {} is streaming LIVE to Pi Zero at {} FPS ({}) via {:?}!\x1b[0m",
+            monitor_to_record, cfg.fps, cfg.color_profile.name(), cfg.capture
         );
 
         let mut last_node_check = Instant::now();
-        let mut last_link_check = Instant::now();
+        let mut last_telemetry_check = Instant::now();
 
-        // 5. Watchdog and Web Hot-Apply loop
+        // 6. Watchdog and Web Hot-Apply loop
         while running.load(Ordering::SeqCst) {
             let mut restart_pipeline = false;
+            let mut switch_engine_or_monitor = false;
 
             // Check HUD auto-hide (60s)
             if let Some(hide_at) = hud_hide_at {
@@ -231,7 +273,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             restart_pipeline = true;
                         }
                     }
+                    ControlAction::SetCapture(eng) => {
+                        if eng != cfg.capture {
+                            println!("\x1b[1;35m[*] Web Command: Troca de Motor de Captura {:?} -> {:?}\x1b[0m", cfg.capture, eng);
+                            cfg.capture = eng;
+                            switch_engine_or_monitor = true;
+                        }
+                    }
+                    ControlAction::SetMonitor(mon) => {
+                        if mon != monitor_to_record {
+                            println!("\x1b[1;35m[*] Web Command: Troca de Monitor {} -> {}\x1b[0m", monitor_to_record, mon);
+                            monitor_to_record = mon;
+                            switch_engine_or_monitor = true;
+                        }
+                    }
                 }
+            }
+
+            if switch_engine_or_monitor {
+                println!("\x1b[1;33m[*] Reiniciando supervisor para nova engine/monitor...\x1b[0m");
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
             }
 
             if restart_pipeline {
@@ -245,8 +308,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                 };
-                thread::sleep(Duration::from_millis(600));
-                pipewire::link_monitor_port_to_sender(node_id, monitor_to_record);
+                if cfg.capture == CaptureEngine::Mutter {
+                    thread::sleep(Duration::from_millis(500));
+                    pipewire::link_monitor_port_to_sender(node_id, &monitor_to_record);
+                }
                 println!("\x1b[1;32m[+] Configuration hot-applied successfully.\x1b[0m");
                 continue;
             }
@@ -263,24 +328,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            // Health watchdog: Detect suspend/resume or PipeWire crash
-            if last_node_check.elapsed() >= Duration::from_millis(1500) {
-                last_node_check = Instant::now();
-                if !pipewire::is_pipewire_node_alive(node_id) {
-                    println!("\x1b[1;31m[!] Screencast node {} disappeared. Reconnecting...\x1b[0m", node_id);
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    thread::sleep(Duration::from_millis(1500));
-                    break;
+            // Health watchdog: Detect suspend/resume or PipeWire crash (Mutter mode only)
+            if cfg.capture == CaptureEngine::Mutter {
+                if last_node_check.elapsed() >= Duration::from_millis(1500) {
+                    last_node_check = Instant::now();
+                    if !pipewire::is_pipewire_node_alive(node_id) {
+                        println!("\x1b[1;31m[!] Screencast node {} disappeared. Reconnecting...\x1b[0m", node_id);
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        thread::sleep(Duration::from_millis(1500));
+                        break;
+                    }
                 }
             }
 
-            // Link watchdog: Ensure pipewiresrc port connection
-            if last_link_check.elapsed() >= Duration::from_millis(3000) {
-                last_link_check = Instant::now();
-                if !pipewire::is_sender_linked() {
-                    println!("\x1b[1;33m[*] PipeWire link lost. Re-linking to node {}...\x1b[0m", node_id);
-                    pipewire::link_monitor_port_to_sender(node_id, monitor_to_record);
+            // Telemetria Periódica de Diagnóstico (a cada 2.5s)
+            if last_telemetry_check.elapsed() >= Duration::from_millis(2500) {
+                last_telemetry_check = Instant::now();
+                match cfg.capture {
+                    CaptureEngine::Kms => {
+                        let kms_detail = kms_info.as_ref().map(|k| {
+                            format!("CRTC: {} | {}x{}@{}Hz | Render: {:?}", k.crtc_id, k.width, k.height, k.vrefresh, k.render_node)
+                        }).unwrap_or_else(|| "KMS Direct".to_string());
+
+                        println!(
+                            "\x1b[1;34m[TELEMETRIA]\x1b[0m Motor: \x1b[1;32mKMS Direct\x1b[0m | Monitor: {} | {} | Encoder: {} FPS | Modo: Contínuo (Anti-Freeze Scanout)",
+                            monitor_to_record,
+                            kms_detail,
+                            cfg.fps
+                        );
+                    }
+                    CaptureEngine::Mutter => {
+                        let is_alive = pipewire::is_pipewire_node_alive(node_id);
+                        let is_linked = pipewire::is_sender_linked();
+                        println!(
+                            "\x1b[1;34m[TELEMETRIA]\x1b[0m Motor: \x1b[1;33mGNOME Mutter\x1b[0m | Monitor: {} | Nó Mutter: {} ({}) | Enlace PipeWire: {} | Encoder: {} FPS | Modo: {}",
+                            monitor_to_record,
+                            node_id,
+                            if is_alive { "\x1b[1;32mATIVO\x1b[0m" } else { "\x1b[1;31mINATIVO\x1b[0m" },
+                            if is_linked { "\x1b[1;32mCONECTADO\x1b[0m" } else { "\x1b[1;31mDESCONECTADO\x1b[0m" },
+                            cfg.fps,
+                            if cfg.drop_only { "Econômico (drop-only)" } else { "Contínuo (CFR Anti-Freeze)" }
+                        );
+                    }
                 }
             }
         }

@@ -87,13 +87,22 @@ fn print_help_en() {
     println!("  6. FPS           Target framerate: 10 to 60 FPS (default: 30)\n");
 
     println!("\x1b[1;33mOPTIONS & FLAGS:\x1b[0m");
-    println!("  \x1b[1;32m--engine=<native|gst|ffmpeg>\x1b[0m Streaming engine (native: 100% Pure Rust - DEFAULT, gst: GStreamer, ffmpeg: FFmpeg)");
+    println!("  \x1b[1;32m--capture=<kms|mutter>\x1b[0m       Capture Engine (kms: Kernel Direct Scanout [DEFAULT], mutter: GNOME Screencast)");
+    println!("  \x1b[1;32m--kms, --kernel\x1b[0m              Shortcut for Kernel DRM/KMS Direct Hardware Scanout (zero-copy)");
+    println!("  \x1b[1;32m--mutter, --gnome\x1b[0m            Shortcut for GNOME Mutter ScreenCast (with embedded mouse cursor)");
+    println!("  \x1b[1;32m--engine=<native|gst>\x1b[0m        Streaming engine (native: 100% Pure In-Process Rust [DEFAULT], gst: GStreamer)");
     println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Select transport protocol (default: network)");
     println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Shortcut for Mode 2 (Direct USB Bulk via rusb)");
     println!("  \x1b[1;32m--hud\x1b[0m                        Enable diagnostic on-screen telemetry overlay (auto-hides in 60s)");
     println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      Set color profile (24-bit TrueColor, 256-color QP, Monochrome)");
     println!("  \x1b[1;32m--help, -h\x1b[0m                   Display this help message");
     println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m         Select help language (English, Portuguese, Italian, Chinese)\n");
+
+    println!("\x1b[1;33mMOUSE CURSOR & SLEEP RECOVERY:\x1b[0m");
+    println!("  - \x1b[1;37mMouse Cursor:\x1b[0m In --mutter mode, the cursor is embedded directly in video frames.");
+    println!("    In KMS mode, enable software cursors via MUTTER_DEBUG_DISABLE_HW_CURSORS=1.");
+    println!("  - \x1b[1;37mSleep/Resume:\x1b[0m Auto-inhibits idle screen lock; auto-recovers stream when host wakes up;");
+    println!("    Raspberry Pi screen blanks to black immediately upon disconnect.\n");
 
     println!("\x1b[1;33mHOW TO STOP EXT-SENDER:\x1b[0m");
     println!("  - \x1b[1;37mInteractive:\x1b[0m Press \x1b[1;31mCtrl + C\x1b[0m in the terminal running ext-sender.");
@@ -103,24 +112,24 @@ fn print_help_en() {
 
 fn print_help_pt() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
-    println!("\x1b[1;32m  ext-sender: Transmissor de Segundo Monitor Virtual via GPU v0.2.0    \x1b[0m");
-    println!("\x1b[1;34m  100% Rust Nativo | PipeWire Zero-Copy | Aceleração VA-API/NVENC/QSV   \x1b[0m");
+    println!("\x1b[1;32m  ext-sender: Transmissor de Segundo Monitor Virtual via GPU v0.3.0    \x1b[0m");
+    println!("\x1b[1;34m  100% Rust Nativo | Kernel DRM/KMS Direct & GNOME Mutter Dual-Engine   \x1b[0m");
+    println!("\x1b[1;34m  Suporte Multi-GPU (AMD/Intel/NVIDIA) | Zero Dependências Externas     \x1b[0m");
     println!("\x1b[1;32m========================================================================\x1b[0m\n");
 
     println!("\x1b[1;33mSINOPSE:\x1b[0m");
     println!("  ext-sender [IP_DESTINO] [PORTA] [BITRATE] [MODO] [ENCODER] [FPS] [OPÇÕES]\n");
 
     println!("\x1b[1;33mDESCRIÇÃO:\x1b[0m");
-    println!("  Captura o monitor virtual do GNOME Mutter via PipeWire D-Bus, codifica em");
-    println!("  hardware na GPU (AMD VA-API, NVIDIA NVENC, Intel QSV) e transmite o fluxo");
-    println!("  H.264 de ultra-baixa latência para o Raspberry Pi Zero.\n");
+    println!("  Transmite a segunda tela estendida ou clonada para o Raspberry Pi Zero");
+    println!("  utilizando aceleração de hardware na GPU (AMD VA-API, NVIDIA NVENC, Intel QSV).");
+    println!("  Binário único e independente em Rust (sem dependência de ffmpeg).\n");
 
-    println!("\x1b[1;33mO QUE É NECESSÁRIO (PRÉ-REQUISITOS DO SISTEMA):\x1b[0m");
-    println!("  1. \x1b[1;37mSessão Wayland:\x1b[0m GNOME 44+ em Wayland com interface org.gnome.Mutter.ScreenCast.");
-    println!("  2. \x1b[1;37mPipeWire:\x1b[0m Servidores pipewire, wireplumber e pipewire-pulse em execução.");
-    println!("  3. \x1b[1;37mAceleração de GPU:\x1b[0m Placa AMD (VA-API), Intel (VA-API/QSV) ou NVIDIA (NVENC).");
-    println!("  4. \x1b[1;37mMotor de Streaming:\x1b[0m 100% Rust Nativo em Processo (PADRÃO - zero dependências), ou GStreamer / FFmpeg.");
-    println!("  5. \x1b[1;37mConexão com Pi Zero:\x1b[0m Cabo Micro-USB OTG conectado (IP 192.168.7.2 ou USB Direto).\n");
+    println!("\x1b[1;33mMOTORES DE CAPTURA DISPONÍVEIS:\x1b[0m");
+    println!("  1. \x1b[1;32mKernel DRM/KMS Direct (PADRÃO):\x1b[0m Leitura direta do scanout da GPU (/dev/dri/card*),");
+    println!("     imune a congelamentos de janelas e independente do compositor Wayland.");
+    println!("  2. \x1b[1;34mGNOME Mutter ScreenCast (--mutter):\x1b[0m Captura via PipeWire com cursor do mouse");
+    println!("     incorporado em cada quadro de vídeo (ideal para máxima visibilidade do ponteiro).\n");
 
     println!("\x1b[1;33mARGUMENTOS E VALORES PADRÃO:\x1b[0m");
     println!("  1. IP_DESTINO    Endereço IP do Pi Zero (padrão: 192.168.7.2)");
@@ -131,13 +140,22 @@ fn print_help_pt() {
     println!("  6. FPS           Taxa de quadros: 10 a 60 FPS (padrão: 30)\n");
 
     println!("\x1b[1;33mOPÇÕES E PARÂMETROS:\x1b[0m");
-    println!("  \x1b[1;32m--engine=<native|gst|ffmpeg>\x1b[0m Motor de streaming (native: 100% Rust Nativo - PADRÃO, gst: GStreamer, ffmpeg: FFmpeg)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Seleciona o protocolo de transporte (padrão: network)");
-    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Atalho para o Modo 2 (USB Bulk Direto via rusb)");
+    println!("  \x1b[1;32m--capture=<kms|mutter>\x1b[0m       Motor de captura (kms: Kernel DRM [PADRÃO], mutter: GNOME Mutter)");
+    println!("  \x1b[1;32m--kms, --kernel\x1b[0m              Atalho para motor Kernel DRM/KMS direto");
+    println!("  \x1b[1;32m--mutter, --gnome\x1b[0m            Atalho para GNOME Mutter ScreenCast (com cursor do mouse embutido)");
+    println!("  \x1b[1;32m--engine=<native|gst>\x1b[0m        Motor de streaming (native: 100% Rust Nativo [PADRÃO], gst: GStreamer)");
+    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Seleciona o protocolo de transporte (network: UDP [PADRÃO], usb: USB Bulk)");
     println!("  \x1b[1;32m--hud\x1b[0m                        Ativa o painel de telemetria na tela (auto-oculta em 60s)");
     println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      Perfil de cor (TrueColor 24-bit, 256 cores QP, Monocromático)");
     println!("  \x1b[1;32m--help, -h\x1b[0m                   Exibe esta mensagem de ajuda");
     println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m         Seleciona o idioma (Inglês, Português, Italiano, Chinês)\n");
+
+    println!("\x1b[1;33mCURSOR DO MOUSE, SUSPENSÃO E RETOMADA:\x1b[0m");
+    println!("  - \x1b[1;37mCursor do Mouse:\x1b[0m No modo --mutter, o cursor é desenhado nativamente nos quadros.");
+    println!("    No modo KMS, ative cursor em software com MUTTER_DEBUG_DISABLE_HW_CURSORS=1.");
+    println!("  - \x1b[1;37mInibição de Bloqueio:\x1b[0m O ext-sender inibe protetor de tela, idle e suspensão durante o stream.");
+    println!("  - \x1b[1;37mRetomada de Suspensão:\x1b[0m Recuperação automática de conexões e monitores ao acordar o PC;");
+    println!("    o Raspberry Pi limpa a tela para preto puro imediatamente na desconexão.\n");
 
     println!("\x1b[1;33mCOMO PARAR O EXT-SENDER:\x1b[0m");
     println!("  - \x1b[1;37mInterativo:\x1b[0m Pressione \x1b[1;31mCtrl + C\x1b[0m no terminal onde o ext-sender está rodando.");

@@ -6,5 +6,6 @@ Cargo.lock
 build-appliance/
 build-buildroot/
 downloads/
+backups/
 
 

@@ -15,6 +15,7 @@
 
 use crate::drm::ensure_drm_hdmi_connected;
 use crate::native_v4l2::NativeV4l2Decoder;
+use crate::audio::{AudioReceiver, AudioStatus, DEFAULT_AUDIO_PORT};
 use std::os::unix::io::RawFd;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -80,6 +81,7 @@ pub struct PipelineManager {
     active_kind: Arc<Mutex<Option<PipelineKind>>>,
     backend: Arc<Mutex<PipelineBackend>>,
     paused: Arc<AtomicBool>,
+    audio: Arc<Mutex<AudioReceiver>>,
 }
 
 impl PipelineManager {
@@ -93,6 +95,7 @@ impl PipelineManager {
             active_kind: Arc::new(Mutex::new(None)),
             backend: Arc::new(Mutex::new(backend)),
             paused: Arc::new(AtomicBool::new(false)),
+            audio: Arc::new(Mutex::new(AudioReceiver::new(DEFAULT_AUDIO_PORT))),
         }
     }
 
@@ -148,8 +151,7 @@ impl PipelineManager {
         let mut kind_guard = self.active_kind.lock().unwrap();
         *kind_guard = None;
 
-        // Restore clean Ready Splash Screen on stop/disconnect
-        crate::display::SplashEngine::show_ready();
+        self.audio.lock().unwrap().stop();
     }
 
     /// Launches the requested hardware decode pipeline
@@ -159,6 +161,7 @@ impl PipelineManager {
 
         // Ensure DRM KMS connector is forced 'on' for headless operation
         ensure_drm_hdmi_connected();
+        let _ = self.audio.lock().unwrap().start();
 
         let backend = self.backend();
         println!(
@@ -355,4 +358,21 @@ impl PipelineManager {
             }
         }
     }
+
+    pub fn audio_status(&self) -> AudioStatus {
+        self.audio.lock().unwrap().status()
+    }
+
+    pub fn set_audio_volume(&self, vol: u32) {
+        self.audio.lock().unwrap().set_volume(vol);
+    }
+
+    pub fn set_audio_muted(&self, muted: bool) {
+        self.audio.lock().unwrap().set_muted(muted);
+    }
+
+    pub fn set_audio_enabled(&self, enabled: bool) {
+        self.audio.lock().unwrap().set_enabled(enabled);
+    }
 }
+

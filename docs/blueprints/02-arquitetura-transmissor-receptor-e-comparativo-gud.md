@@ -17,20 +17,18 @@ A arquitetura foi desenhada para superar a maior limitação do Raspberry Pi Zer
 +-----------------------------------------------------------------------------------+
 |                              COMPUTADOR HOST (LINUX)                              |
 |                                                                                   |
-|  [ GNOME Mutter Wayland ]                                                         |
-|         │ (Captura de tela virtual HDMI-1 sem dongle físico)                      |
-|         ▼                                                                         |
-|  [ D-Bus Screencast API ] -> Obtém File Descriptor DMA-BUF (screencast.rs)         |
-|         │                                                                         |
-|         ▼                                                                         |
-|  [ PipeWire Daemon ] -------> Roteamento zero-copy de buffers (pipewire.rs)       |
-|         │                                                                         |
-|         ▼                                                                         |
-|  [ ext-sender (Rust Modular) ]                                                    |
+|  [ Motor 1: Kernel DRM/KMS Direct ]        [ Motor 2: GNOME Mutter Wayland ]      |
+|  - Leitura direta de scanout CRTC da GPU   - D-Bus Screencast API                 |
+|  - PRIME DMA-BUF Zero-Copy via GETFB2      - PipeWire Daemon Graph Linking        |
+|  - Zero Congelamento por Oclusão/Mouse     - Suporte nativo GNOME sem dongle      |
+|         │                                          │                              |
+|         └────────────────────┬─────────────────────┘                              |
+|                              ▼                                                    |
+|  [ ext-sender (Rust Modular - Dual Engine v0.3.0) ]                               |
 |         │                                                                         |
 |         ├──> GPU Hardware Encoder: AMD VA-API (vah264enc) / NVENC / Intel QSV     |
 |         │    Perfil: Constrained Baseline | Entropia: CAVLC | IDR: 1 seg          |
-|         │    Bitrate: 400 kbps - 2.5 Mbps (Adaptativo via pipeline.rs)            |
+|         │    Bitrate: 400 kbps - 6.0 Mbps (Adaptativo via pipeline.rs)            |
 |         │                                                                         |
 |         ├──> RTP Packetizer: Fragmentador FU-A / NAL slicing com Marker (M=1)     |
 |         │                                                                         |

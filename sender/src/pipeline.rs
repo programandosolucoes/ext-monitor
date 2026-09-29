@@ -6,16 +6,22 @@
 //! License: MIT
 //! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
 
-use crate::config::{ColorProfile, EncoderApi, StreamEngine};
+use crate::config::{CaptureEngine, ColorProfile, EncoderApi, StreamEngine};
+use crate::kms::KmsOutputInfo;
 use crate::native_streamer;
-use std::io;
+use std::io::{self, BufRead, BufReader};
 use std::os::unix::io::RawFd;
 use std::os::unix::process::ExitStatusExt;
-use std::process::{Child, Command, ExitStatus};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::thread;
 
 pub enum StreamerHandle {
     Child(Child),
     Native(native_streamer::NativeStreamer),
+    Composite {
+        video: Box<StreamerHandle>,
+        audio: Option<Child>,
+    },
 }
 
 impl StreamerHandle {
@@ -26,6 +32,13 @@ impl StreamerHandle {
                 n.stop();
                 Ok(())
             }
+            StreamerHandle::Composite { ref mut video, ref mut audio } => {
+                let _ = video.kill();
+                if let Some(ref mut a) = audio {
+                    let _ = a.kill();
+                }
+                Ok(())
+            }
         }
     }
 
@@ -33,6 +46,12 @@ impl StreamerHandle {
         match self {
             StreamerHandle::Child(ref mut c) => c.wait(),
             StreamerHandle::Native(_) => Ok(ExitStatus::from_raw(0)),
+            StreamerHandle::Composite { ref mut video, ref mut audio } => {
+                if let Some(ref mut a) = audio {
+                    let _ = a.wait();
+                }
+                video.wait()
+            }
         }
     }
 
@@ -45,6 +64,9 @@ impl StreamerHandle {
                 } else {
                     Ok(Some(ExitStatus::from_raw(0)))
                 }
+            }
+            StreamerHandle::Composite { ref mut video, .. } => {
+                video.try_wait()
             }
         }
     }
@@ -64,36 +86,80 @@ pub struct PipelineBuilder {
     pub key_int_max: u32,
     pub usb_pipe_fd: Option<RawFd>,
     pub engine: StreamEngine,
+    pub capture: CaptureEngine,
+    #[allow(dead_code)]
+    pub kms_info: Option<KmsOutputInfo>,
+    pub audio: bool,
+    pub audio_port: u16,
 }
 
 impl PipelineBuilder {
     /// Spawns the configured streaming pipeline process
-    pub fn spawn(&self) -> io::Result<StreamerHandle> {
-        match self.engine {
-            StreamEngine::NativeRust => {
-                let streamer = native_streamer::NativeStreamer::start(
-                    self.target_ip.clone(),
-                    self.target_port,
-                    self.bitrate,
-                    self.fps,
-                    self.usb_pipe_fd,
-                )?;
-                Ok(StreamerHandle::Native(streamer))
-            }
-            StreamEngine::GStreamer => {
-                let child = self.spawn_gstreamer()?;
-                Ok(StreamerHandle::Child(child))
-            }
-            StreamEngine::FFmpeg => {
-                let child = self.spawn_ffmpeg()?;
-                Ok(StreamerHandle::Child(child))
-            }
+    pub fn spawn_audio(&self) -> Option<Child> {
+        if !self.audio {
+            return None;
         }
+
+        println!(
+            "\x1b[1;34m[*] Starting low-latency PipeWire Opus audio streamer to {}:{}...\x1b[0m",
+            self.target_ip, self.audio_port
+        );
+
+        Command::new("gst-launch-1.0")
+            .arg("-q")
+            .arg("pipewiresrc")
+            .arg("client-name=ext-hdmi-audio")
+            .arg("do-timestamp=true")
+            .arg("!")
+            .arg("audioconvert")
+            .arg("!")
+            .arg("audioresample")
+            .arg("!")
+            .arg("audio/x-raw,rate=48000,channels=2")
+            .arg("!")
+            .arg("opusenc")
+            .arg("bitrate=96000")
+            .arg("frame-size=10")
+            .arg("complexity=3")
+            .arg("!")
+            .arg("rtpopuspay")
+            .arg("pt=96")
+            .arg("!")
+            .arg("udpsink")
+            .arg(format!("host={}", self.target_ip))
+            .arg(format!("port={}", self.audio_port))
+            .arg("sync=false")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()
+    }
+
+    pub fn spawn(&self) -> io::Result<StreamerHandle> {
+        let video_handle = if self.engine == StreamEngine::NativeRust {
+            let streamer = native_streamer::NativeStreamer::start(
+                self.target_ip.clone(),
+                self.target_port,
+                self.bitrate,
+                self.fps,
+                self.usb_pipe_fd,
+            )?;
+            StreamerHandle::Native(streamer)
+        } else {
+            let child = self.spawn_gstreamer()?;
+            StreamerHandle::Child(child)
+        };
+
+        let audio_child = self.spawn_audio();
+
+        Ok(StreamerHandle::Composite {
+            video: Box::new(video_handle),
+            audio: audio_child,
+        })
     }
 
     fn spawn_gstreamer(&self) -> io::Result<Child> {
         let mut cmd = Command::new("gst-launch-1.0");
-        cmd.arg("-q");
 
         let keepalive_ms = (1000 / self.fps).max(16);
         cmd.arg("pipewiresrc")
@@ -106,14 +172,22 @@ impl PipelineBuilder {
             .arg("always-copy=false")
             .arg("!");
 
-        // 2. Framerate normalization & drop-on-late (prioritize newest frames immediately)
-        cmd.arg("videorate")
-            .arg("drop-only=true")
-            .arg("new-pref=1.0")
-            .arg(format!("skip-to-first={}", self.skip_to_first))
-            .arg("!")
-            .arg(format!("video/x-raw,framerate={}/1", self.fps))
-            .arg("!");
+        // 2. Hardware Framerate Shaping: zero-copy passthrough
+        if self.drop_only {
+            cmd.arg("videorate")
+                .arg("drop-only=true")
+                .arg(format!("skip-to-first={}", self.skip_to_first))
+                .arg("!")
+                .arg(format!("video/x-raw,framerate={}/1", self.fps))
+                .arg("!");
+        } else {
+            cmd.arg("videorate")
+                .arg("drop-only=false")
+                .arg(format!("skip-to-first={}", self.skip_to_first))
+                .arg("!")
+                .arg(format!("video/x-raw,framerate={}/1", self.fps))
+                .arg("!");
+        }
 
         // 3. Diagnostic On-Screen HUD if active
         if self.hud {
@@ -210,7 +284,47 @@ impl PipelineBuilder {
                 .arg("sync=false");
         }
 
-        cmd.spawn()
+        Self::spawn_and_attach_logger(cmd, "GStreamer")
+    }
+
+    fn spawn_and_attach_logger(mut cmd: Command, tag: &'static str) -> io::Result<Child> {
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = cmd.spawn()?;
+
+        if let Some(stdout) = child.stdout.take() {
+            thread::spawn(move || {
+                let reader = BufReader::new(stdout);
+                for line in reader.lines().flatten() {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() || trimmed.contains("99:99:99") {
+                        continue;
+                    }
+                    println!("\x1b[1;36m[{}][OUT]\x1b[0m {}", tag, trimmed);
+                }
+            });
+        }
+
+        if let Some(stderr) = child.stderr.take() {
+            thread::spawn(move || {
+                let reader = BufReader::new(stderr);
+                for line in reader.lines().flatten() {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() || trimmed.contains("99:99:99") {
+                        continue;
+                    }
+                    if trimmed.contains("ERROR") || trimmed.contains("ERRO") || trimmed.contains("Failed") {
+                        eprintln!("\x1b[1;31m[{}][ERROR]\x1b[0m {}", tag, trimmed);
+                    } else if trimmed.contains("WARN") || trimmed.contains("AVISO") {
+                        eprintln!("\x1b[1;33m[{}][WARN]\x1b[0m {}", tag, trimmed);
+                    } else {
+                        println!("\x1b[1;37m[{}][DIAG]\x1b[0m {}", tag, trimmed);
+                    }
+                }
+            });
+        }
+
+        Ok(child)
     }
 
     fn append_encoder_args(&self, cmd: &mut Command) {
@@ -304,32 +418,5 @@ impl PipelineBuilder {
                     .arg("!");
             }
         }
-    }
-
-    fn spawn_ffmpeg(&self) -> io::Result<Child> {
-        let mut cmd = Command::new("ffmpeg");
-        cmd.arg("-nostdin")
-            .arg("-y")
-            .arg("-f").arg("pipewire")
-            .arg("-i").arg(format!("{}", self.node_id))
-            .arg("-vf").arg("scale=1280:720:flags=fast_bilinear,fps=30")
-            .arg("-c:v").arg("h264_vaapi")
-            .arg("-vaapi_device").arg("/dev/dri/renderD128")
-            .arg("-b:v").arg(format!("{}k", self.bitrate))
-            .arg("-maxrate").arg(format!("{}k", self.bitrate))
-            .arg("-bufsize").arg(format!("{}k", self.bitrate / 4))
-            .arg("-g").arg(format!("{}", self.key_int_max))
-            .arg("-bf").arg("0")
-            .arg("-tune").arg("zerolatency");
-
-        if let Some(fd) = self.usb_pipe_fd {
-            cmd.arg("-f").arg("h264").arg(format!("pipe:{}", fd));
-        } else {
-            cmd.arg("-payload_type").arg("96")
-                .arg("-f").arg("rtp")
-                .arg(format!("rtp://{}:{}", self.target_ip, self.target_port));
-        }
-
-        cmd.spawn()
     }
 }

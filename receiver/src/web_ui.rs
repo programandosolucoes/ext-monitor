@@ -815,22 +815,49 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     </div>
                 </div>
 
-                <!-- Frame Skipping & Damage-Only Preservation -->
+                <!-- HDMI Digital Audio (Opus 48kHz) -->
                 <div class="control-group">
                     <div class="control-label">
                         <span class="tip-wrap">
-                            <span data-i18n="dropOnlyLabel">Preservação de Salto de Quadros (Damage-Only)</span>
+                            <span data-i18n="audioLabel">HDMI Digital Audio (Opus 48kHz)</span>
                             <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipDropOnly">Quando Ativo, só transmite ao detectar alteração. Desativado mantém envio a 30 FPS contínuos para vídeos do YouTube nunca pausarem.</span>
+                            <span class="tip-box" data-i18n="tipAudio">Volume do áudio digital enviado ao monitor/TV via cabo HDMI. Latência sub-25ms com sincronia A/V.</span>
                         </span>
-                        <span class="control-value" id="valDropOnly">drop-only=true (Ativo)</span>
+                        <span class="control-value" id="valAudioVolume">100%</span>
+                    </div>
+                    <div class="slider-wrap">
+                        <input type="range" min="0" max="100" step="5" value="100" class="range-slider" id="audioVolumeSlider" oninput="updateAudioVolume(this.value)">
+                        <div class="slider-labels">
+                            <span>0% (Mudo)</span>
+                            <span>25%</span>
+                            <span>50%</span>
+                            <span>75%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+                    <div class="action-row" style="margin-top: 0.6rem;">
+                        <button id="btnAudioMute" class="btn-primary" onclick="toggleAudioMute()">🔊 Silenciar Áudio</button>
+                    </div>
+                </div>
+
+                <!-- Frame Skipping & Damage-Only Preservation -->
+                <div class="control-group">
+                <!-- Transmission Mode: Continuous CFR vs Drop-Only Economy -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="dropOnlyLabel">Modo de Transmissão (Contínuo vs Econômico)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipDropOnly">Contínuo (Padrão): Transmissão ininterrupta a 30/60 FPS no modo de Rede e USB Bulk, garantindo vídeos sem congelamento mesmo sem mouse na tela. Econômico (drop-only): Descarta quadros repetidos, economizando 95% de banda com telas estáticas.</span>
+                        </span>
+                        <span class="control-value" id="valDropOnly">drop-only=false (Contínuo - Padrão)</span>
                     </div>
                     <div class="btn-grid" id="dropOnlyGrid">
-                        <button class="btn-toggle active" id="btnDropOnlyTrue" onclick="setDropOnly(true)" data-i18n="dropOnlyTrue">Ativo (Economia 95% em tela estática)</button>
-                        <button class="btn-toggle" id="btnDropOnlyFalse" onclick="setDropOnly(false)" data-i18n="dropOnlyFalse">Desativado (Envio contínuo forçado)</button>
+                        <button class="btn-toggle" id="btnDropOnlyTrue" onclick="setDropOnly(true)" data-i18n="dropOnlyTrue">Econômico (Descarta estáticos)</button>
+                        <button class="btn-toggle active" id="btnDropOnlyFalse" onclick="setDropOnly(false)" data-i18n="dropOnlyFalse">Contínuo (Padrão: Vídeos / USB Bulk)</button>
                     </div>
                     <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.4rem; line-height: 1.4;" data-i18n="dropOnlyDesc">
-                        Quando ativo, o pipeline não duplica quadros quando a tela está estática. O orçamento de bitrate é 100% reservado para momentos de movimento (digitação/mouse).
+                        Padrão: Contínuo (drop-only=false). O stream entrega fluxo estável a 30/60 FPS no modo de Rede e USB Bulk. Para economia extrema em textos estáticos, ative 'Econômico' ou use a flag --economy no host.
                     </div>
                 </div>
 
@@ -879,6 +906,39 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     </div>
                     <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.4rem; line-height: 1.4;" data-i18n="keyIntDesc">
                         Injeta um quadro-chave IDR completo periodicamente para limpar qualquer resíduo visual na TV ou monitor HDMI.
+                    </div>
+                </div>
+
+                <!-- Capture Engine: KMS Direct vs GNOME Mutter -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>Motor de Captura (Dual-Engine)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">KMS Direct: Lê os pixels diretamente do scanout do hardware da placa de vídeo via Linux Kernel DRM/KMS. Elimina congelamento mesmo sem mouse na tela. Mutter: Captura via D-Bus screencast do GNOME Mutter.</span>
+                        </span>
+                        <span class="control-value" id="valCapture">KMS Direct (Hardware Scanout)</span>
+                    </div>
+                    <div class="btn-grid" id="captureGrid">
+                        <button class="btn-toggle active" data-capture="kms" onclick="setCapture('kms')">⚡ KMS Direct (Anti-Freeze / GPU Scanout)</button>
+                        <button class="btn-toggle" data-capture="mutter" onclick="setCapture('mutter')">🐧 GNOME Mutter (PipeWire Screencast)</button>
+                    </div>
+                </div>
+
+                <!-- Active Display Monitor -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>Monitor de Gravação</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">Escolha a saída de vídeo a ser capturada. HDMI-1 para segunda tela estendida na TV/monitor, eDP-1 para clonar a tela do notebook.</span>
+                        </span>
+                        <span class="control-value" id="valMonitor">HDMI-1 (Segunda Tela)</span>
+                    </div>
+                    <div class="btn-grid" id="monitorGrid">
+                        <button class="btn-toggle active" data-monitor="HDMI-1" onclick="setMonitor('HDMI-1')">HDMI-1 (Segunda Tela Estendida)</button>
+                        <button class="btn-toggle" data-monitor="eDP-1" onclick="setMonitor('eDP-1')">eDP-1 (Tela do Notebook)</button>
+                        <button class="btn-toggle" data-monitor="auto" onclick="setMonitor('auto')">Auto (Primeiro Externo Ativo)</button>
                     </div>
                 </div>
 
@@ -1148,6 +1208,8 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         let currentDropOnly = false;
         let currentSkipToFirst = true;
         let currentKeyIntMax = 30;
+        let currentCapture = 'kms';
+        let currentMonitor = 'HDMI-1';
         let isPaused = false;
 
         // Internationalization Dictionary
@@ -1191,11 +1253,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 colorFull: "24-bit TrueColor",
                 color256: "256 Cores (QP 30-44)",
                 colorGray: "Monochrome",
-                dropOnlyLabel: "Frame Skipping (Damage-Only Preserving)",
-                tipDropOnly: "When Enabled, only transmits when damage is detected. Disabled forces continuous 30 FPS so YouTube videos never freeze when mouse leaves.",
-                dropOnlyTrue: "Enabled (95% bandwidth savings on idle)",
-                dropOnlyFalse: "Disabled (Continuous frame duplication)",
-                dropOnlyDesc: "When enabled, videorate drops duplicate frames while the screen is static, allocating 100% of bitrate to mouse and typing updates.",
+                dropOnlyLabel: "Transmission Mode (Continuous vs Economy)",
+                tipDropOnly: "Continuous (Default): Steady 30/60 FPS stream for Network and USB Bulk, ensuring smooth YouTube playback without needing mouse movement. Economy: Drops duplicate frames, saving 95% bandwidth on static screens.",
+                dropOnlyTrue: "Economy (Drop static frames)",
+                dropOnlyFalse: "Continuous (Default: Videos / USB Bulk)",
+                dropOnlyDesc: "Default: Continuous (drop-only=false). Steady stream for Network and USB Bulk. Use Economy or --economy flag for extreme battery/bandwidth savings on static text.",
                 skipFirstLabel: "Instant Motion Delivery (skip-to-first)",
                 tipSkipFirst: "Eliminates backlog delay by delivering the very first frame of motion immediately without queue latency.",
                 skipFirstTrue: "Enabled (Zero latency on first motion)",
@@ -1303,11 +1365,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 colorFull: "24-bit TrueColor",
                 color256: "256 Cores (QP 30-44)",
                 colorGray: "Monocromático",
-                dropOnlyLabel: "Preservação de Salto de Quadros (Damage-Only)",
-                tipDropOnly: "Quando Ativo, só transmite ao detectar alteração. Desativado mantém envio a 30 FPS contínuos para vídeos do YouTube nunca pausarem.",
-                dropOnlyTrue: "Ativo (Economia 95% em tela estática)",
-                dropOnlyFalse: "Desativado (Envio contínuo forçado)",
-                dropOnlyDesc: "Quando ativo, o pipeline não duplica quadros com a tela estática. O bitrate é 100% alocado para momentos de movimento (digitação/mouse).",
+                dropOnlyLabel: "Modo de Transmissão (Contínuo vs Econômico)",
+                tipDropOnly: "Contínuo (Padrão): Transmissão ininterrupta a 30/60 FPS no modo de Rede e USB Bulk, garantindo YouTube e vídeos sem congelar mesmo sem mouse na tela. Econômico: Descarta quadros repetidos, economizando 95% de banda em telas estáticas.",
+                dropOnlyTrue: "Econômico (Descarta estáticos)",
+                dropOnlyFalse: "Contínuo (Padrão: Vídeos / USB Bulk)",
+                dropOnlyDesc: "Padrão: Contínuo (drop-only=false). O stream entrega fluxo constante a 30/60 FPS no modo de Rede e USB Bulk. Para economizar banda/bateria em leitura de PDFs ou terminais estáticos, selecione 'Econômico' ou use a flag --economy no host.",
                 skipFirstLabel: "Entrega Imediata no Primeiro Quadro (skip-to-first)",
                 tipSkipFirst: "Elimina atrasos acumulados, entregando imediatamente o primeiro quadro assim que o mouse se move.",
                 skipFirstTrue: "Ativo (Latência zero ao mover)",
@@ -1679,7 +1741,7 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             currentDropOnly = val;
             localStorage.setItem('ext_drop_only', val);
             const el = document.getElementById('valDropOnly');
-            if (el) el.textContent = val ? 'drop-only=true (Ativo)' : 'drop-only=false (Desativado)';
+            if (el) el.textContent = val ? 'drop-only=true (Econômico)' : 'drop-only=false (Contínuo - Padrão)';
             const btnT = document.getElementById('btnDropOnlyTrue');
             const btnF = document.getElementById('btnDropOnlyFalse');
             if (btnT) btnT.classList.toggle('active', val);
@@ -1764,6 +1826,24 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             }).catch(() => {});
         }
 
+        function setCapture(cap) {
+            currentCapture = cap;
+            document.querySelectorAll('#captureGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', b.dataset.capture === cap);
+            });
+            document.getElementById('valCapture').textContent = cap === 'kms' ? 'KMS Direct (Hardware Scanout)' : 'GNOME Mutter (PipeWire)';
+            localStorage.setItem('ext_capture', cap);
+        }
+
+        function setMonitor(mon) {
+            currentMonitor = mon;
+            document.querySelectorAll('#monitorGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', b.dataset.monitor === mon);
+            });
+            document.getElementById('valMonitor').textContent = mon;
+            localStorage.setItem('ext_monitor', mon);
+        }
+
         // Hot-Apply Configuration
         function applyConfiguration() {
             localStorage.setItem('ext_color', currentColor);
@@ -1772,6 +1852,8 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             localStorage.setItem('ext_drop_only', currentDropOnly);
             localStorage.setItem('ext_skip_to_first', currentSkipToFirst);
             localStorage.setItem('ext_key_int_max', currentKeyIntMax);
+            localStorage.setItem('ext_capture', currentCapture);
+            localStorage.setItem('ext_monitor', currentMonitor);
             showToast('Applying configuration via UDP 5001...');
             fetch('/api/config', {
                 method: 'POST',
@@ -1782,7 +1864,9 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     color: currentColor,
                     drop_only: currentDropOnly,
                     skip_to_first: currentSkipToFirst,
-                    key_int_max: currentKeyIntMax
+                    key_int_max: currentKeyIntMax,
+                    capture: currentCapture,
+                    monitor: currentMonitor
                 })
             })
             .then(res => res.json())
@@ -1884,6 +1968,34 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             setTimeout(() => t.classList.remove('show'), 2500);
         }
 
+        let isAudioMuted = false;
+        function updateAudioVolume(val) {
+            document.getElementById('valAudioVolume').textContent = val + '%';
+            fetch('/api/audio/volume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ volume: parseInt(val, 10) })
+            }).then(r => r.json()).then(st => {
+                showToast('Volume HDMI: ' + st.volume + '%');
+            }).catch(() => {});
+        }
+
+        function toggleAudioMute() {
+            isAudioMuted = !isAudioMuted;
+            fetch('/api/audio/mute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ muted: isAudioMuted })
+            }).then(r => r.json()).then(st => {
+                const btn = document.getElementById('btnAudioMute');
+                if (btn) {
+                    btn.textContent = st.muted ? '🔇 Ativar Áudio' : '🔊 Silenciar Áudio';
+                    btn.className = st.muted ? 'btn-danger' : 'btn-primary';
+                }
+                showToast(st.muted ? 'Áudio HDMI Silenciado' : 'Áudio HDMI Ativado');
+            }).catch(() => {});
+        }
+
         // Telemetry Poller
         function pollTelemetry() {
             fetch('/api/status')
@@ -1892,6 +2004,20 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     if (data.temp) document.getElementById('valTemp').textContent = data.temp + '°C';
                     if (data.cpu) document.getElementById('valCpu').textContent = data.cpu;
                     if (data.ram) document.getElementById('valRam').textContent = data.ram + ' MB';
+                    if (data.audio) {
+                        const a = data.audio;
+                        const elVol = document.getElementById('valAudioVolume');
+                        const slider = document.getElementById('audioVolumeSlider');
+                        if (elVol && slider && !slider.matches(':active')) {
+                            elVol.textContent = a.volume + '%';
+                            slider.value = a.volume;
+                        }
+                        const btn = document.getElementById('btnAudioMute');
+                        if (btn) {
+                            btn.textContent = a.muted ? '🔇 Ativar Áudio' : '🔊 Silenciar Áudio';
+                            btn.className = a.muted ? 'btn-danger' : 'btn-primary';
+                        }
+                    }
                     if (data.monitor) {
                         const m = data.monitor;
                         const elName = document.getElementById('monitorName');

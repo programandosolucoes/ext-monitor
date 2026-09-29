@@ -108,3 +108,40 @@ impl Drop for MutterScreenCastSession {
         self.stop();
     }
 }
+
+/// GNOME Session Inhibitor to prevent screensaver, display sleep and idle lock
+pub struct GnomeSessionInhibitor {
+    conn: Connection,
+    cookie: u32,
+}
+
+impl GnomeSessionInhibitor {
+    pub fn inhibit(app_id: &str, reason: &str) -> Option<Self> {
+        let conn = Connection::session().ok()?;
+        // Flags: 4 = Inhibit Suspend, 8 = Inhibit Idle/ScreenSaver (4 | 8 = 12)
+        let reply = conn.call_method(
+            Some("org.gnome.SessionManager"),
+            "/org/gnome/SessionManager",
+            Some("org.gnome.SessionManager"),
+            "Inhibit",
+            &(app_id, 0u32, reason, 12u32),
+        ).ok()?;
+        let cookie: u32 = reply.body().deserialize().ok()?;
+        println!("\x1b[1;32m[+] GNOME Session Inhibit Active (Cookie: {}):\x1b[0m Bloqueio de tela e suspensão inibidos durante transmissão", cookie);
+        Some(Self { conn, cookie })
+    }
+}
+
+impl Drop for GnomeSessionInhibitor {
+    fn drop(&mut self) {
+        let _ = self.conn.call_method(
+            Some("org.gnome.SessionManager"),
+            "/org/gnome/SessionManager",
+            Some("org.gnome.SessionManager"),
+            "Uninhibit",
+            &(self.cookie,),
+        );
+        println!("\x1b[1;33m[*] GNOME Session Inhibit liberado.\x1b[0m");
+    }
+}
+
