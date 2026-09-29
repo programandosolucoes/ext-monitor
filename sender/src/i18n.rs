@@ -91,7 +91,7 @@ fn print_help_en() {
     println!("  \x1b[1;32m--kms, --kernel\x1b[0m              Shortcut for Kernel DRM/KMS Direct Hardware Scanout (zero-copy)");
     println!("  \x1b[1;32m--mutter, --gnome\x1b[0m            Shortcut for GNOME Mutter ScreenCast (with embedded mouse cursor)");
     println!("  \x1b[1;32m--engine=<native|gst>\x1b[0m        Streaming engine (native: 100% Pure In-Process Rust [DEFAULT], gst: GStreamer)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Select transport protocol (default: network)");
+    println!("  \x1b[1;32m--transport=<usb|network>\x1b[0m    Select transport protocol (usb: USB Bulk [DEFAULT w/ auto-fallback], network: UDP)");
     println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Shortcut for Mode 2 (Direct USB Bulk via rusb)");
     println!("  \x1b[1;32m--hud\x1b[0m                        Enable diagnostic on-screen telemetry overlay (auto-hides in 60s)");
     println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      Set color profile (24-bit TrueColor, 256-color QP, Monochrome)");
@@ -144,7 +144,9 @@ fn print_help_pt() {
     println!("  \x1b[1;32m--kms, --kernel\x1b[0m              Atalho para motor Kernel DRM/KMS direto");
     println!("  \x1b[1;32m--mutter, --gnome\x1b[0m            Atalho para GNOME Mutter ScreenCast (com cursor do mouse embutido)");
     println!("  \x1b[1;32m--engine=<native|gst>\x1b[0m        Motor de streaming (native: 100% Rust Nativo [PADRÃO], gst: GStreamer)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Seleciona o protocolo de transporte (network: UDP [PADRÃO], usb: USB Bulk)");
+    println!("  \x1b[1;32m--transport=<usb|network>\x1b[0m    Seleciona o transporte (usb: USB Bulk [PADRÃO c/ fallback auto], network: UDP)");
+    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Atalho para Modo 2 (USB Bulk Direto via rusb)");
+    println!("  \x1b[1;32m--network, --udp\x1b[0m             Forçar envio direto via rede UDP (sem tentar USB Bulk)");
     println!("  \x1b[1;32m--hud\x1b[0m                        Ativa o painel de telemetria na tela (auto-oculta em 60s)");
     println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      Perfil de cor (TrueColor 24-bit, 256 cores QP, Monocromático)");
     println!("  \x1b[1;32m--help, -h\x1b[0m                   Exibe esta mensagem de ajuda");
@@ -165,7 +167,7 @@ fn print_help_pt() {
 
 fn print_help_it() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
-    println!("\x1b[1;32m  ext-sender: Trasmettitore Secondo Monitor Virtuale via GPU v0.2.0     \x1b[0m");
+    println!("\x1b[1;32m  ext-sender: Trasmettitore Secondo Monitor Virtuale via GPU v0.3.0     \x1b[0m");
     println!("\x1b[1;34m  100% Rust Nativo | PipeWire Zero-Copy | Accelerazione VA-API/NVENC/QSV\x1b[0m");
     println!("\x1b[1;32m========================================================================\x1b[0m\n");
 
@@ -173,16 +175,16 @@ fn print_help_it() {
     println!("  ext-sender [IP_DESTINAZIONE] [PORTA] [BITRATE] [MODALITA] [ENCODER] [FPS] [OPZIONI]\n");
 
     println!("\x1b[1;33mDESCRIZIONE:\x1b[0m");
-    println!("  Cattura il monitor virtuale da GNOME Mutter tramite PipeWire D-Bus, codifica");
-    println!("  in hardware su GPU (AMD VA-API, NVIDIA NVENC, Intel QSV) e trasmette il flusso");
+    println!("  Cattura il monitor virtuale da GNOME Mutter tramite PipeWire D-Bus o Kernel DRM,");
+    println!("  codifica in hardware su GPU (AMD VA-API, NVIDIA NVENC, Intel QSV) e trasmette il flusso");
     println!("  H.264 ad ultra-bassa latenza al Raspberry Pi Zero.\n");
 
     println!("\x1b[1;33mREQUISITI NECESSARI (PREREQUISITI DI SISTEMA):\x1b[0m");
     println!("  1. \x1b[1;37mSessione Wayland:\x1b[0m GNOME 44+ su Wayland con org.gnome.Mutter.ScreenCast.");
     println!("  2. \x1b[1;37mPipeWire:\x1b[0m Servizi pipewire, wireplumber e pipewire-pulse attivi.");
     println!("  3. \x1b[1;37mAccelerazione GPU:\x1b[0m Scheda AMD (VA-API), Intel (VA-API/QSV) o NVIDIA (NVENC).");
-    println!("  4. \x1b[1;37mMotore di Streaming:\x1b[0m 100% Rust Nativo In-Process (PREDEFINITO - zero software esterno), o GStreamer / FFmpeg.");
-    println!("  5. \x1b[1;37mConnessione Pi Zero:\x1b[0m Cavo Micro-USB OTG connesso (IP 192.168.7.2 o USB Diretto).\n");
+    println!("  4. \x1b[1;37mMotore di Streaming:\x1b[0m 100% Rust Nativo In-Process (PREDEFINITO - zero software esterno), o GStreamer.");
+    println!("  5. \x1b[1;37mConnessione Pi Zero:\x1b[0m Cavo Micro-USB OTG connesso (USB Diretto predefinito o IP 192.168.7.2).\n");
 
     println!("\x1b[1;33mARGOMENTI E PREDEFINITI:\x1b[0m");
     println!("  1. IP_DESTINAZIONE Indirizzo IP del Pi Zero (default: 192.168.7.2)");
@@ -193,9 +195,10 @@ fn print_help_it() {
     println!("  6. FPS             Frequenza fotogrammi: da 10 a 60 FPS (default: 30)\n");
 
     println!("\x1b[1;33mOPZIONI:\x1b[0m");
-    println!("  \x1b[1;32m--engine=<native|gst|ffmpeg>\x1b[0m Motore di streaming (native: 100% Rust Nativo - PREDEFINITO, gst: GStreamer, ffmpeg: FFmpeg)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    Seleziona trasporto dati (default: network)");
-    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Scorciatoia per Modalità 2 (USB Bulk Diretto via rusb)");
+    println!("  \x1b[1;32m--engine=<native|gst>\x1b[0m        Motore di streaming (native: 100% Rust Nativo - PREDEFINITO, gst: GStreamer)");
+    println!("  \x1b[1;32m--transport=<usb|network>\x1b[0m    Seleziona trasporto (usb: USB Bulk [PREDEFINITO c/ auto-fallback], network: UDP)");
+    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            Scorciatoia per USB Bulk Diretto");
+    println!("  \x1b[1;32m--network, --udp\x1b[0m             Forza invio diretto via rete UDP (senza provare USB Bulk)");
     println!("  \x1b[1;32m--hud\x1b[0m                        Attiva telemetria OSD a schermo (scomparsa in 60s)");
     println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      Profilo colore (TrueColor 24-bit, 256 colori QP, Bianco/Nero)");
     println!("  \x1b[1;32m--help, -h\x1b[0m                   Mostra questo messaggio di aiuto");
@@ -209,7 +212,7 @@ fn print_help_it() {
 
 fn print_help_zh() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
-    println!("\x1b[1;32m  ext-sender: 基于 GPU 硬件加速的虚拟第二显示器发送端 v0.2.0           \x1b[0m");
+    println!("\x1b[1;32m  ext-sender: 基于 GPU 硬件加速的虚拟第二显示器发送端 v0.3.0           \x1b[0m");
     println!("\x1b[1;34m  100% 纯 Rust 原生开发 | PipeWire 零拷贝 | VA-API / NVENC / QSV 硬件加速\x1b[0m");
     println!("\x1b[1;32m========================================================================\x1b[0m\n");
 
@@ -217,7 +220,7 @@ fn print_help_zh() {
     println!("  ext-sender [目标IP] [端口] [码率] [显示模式] [编码引擎] [帧率] [选项]\n");
 
     println!("\x1b[1;33m功能简介:\x1b[0m");
-    println!("  通过 PipeWire D-Bus 捕获 GNOME Mutter 虚拟显示器画面，使用 GPU 硬件");
+    println!("  通过 PipeWire D-Bus 或 Kernel DRM 捕获虚拟显示器画面，使用 GPU 硬件");
     println!("  编码引擎 (AMD VA-API, NVIDIA NVENC, Intel QSV) 将超低延迟 H.264 流实时");
     println!("  推送到树莓派 Zero。\n");
 
@@ -225,8 +228,8 @@ fn print_help_zh() {
     println!("  1. \x1b[1;37mWayland 桌面会话:\x1b[0m GNOME 44+ 并开启 org.gnome.Mutter.ScreenCast 接口。");
     println!("  2. \x1b[1;37mPipeWire 音视频服务:\x1b[0m pipewire, wireplumber 及 pipewire-pulse 正常运行。");
     println!("  3. \x1b[1;37mGPU 硬件加速环境:\x1b[0m AMD 显卡 (VA-API), Intel 核显 (VA-API/QSV) 或 NVIDIA 显卡 (NVENC)。");
-    println!("  4. \x1b[1;37m推流框架环境:\x1b[0m 100% 纯 Rust 原生进程内引擎 (默认 - 无需外部软件), 或 GStreamer / FFmpeg。");
-    println!("  5. \x1b[1;37m树莓派连接状态:\x1b[0m 已通过 Micro-USB OTG 数据线连接 (IP 192.168.7.2 或 USB 直通模式)。\n");
+    println!("  4. \x1b[1;37m推流框架环境:\x1b[0m 100% 纯 Rust 原生进程内引擎 (默认 - 无需外部软件), 或 GStreamer。");
+    println!("  5. \x1b[1;37m树莓派连接状态:\x1b[0m 已通过 Micro-USB OTG 数据线连接 (默认 USB 直通 或 IP 192.168.7.2)。\n");
 
     println!("\x1b[1;33m位置参数与默认值:\x1b[0m");
     println!("  1. 目标IP        树莓派 Zero IP 地址 (默认: 192.168.7.2)");
@@ -237,9 +240,10 @@ fn print_help_zh() {
     println!("  6. 帧率          目标帧率: 10 到 60 FPS (默认: 30)\n");
 
     println!("\x1b[1;33m可用选项:\x1b[0m");
-    println!("  \x1b[1;32m--engine=<native|gst|ffmpeg>\x1b[0m 推流引擎 (native: 100% 纯 Rust 原生 - 默认, gst: GStreamer, ffmpeg: FFmpeg)");
-    println!("  \x1b[1;32m--transport=<network|usb>\x1b[0m    选择数据传输模式 (默认: network)");
-    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            模式 2 快捷参数 (基于 rusb 的 USB Bulk 直通模式)");
+    println!("  \x1b[1;32m--engine=<native|gst>\x1b[0m        推流引擎 (native: 100% 纯 Rust 原生 - 默认, gst: GStreamer)");
+    println!("  \x1b[1;32m--transport=<usb|network>\x1b[0m    选择传输模式 (usb: USB Bulk [默认，带自动降级], network: UDP)");
+    println!("  \x1b[1;32m--usb, --usb-bulk\x1b[0m            USB Bulk 直通模式快捷方式");
+    println!("  \x1b[1;32m--network, --udp\x1b[0m             直接强制使用 UDP 网络推流 (跳过 USB Bulk 探测)");
     println!("  \x1b[1;32m--hud\x1b[0m                        开启屏幕半透明遥测诊断浮层 (60秒后自动隐藏)");
     println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m      色彩配置文件 (24位全彩, 256色粗量化, 黑白单色)");
     println!("  \x1b[1;32m--help, -h\x1b[0m                   显示此帮助信息");

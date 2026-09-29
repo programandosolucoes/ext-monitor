@@ -118,6 +118,33 @@ gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 \
     rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false
 ```
 
+### 4.3 Alternativas ao GStreamer (Para qualquer ambiente: KDE, XFCE, i3, Windows, macOS)
+O stream RTP enviado pelo `ext-sender` é H.264 padrão RFC 4571 com payload type 96. Ele pode ser consumido em qualquer sistema operacional sem depender de GNOME ou GStreamer:
+
+#### 1. FFmpeg / ffplay (Universal, ultra-baixo atraso, suporte a VA-API / D3D11 / Metal)
+Comando direto para recepção com buffer zero e descarte de quadros atrasados:
+```bash
+ffplay -fflags nobuffer -flags low_delay -framedrop -strict experimental \
+       -an -sn -sync ext -protocol_whitelist file,udp,rtp \
+       -i rtp://0.0.0.0:5000
+```
+Com aceleração de hardware VA-API (Intel/AMD no Linux):
+```bash
+ffplay -vcodec h264_vaapi -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 \
+       -fflags nobuffer -flags low_delay -framedrop -an \
+       -i rtp://0.0.0.0:5000
+```
+
+#### 2. MPV Player (Excelente renderização OpenGL/Vulkan, zero-jitter)
+```bash
+mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec=auto rtp://0.0.0.0:5000
+```
+
+#### 3. VLC Media Player (GUI padrão em qualquer sistema)
+```bash
+cvlc --network-caching=0 --clock-jitter=0 --no-audio rtp://@:5000
+```
+
 ---
 
 ## 5. Como Direcionar a Transmissão para a Tela 1 ou 2 em PCs Multi-Monitor
@@ -125,7 +152,7 @@ gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 \
 Caso o PC que está atuando como receptor possua mais de um monitor físico conectado (ex: Monitor 1 interno do notebook e Monitor 2 HDMI), você pode direcionar a janela ou o scanout KMS diretamente para a saída desejada:
 
 ### Opção A: No Modo Direto KMS DRM (`kmssink`)
-O elemento `kmssink` permite especificar o identificador exato do conector:
+O elemento `kmssink` permite especificar o identificador exato do conector físico da placa de vídeo:
 ```bash
 # 1. Listar conectores disponíveis no PC receptor:
 modetest -c | grep -E "id|name"
@@ -134,9 +161,36 @@ modetest -c | grep -E "id|name"
 gst-launch-1.0 udpsrc port=5000 ... ! kmssink connector-id=42 sync=false
 ```
 
-### Opção B: Em Sessão Gráfica X11 / Wayland
-Abra o player com tela cheia posicionada na geometria da segunda tela:
+### Opção B: FFmpeg / ffplay Posicionado no Monitor Secundário
+Abra o player com tela cheia posicionada na geometria exata da tela desejada:
 ```bash
-# Usando ffplay posicionado no monitor 2 (x=1920):
-ffplay -left 1920 -top 0 -x 1920 -y 1080 -fs -flags low_delay -framedrop rtp://0.0.0.0:5000
+# Monitor 1 (primário):
+ffplay -left 0 -top 0 -fs -fflags nobuffer -flags low_delay rtp://0.0.0.0:5000
+
+# Monitor 2 (estendido à direita do primário em 1920x0):
+ffplay -left 1920 -top 0 -fs -fflags nobuffer -flags low_delay rtp://0.0.0.0:5000
 ```
+
+### Opção C: MPV com Seleção Direta de Tela
+O MPV suporta a flag nativa `--screen`:
+```bash
+# Exibir no Monitor 1:
+mpv --fs --screen=0 --profile=low-latency rtp://0.0.0.0:5000
+
+# Exibir no Monitor 2:
+mpv --fs --screen=1 --profile=low-latency rtp://0.0.0.0:5000
+```
+
+---
+
+## 6. Modo Padrão USB Bulk Direto e Fallback Automático para Rede
+
+A partir da versão v2.1.0, o sistema opera com a seguinte hierarquia de transporte:
+
+1. **Padrão (Default): USB Bulk Direto:**
+   - O `ext-sender` tenta se conectar prioritariamente via USB Bulk direto (`1d50:614d`).
+   - O Pi Zero inicializa por padrão no modo `usb-bulk` em `/boot/mode.txt`.
+2. **Fallback Automático para Rede UDP:**
+   - Se o dispositivo USB Bulk não for encontrado (ex: cabo conectado em porta somente de carga, ou usando receptor via Wi-Fi/Ethernet como Pi 4 ou PC convencional), o `ext-sender` emite aviso no console e comuta suavemente para transmissão UDP (`192.168.7.2:5000` ou IP configurado).
+   - Não ocorre encerramento nem falha crítica — a transição é transparente para o usuário.
+

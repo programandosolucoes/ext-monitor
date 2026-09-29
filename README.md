@@ -223,18 +223,31 @@ Esses modelos possuem portas USB controladas por hub e não suportam modo gadget
    ```
 
 ### 3. Transformar um PC / Laptop Convencional em Segunda Tela
-Você pode usar qualquer notebook ou desktop antigo com Linux como tela secundária sem Raspberry Pi:
+Você pode usar qualquer notebook ou desktop com Linux (GNOME, KDE, XFCE, i3, Sway), Windows ou macOS como tela secundária sem Raspberry Pi:
 
-1. No PC receptor, instale os pacotes de decodificação:
-   ```bash
-   sudo apt-get install -y gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
-   ```
-2. Inicie o pipeline receptor em tela cheia:
-   ```bash
-   gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 \
-       caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96" ! \
-       rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false
-   ```
+#### Opção A: GStreamer (Pipeline leve padrão)
+```bash
+gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 \
+    caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96" ! \
+    rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false
+```
+
+#### Opção B: FFmpeg / ffplay (Universal, funciona em qualquer SO / ambiente sem GNOME)
+```bash
+ffplay -fflags nobuffer -flags low_delay -framedrop -strict experimental \
+       -an -sn -sync ext -protocol_whitelist file,udp,rtp \
+       -i rtp://0.0.0.0:5000
+```
+Com aceleração VA-API (Intel/AMD):
+```bash
+ffplay -vcodec h264_vaapi -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 \
+       -fflags nobuffer -flags low_delay -framedrop -an -protocol_whitelist file,udp,rtp rtp://0.0.0.0:5000
+```
+
+#### Opção C: MPV Player
+```bash
+mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec=auto rtp://0.0.0.0:5000
+```
 
 ### 4. Direcionar para a Tela 1 ou 2 em PCs com Múltiplos Monitores
 Caso o PC receptor possua 2 ou mais telas conectadas e você queira projetar especificamente na **Tela 2**:
@@ -249,8 +262,15 @@ Caso o PC receptor possua 2 ou mais telas conectadas e você queira projetar esp
 * **Em Sessão Gráfica com `ffplay`:**
   ```bash
   # Posiciona a janela em tela cheia no segundo monitor (ex: x=1920):
-  ffplay -left 1920 -top 0 -x 1920 -y 1080 -fs -flags low_delay -framedrop rtp://0.0.0.0:5000
+  ffplay -left 1920 -top 0 -fs -fflags nobuffer -flags low_delay -protocol_whitelist file,udp,rtp rtp://0.0.0.0:5000
   ```
+* **Com `mpv`:**
+  ```bash
+  mpv --fs --screen=1 --profile=low-latency rtp://0.0.0.0:5000
+  ```
+
+### 5. Modo USB Bulk Padrão com Fallback Automático
+O `ext-sender` opera por padrão no modo **USB Bulk Direto** de alta velocidade (480 Mbps). Se o cabo estiver conectado a um dispositivo sem suporte USB gadget ou via rede (como um PC secundário ou Pi via Wi-Fi), o transmissor detecta a ausência e faz o **fallback automático para Rede UDP (porta 5000)** de forma transparente.
 
 ---
 

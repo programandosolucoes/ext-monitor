@@ -215,14 +215,15 @@ impl SenderConfig {
             })
             .unwrap_or_else(|| fps.max(15));
 
-        let is_usb = args.iter().any(|a| a == "--transport=usb" || a == "--usb-bulk" || a == "--usb");
-        let transport = if is_usb {
-            TransportKind::UsbBulk
-        } else {
+        let is_explicit_net = args.iter().any(|a| a == "--transport=network" || a == "--network" || a == "--udp" || a == "--net");
+        let transport = if is_explicit_net {
             TransportKind::Network {
                 ip: target_ip.clone(),
                 port: target_port,
             }
+        } else {
+            // Default: USB Bulk Direct (with auto-fallback to Network if device is absent)
+            TransportKind::UsbBulk
         };
 
         let capture = if args.iter().any(|a| a == "--capture=kms" || a == "--kms" || a == "--drm") {
