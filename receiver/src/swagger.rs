@@ -12,7 +12,7 @@ pub const OPENAPI_JSON: &str = r##"{
   "info": {
     "title": "Pi Zero Extended Monitor - Receiver Control API",
     "description": "Comprehensive REST and telemetry API for the Raspberry Pi Zero GPU Display Receiver appliance.\nSupports real-time telemetry, stream parameter hot-tuning, hardware decoding controls, diagnostics, storage management, and firmware updates.",
-    "version": "0.2.0",
+    "version": "2.3.0",
     "contact": {
       "name": "Carlos Alberto",
       "email": "psncarlosalberto4ti@gmail.com"
@@ -35,6 +35,18 @@ pub const OPENAPI_JSON: &str = r##"{
     {
       "name": "Status & Telemetry",
       "description": "Real-time SoC temperature, CPU utilization, free RAM, and display status"
+    },
+    {
+      "name": "IoT Media & HDMI Visualizer",
+      "description": "Real-time 24-band audio spectrum, UPnP DLNA / DIAL metadata, and dynamic HDMI visualizer"
+    },
+    {
+      "name": "Host Remote Control",
+      "description": "Bidirectional transmitter control on Host PC (Start/Stop, Extend/Clone, Audio, and HUD)"
+    },
+    {
+      "name": "Audio & Sound",
+      "description": "Digital HDMI audio volume, mute, and BlueZ A2DP Bluetooth discovery"
     },
     {
       "name": "Stream Configuration",
@@ -619,6 +631,266 @@ pub const OPENAPI_JSON: &str = r##"{
         }
       }
     },
+    "/api/media/status": {
+      "get": {
+        "tags": ["IoT Media & HDMI Visualizer"],
+        "summary": "Get Realtime Audio Spectrum & Track Status",
+        "description": "Returns current media track info, volume, visualizer status, active video flag, and 24-band live frequency spectrum heights and peaks.",
+        "operationId": "getMediaStatus",
+        "responses": {
+          "200": {
+            "description": "Live media and spectrum telemetry",
+            "content": {
+              "application/json": {
+                "example": {
+                  "title": "HDMI Digital Audio (48kHz)",
+                  "artist": "Host PC Realtime Audio Stream",
+                  "album": "PCM / PipeWire Low-Latency",
+                  "source": "pc_audio",
+                  "state": "playing",
+                  "volume": 100,
+                  "visualizer_enabled": true,
+                  "video_active": false,
+                  "audio_active": true,
+                  "rms_db": -14.2,
+                  "bars": [0.12, 0.45, 0.78, 0.95, 0.82, 0.65, 0.40, 0.35, 0.50, 0.60, 0.72, 0.80, 0.68, 0.55, 0.42, 0.30, 0.25, 0.20, 0.18, 0.15, 0.12, 0.10, 0.08, 0.05],
+                  "peaks": [0.20, 0.50, 0.82, 0.98, 0.88, 0.70, 0.45, 0.40, 0.55, 0.65, 0.78, 0.85, 0.72, 0.60, 0.48, 0.35, 0.28, 0.22, 0.20, 0.18, 0.15, 0.12, 0.10, 0.06]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/realtime": {
+      "post": {
+        "tags": ["IoT Media & HDMI Visualizer"],
+        "summary": "Feed Realtime Audio Spectrum Telemetry",
+        "description": "Ingests 24 frequency band energies (0.0 to 1.0) and RMS level (dB) calculated by the host or audio engine.",
+        "operationId": "feedMediaRealtime",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "bars": [0.25, 0.45, 0.70, 0.85, 0.95, 0.90, 0.75, 0.60, 0.40, 0.35, 0.50, 0.65, 0.80, 0.70, 0.55, 0.40, 0.30, 0.25, 0.20, 0.35, 0.50, 0.40, 0.25, 0.15],
+                "rms": -12.5
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Spectrum updated",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "spectrum_updated"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/visualizer": {
+      "post": {
+        "tags": ["IoT Media & HDMI Visualizer"],
+        "summary": "Enable or Disable HDMI Visualizer",
+        "description": "Toggles whether the 30 FPS dynamic audio visualizer is displayed on HDMI when audio is playing and desktop video is idle.",
+        "operationId": "setMediaVisualizer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "enabled": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Visualizer state updated",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "visualizer_updated"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/control": {
+      "post": {
+        "tags": ["IoT Media & HDMI Visualizer"],
+        "summary": "Control Media Playback & Metadata",
+        "description": "Controls audio playback state (play/pause/stop) and updates track title, artist, and album.",
+        "operationId": "controlMedia",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "action": "play",
+                "title": "Song Title",
+                "artist": "Artist Name",
+                "album": "Album Name"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Media control executed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/host/control": {
+      "post": {
+        "tags": ["Host Remote Control"],
+        "summary": "Send Remote Control Command to Host PC",
+        "description": "Forwards real-time commands via bidirectional UDP port 5001 to ext-sender on the host PC (start, stop, extend, clone, audio, trigger_hud).",
+        "operationId": "sendHostControl",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "action": "extend"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Command forwarded to host",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "forwarded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/host/status": {
+      "get": {
+        "tags": ["Host Remote Control"],
+        "summary": "Get Transmitter Host Connection Status",
+        "description": "Returns status of the ext-sender host link and last telemetry ping.",
+        "operationId": "getHostStatus",
+        "responses": {
+          "200": {
+            "description": "Host transmitter status",
+            "content": {
+              "application/json": {
+                "example": {
+                  "connected": true,
+                  "ip": "192.168.7.1",
+                  "mode": "extend"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bluetooth/discoverable": {
+      "post": {
+        "tags": ["Audio & Sound"],
+        "summary": "Trigger Bluetooth A2DP Pairing Mode",
+        "description": "Puts BlueZ bluetooth daemon into discoverable pairing mode for 60 seconds to pair phones and tablets.",
+        "operationId": "triggerBluetoothPairing",
+        "responses": {
+          "200": {
+            "description": "Bluetooth pairing activated",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "pairing_active",
+                  "timeout_seconds": 60
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio/volume": {
+      "post": {
+        "tags": ["Audio & Sound"],
+        "summary": "Set Digital HDMI Audio Volume",
+        "description": "Sets the hardware HDMI ALSA playback volume (0 to 100%).",
+        "operationId": "setAudioVolume",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "volume": 85
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Volume updated",
+            "content": {
+              "application/json": {
+                "example": {
+                  "volume": 85,
+                  "muted": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio/mute": {
+      "post": {
+        "tags": ["Audio & Sound"],
+        "summary": "Mute or Unmute HDMI Audio",
+        "description": "Mutes or unmutes the digital HDMI audio sink.",
+        "operationId": "setAudioMute",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "muted": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mute state updated",
+            "content": {
+              "application/json": {
+                "example": {
+                  "volume": 85,
+                  "muted": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/connect.sh": {
       "get": {
         "tags": ["Client Downloads"],
@@ -931,7 +1203,7 @@ pub const SWAGGER_HTML: &str = r##"<!DOCTYPE html>
     <header class="header-bar">
         <div class="header-title">
             <span>📺 Pi Zero Extended Monitor</span>
-            <span class="badge">OpenAPI 3.0</span>
+            <span class="badge" style="background: linear-gradient(135deg, #00e5ff, #7ee787); color: #0b0f17; font-weight: bold;">v2.3.0 OAS 3.0</span>
             <span style="font-size: 0.85rem; color: #94a3b8; font-weight: 400;">Interactive REST API Explorer</span>
         </div>
         <nav class="header-nav">

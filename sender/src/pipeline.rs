@@ -9,11 +9,15 @@
 use crate::config::{CaptureEngine, ColorProfile, EncoderApi, StreamEngine};
 use crate::kms::KmsOutputInfo;
 use crate::native_streamer;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
+use std::net::UdpSocket;
 use std::os::unix::io::RawFd;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 pub enum StreamerHandle {
     Child(Child),
@@ -21,6 +25,7 @@ pub enum StreamerHandle {
     Composite {
         video: Box<StreamerHandle>,
         audio: Option<Child>,
+        audio_running: Option<Arc<AtomicBool>>,
     },
 }
 
@@ -32,10 +37,13 @@ impl StreamerHandle {
                 n.stop();
                 Ok(())
             }
-            StreamerHandle::Composite { ref mut video, ref mut audio } => {
+            StreamerHandle::Composite { ref mut video, ref mut audio, ref mut audio_running } => {
                 let _ = video.kill();
                 if let Some(ref mut a) = audio {
                     let _ = a.kill();
+                }
+                if let Some(ref r) = audio_running {
+                    r.store(false, Ordering::Relaxed);
                 }
                 Ok(())
             }
@@ -46,7 +54,7 @@ impl StreamerHandle {
         match self {
             StreamerHandle::Child(ref mut c) => c.wait(),
             StreamerHandle::Native(_) => Ok(ExitStatus::from_raw(0)),
-            StreamerHandle::Composite { ref mut video, ref mut audio } => {
+            StreamerHandle::Composite { ref mut video, ref mut audio, .. } => {
                 if let Some(ref mut a) = audio {
                     let _ = a.wait();
                 }
@@ -103,14 +111,22 @@ impl PipelineBuilder {
         }
 
         // 1. Ensure virtual sink Raspberry_Pi_HDMI_Audio exists in PulseAudio/PipeWire
-        let _ = Command::new("pactl")
-            .args([
-                "load-module",
-                "module-null-sink",
-                "sink_name=Raspberry_Pi_HDMI_Audio",
-                "sink_properties=device.description=Raspberry_Pi_HDMI_Audio",
-            ])
-            .output();
+        let exists = Command::new("pactl")
+            .args(["list", "sinks", "short"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("Raspberry_Pi_HDMI_Audio"))
+            .unwrap_or(false);
+
+        if !exists {
+            let _ = Command::new("pactl")
+                .args([
+                    "load-module",
+                    "module-null-sink",
+                    "sink_name=Raspberry_Pi_HDMI_Audio",
+                    "sink_properties=device.description=Raspberry_Pi_HDMI_Audio",
+                ])
+                .output();
+        }
 
         let use_pulse = Command::new("pactl")
             .args(["list", "sources", "short"])
@@ -178,11 +194,18 @@ impl PipelineBuilder {
             StreamerHandle::Child(child)
         };
 
-        let audio_child = self.spawn_audio();
+        let (audio_child, audio_running) = if self.audio {
+            let running = Arc::new(AtomicBool::new(true));
+            spawn_audio_spectrum_monitor(self.target_ip.clone(), running.clone());
+            (self.spawn_audio(), Some(running))
+        } else {
+            (None, None)
+        };
 
         Ok(StreamerHandle::Composite {
             video: Box::new(video_handle),
             audio: audio_child,
+            audio_running,
         })
     }
 
@@ -190,10 +213,14 @@ impl PipelineBuilder {
         let mut cmd = Command::new("gst-launch-1.0");
 
         let keepalive_ms = (1000 / self.fps).max(16);
-        cmd.arg("pipewiresrc")
-            .arg("autoconnect=false")
-            .arg("stream-properties=props,node.name=ext-hdmi-sender")
-            .arg("do-timestamp=true")
+        cmd.arg("pipewiresrc");
+        if self.node_id > 0 {
+            cmd.arg(format!("path={}", self.node_id));
+        } else {
+            cmd.arg("autoconnect=false")
+                .arg("stream-properties=props,node.name=ext-hdmi-sender");
+        }
+        cmd.arg("do-timestamp=true")
             .arg("min-buffers=2")
             .arg("max-buffers=4")
             .arg(format!("keepalive-time={}", keepalive_ms))
@@ -448,3 +475,160 @@ impl PipelineBuilder {
         }
     }
 }
+
+// -----------------------------------------------------------------------------
+// Real-Time Hardware Audio Spectrum Analysis & UDP Streamer (Host PC -> Pi Zero)
+// -----------------------------------------------------------------------------
+
+const BAND_RANGES: [(usize, usize); 24] = [
+    (1, 2),   // 94 - 188 Hz
+    (2, 3),   // 188 - 281 Hz
+    (3, 4),   // 281 - 375 Hz
+    (4, 5),   // 375 - 469 Hz
+    (5, 7),   // 469 - 656 Hz
+    (7, 9),   // 656 - 844 Hz
+    (9, 12),  // 844 - 1125 Hz
+    (12, 16), // 1.1 - 1.5 kHz
+    (16, 21), // 1.5 - 2.0 kHz
+    (21, 28), // 2.0 - 2.6 kHz
+    (28, 36), // 2.6 - 3.4 kHz
+    (36, 46), // 3.4 - 4.3 kHz
+    (46, 58), // 4.3 - 5.4 kHz
+    (58, 73), // 5.4 - 6.8 kHz
+    (73, 91), // 6.8 - 8.5 kHz
+    (91, 112), // 8.5 - 10.5 kHz
+    (112, 136), // 10.5 - 12.8 kHz
+    (136, 162), // 12.8 - 15.2 kHz
+    (162, 188), // 15.2 - 17.6 kHz
+    (188, 214), // 17.6 - 20.1 kHz
+    (214, 224), // 20.1 - 21.0 kHz
+    (224, 234), // 21.0 - 21.9 kHz
+    (234, 245), // 21.9 - 23.0 kHz
+    (245, 256), // 23.0 - 24.0 kHz
+];
+
+fn fft_512(real: &mut [f32; 512], imag: &mut [f32; 512]) {
+    let mut j = 0;
+    for i in 0..511 {
+        if i < j {
+            real.swap(i, j);
+            imag.swap(i, j);
+        }
+        let mut k = 256;
+        while k <= j {
+            j -= k;
+            k >>= 1;
+        }
+        j += k;
+    }
+
+    let mut len = 2;
+    while len <= 512 {
+        let half = len / 2;
+        let angle = -2.0 * std::f32::consts::PI / (len as f32);
+        let w_step_re = angle.cos();
+        let w_step_im = angle.sin();
+
+        let mut i = 0;
+        while i < 512 {
+            let mut w_re = 1.0f32;
+            let mut w_im = 0.0f32;
+            for j in 0..half {
+                let u_re = real[i + j];
+                let u_im = imag[i + j];
+                let v_re = real[i + j + half] * w_re - imag[i + j + half] * w_im;
+                let v_im = real[i + j + half] * w_im + imag[i + j + half] * w_re;
+
+                real[i + j] = u_re + v_re;
+                imag[i + j] = u_im + v_im;
+                real[i + j + half] = u_re - v_re;
+                imag[i + j + half] = u_im - v_im;
+
+                let next_w_re = w_re * w_step_re - w_im * w_step_im;
+                let next_w_im = w_re * w_step_im + w_im * w_step_re;
+                w_re = next_w_re;
+                w_im = next_w_im;
+            }
+            i += len;
+        }
+        len <<= 1;
+    }
+}
+
+pub fn spawn_audio_spectrum_monitor(target_ip: String, running: Arc<AtomicBool>) {
+    thread::Builder::new()
+        .name("audio-spectrum-tx".to_string())
+        .spawn(move || {
+            let socket = match UdpSocket::bind("0.0.0.0:0") {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            let dest_addr = format!("{}:5006", target_ip);
+
+            // Spawn parec reading from Raspberry_Pi_HDMI_Audio.monitor
+            let mut child = match Command::new("parec")
+                .args(["--device=Raspberry_Pi_HDMI_Audio.monitor", "--rate=48000", "--channels=2", "--format=s16le", "--raw"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn() {
+                    Ok(c) => c,
+                    Err(_) => return,
+                };
+
+            let mut stdout = match child.stdout.take() {
+                Some(s) => s,
+                None => return,
+            };
+
+            // 512 stereo samples = 512 * 4 = 2048 bytes (~10.7ms of audio)
+            let mut raw_buf = [0u8; 2048];
+            let mut packet = [0u8; 25];
+
+            while running.load(Ordering::Relaxed) {
+                if stdout.read_exact(&mut raw_buf).is_err() {
+                    thread::sleep(Duration::from_millis(30));
+                    continue;
+                }
+
+                let mut real = [0.0f32; 512];
+                let mut imag = [0.0f32; 512];
+                let mut sum_sq = 0.0f64;
+
+                for i in 0..512 {
+                    let l = i16::from_le_bytes([raw_buf[i * 4], raw_buf[i * 4 + 1]]) as f32 / 32768.0;
+                    let r = i16::from_le_bytes([raw_buf[i * 4 + 2], raw_buf[i * 4 + 3]]) as f32 / 32768.0;
+                    let mono = (l + r) * 0.5;
+                    // Hann window to prevent spectral leakage
+                    let w = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / 512.0).cos());
+                    real[i] = mono * w;
+                    sum_sq += (mono * mono) as f64;
+                }
+
+                let rms = (sum_sq / 512.0).sqrt() as f32;
+                let rms_db = if rms > 1e-4 { 20.0 * rms.log10() } else { -90.0 };
+                let rms_byte = ((rms_db + 60.0).clamp(0.0, 60.0) / 60.0 * 255.0) as u8;
+
+                fft_512(&mut real, &mut imag);
+
+                for (idx, &(start_k, end_k)) in BAND_RANGES.iter().enumerate() {
+                    let mut mag_sum = 0.0f32;
+                    let count = (end_k - start_k).max(1);
+                    for k in start_k..end_k {
+                        let mag = (real[k] * real[k] + imag[k] * imag[k]).sqrt();
+                        mag_sum += mag;
+                    }
+                    let avg_mag = mag_sum / count as f32;
+                    let normalized = (avg_mag * 4.0).clamp(0.0, 1.0);
+                    packet[idx] = (normalized * 255.0) as u8;
+                }
+                packet[24] = rms_byte;
+
+                let _ = socket.send_to(&packet, &dest_addr);
+                thread::sleep(Duration::from_millis(20)); // ~50 FPS spectrum refresh
+            }
+
+            let _ = child.kill();
+        })
+        .ok();
+}
+

@@ -24,33 +24,72 @@ impl MutterScreenCastSession {
     pub fn create_and_start(monitor: &str) -> Result<Self, Box<dyn Error>> {
         let conn = Connection::session()?;
 
-        // 1. Create Mutter ScreenCast Session
-        let empty_props: HashMap<&str, Value> = HashMap::new();
+        // 1. Create Mutter ScreenCast Session with remote-desktop enabled
+        let mut session_props: HashMap<&str, Value> = HashMap::new();
+        session_props.insert("remote-desktop", Value::from(true));
         let session_reply = conn.call_method(
             Some("org.gnome.Mutter.ScreenCast"),
             "/org/gnome/Mutter/ScreenCast",
             Some("org.gnome.Mutter.ScreenCast"),
             "CreateSession",
-            &(empty_props,),
+            &(session_props,),
         )?;
 
         let session_path: OwnedObjectPath = session_reply.body().deserialize()?;
         println!("\x1b[1;32m[+] Mutter Session created:\x1b[0m {}", session_path);
 
         // 2. Request monitor recording with cursor embedded (mode 1)
-        let mut monitor_props: HashMap<&str, Value> = HashMap::new();
-        monitor_props.insert("cursor-mode", Value::from(1u32));
-
-        let stream_reply = conn.call_method(
-            Some("org.gnome.Mutter.ScreenCast"),
-            session_path.as_str(),
-            Some("org.gnome.Mutter.ScreenCast.Session"),
-            "RecordMonitor",
-            &(monitor, monitor_props),
-        )?;
-
-        let stream_path: OwnedObjectPath = stream_reply.body().deserialize()?;
-        println!("\x1b[1;32m[+] {} ScreenCast Stream created:\x1b[0m {}", monitor, stream_path);
+        // If monitor is virtual or auto, create virtual display via RecordVirtual
+        let (stream_path, active_monitor) = if monitor.to_lowercase() == "virtual" || monitor.to_lowercase() == "auto" {
+            let mut virtual_props: HashMap<&str, Value> = HashMap::new();
+            virtual_props.insert("is-platform", Value::from(true));
+            virtual_props.insert("cursor-mode", Value::from(1u32));
+            let stream_reply = conn.call_method(
+                Some("org.gnome.Mutter.ScreenCast"),
+                session_path.as_str(),
+                Some("org.gnome.Mutter.ScreenCast.Session"),
+                "RecordVirtual",
+                &(virtual_props,),
+            )?;
+            let sp: OwnedObjectPath = stream_reply.body().deserialize()?;
+            println!("\x1b[1;32m[+] Mutter Virtual ScreenCast Stream created:\x1b[0m {}", sp);
+            (sp, "Virtual-Display".to_string())
+        } else {
+            let mut monitor_props: HashMap<&str, Value> = HashMap::new();
+            monitor_props.insert("cursor-mode", Value::from(1u32));
+            match conn.call_method(
+                Some("org.gnome.Mutter.ScreenCast"),
+                session_path.as_str(),
+                Some("org.gnome.Mutter.ScreenCast.Session"),
+                "RecordMonitor",
+                &(monitor, monitor_props),
+            ) {
+                Ok(stream_reply) => {
+                    let sp: OwnedObjectPath = stream_reply.body().deserialize()?;
+                    println!("\x1b[1;32m[+] {} ScreenCast Stream created:\x1b[0m {}", monitor, sp);
+                    (sp, monitor.to_string())
+                }
+                Err(err) => {
+                    println!(
+                        "\x1b[1;33m[!] RecordMonitor('{}') failed ({}). Fallback: Criando monitor virtual estendido via RecordVirtual...\x1b[0m",
+                        monitor, err
+                    );
+                    let mut virtual_props: HashMap<&str, Value> = HashMap::new();
+                    virtual_props.insert("is-platform", Value::from(true));
+                    virtual_props.insert("cursor-mode", Value::from(1u32));
+                    let stream_reply = conn.call_method(
+                        Some("org.gnome.Mutter.ScreenCast"),
+                        session_path.as_str(),
+                        Some("org.gnome.Mutter.ScreenCast.Session"),
+                        "RecordVirtual",
+                        &(virtual_props,),
+                    )?;
+                    let sp: OwnedObjectPath = stream_reply.body().deserialize()?;
+                    println!("\x1b[1;32m[+] Mutter Virtual ScreenCast Stream created:\x1b[0m {}", sp);
+                    (sp, format!("Virtual-{}", monitor))
+                }
+            }
+        };
 
         // 3. Subscribe to PipeWireStreamAdded signal BEFORE calling Start()
         let stream_proxy = Proxy::new(
@@ -87,7 +126,7 @@ impl MutterScreenCastSession {
             conn,
             session_path,
             node_id,
-            monitor: monitor.to_string(),
+            monitor: active_monitor,
         })
     }
 

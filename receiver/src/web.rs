@@ -299,17 +299,31 @@ fn handle_http_client(
         }
         ("GET", "/api/media/status") => {
             let st = crate::media_renderer::get_media_state();
+            let spec_arc = crate::media_renderer::get_audio_spectrum();
+            let (bands, peaks, rms_db, is_audio_active) = {
+                let s = spec_arc.lock().unwrap();
+                (s.bands, s.peaks, s.rms_db, s.is_active)
+            };
+            let is_video_active = pipeline_mgr.current_kind().is_some();
+            let bars_json: Vec<String> = bands.iter().map(|b| format!("{:.2}", b)).collect();
+            let peaks_json: Vec<String> = peaks.iter().map(|p| format!("{:.2}", p)).collect();
+
             let json = {
                 let m = st.lock().unwrap();
                 format!(
-                    "{{\"title\":\"{}\",\"artist\":\"{}\",\"album\":\"{}\",\"source\":\"{}\",\"state\":\"{}\",\"volume\":{},\"visualizer_enabled\":{}}}",
+                    "{{\"title\":\"{}\",\"artist\":\"{}\",\"album\":\"{}\",\"source\":\"{}\",\"state\":\"{}\",\"volume\":{},\"visualizer_enabled\":{},\"video_active\":{},\"audio_active\":{},\"rms_db\":{:.1},\"bars\":[{}],\"peaks\":[{}]}}",
                     m.title.replace('"', "\\\""),
                     m.artist.replace('"', "\\\""),
                     m.album.replace('"', "\\\""),
                     m.source,
                     m.state,
                     m.volume,
-                    m.visualizer_enabled
+                    m.visualizer_enabled,
+                    is_video_active,
+                    is_audio_active,
+                    rms_db,
+                    bars_json.join(","),
+                    peaks_json.join(",")
                 )
             };
             send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
@@ -346,16 +360,43 @@ fn handle_http_client(
                 if let Ok(mut m) = st.lock() {
                     if let Some(vis) = extract_json_bool(body, "enabled") {
                         m.visualizer_enabled = vis;
-                        if vis && m.state == "idle" {
-                            m.state = "playing".to_string();
-                            m.title = "🎵 Demonstração Visualizador".to_string();
-                            m.artist = "Ext-Monitor Audio Spectrum 30 FPS".to_string();
-                            m.album = "VU Meter • Broadcom VideoCore IV".to_string();
-                        }
                     }
                 };
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"visualizer_updated\"}");
+        }
+        ("POST", "/api/media/realtime") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = req_str[idx + 4..].trim();
+                if let Some(bars_idx) = body.find("\"bars\":[") {
+                    let rest = &body[bars_idx + 8..];
+                    if let Some(end_idx) = rest.find(']') {
+                        let nums_str = &rest[..end_idx];
+                        let mut bands = [0.0f32; 24];
+                        for (i, part) in nums_str.split(',').enumerate() {
+                            if i < 24 {
+                                if let Ok(val) = part.trim().parse::<f32>() {
+                                    bands[i] = val.clamp(0.0, 1.0);
+                                }
+                            }
+                        }
+                        let rms_val = extract_json_f32(body, "rms").unwrap_or(-18.0);
+                        crate::media_renderer::update_audio_spectrum(&bands, rms_val);
+                        send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"spectrum_updated\"}");
+                        return;
+                    }
+                }
+            }
+            send_response(&mut stream, "400 Bad Request", "text/plain", b"Invalid body");
+        }
+        ("POST", "/api/media/test_sound") => {
+            let bands = [
+                0.35, 0.55, 0.75, 0.90, 0.98, 0.92, 0.80, 0.65,
+                0.45, 0.40, 0.55, 0.70, 0.85, 0.75, 0.60, 0.45,
+                0.35, 0.30, 0.25, 0.40, 0.55, 0.45, 0.30, 0.20
+            ];
+            crate::media_renderer::update_audio_spectrum(&bands, -8.5);
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"test_sound_triggered\"}");
         }
         ("POST", "/api/system/reboot") => {
             println!("\x1b[1;31m[web-server]\x1b[0m System REBOOT requested via Web UI.");
@@ -878,6 +919,16 @@ fn extract_json_u32(json: &str, key: &str) -> Option<u32> {
     let colon_idx = rest.find(':')?;
     let after_colon = rest[colon_idx + 1..].trim_start();
     let num_str: String = after_colon.chars().take_while(|c| c.is_ascii_digit()).collect();
+    num_str.parse().ok()
+}
+
+fn extract_json_f32(json: &str, key: &str) -> Option<f32> {
+    let pattern = format!("\"{}\"", key);
+    let idx = json.find(&pattern)?;
+    let rest = &json[idx + pattern.len()..];
+    let colon_idx = rest.find(':')?;
+    let after_colon = rest[colon_idx + 1..].trim_start();
+    let num_str: String = after_colon.chars().take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-').collect();
     num_str.parse().ok()
 }
 

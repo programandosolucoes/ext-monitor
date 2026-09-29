@@ -179,6 +179,93 @@ pub fn get_dial_dd_xml(host_ip: &str, _http_port: u16) -> String {
     )
 }
 
+#[derive(Debug, Clone)]
+pub struct AudioSpectrumState {
+    pub bands: [f32; 24],
+    pub peaks: [f32; 24],
+    pub rms_db: f32,
+    pub is_active: bool,
+    pub last_update: std::time::Instant,
+}
+
+static GLOBAL_SPECTRUM: OnceLock<Arc<Mutex<AudioSpectrumState>>> = OnceLock::new();
+
+pub fn get_audio_spectrum() -> Arc<Mutex<AudioSpectrumState>> {
+    GLOBAL_SPECTRUM
+        .get_or_init(|| {
+            Arc::new(Mutex::new(AudioSpectrumState {
+                bands: [0.0; 24],
+                peaks: [0.0; 24],
+                rms_db: -96.0,
+                is_active: false,
+                last_update: std::time::Instant::now(),
+            }))
+        })
+        .clone()
+}
+
+pub fn update_audio_spectrum(bands: &[f32; 24], rms_db: f32) {
+    let spec_arc = get_audio_spectrum();
+    if let Ok(mut spec) = spec_arc.lock() {
+        spec.rms_db = rms_db;
+        spec.is_active = true;
+        spec.last_update = std::time::Instant::now();
+        for i in 0..24 {
+            let val = bands[i].clamp(0.0, 1.0);
+            spec.bands[i] = val;
+            if val > spec.peaks[i] {
+                spec.peaks[i] = val;
+            } else {
+                spec.peaks[i] = (spec.peaks[i] - 0.02).max(0.0);
+            }
+        }
+    }
+
+    if let Ok(mut trk) = get_media_state().lock() {
+        if trk.state != "playing" {
+            trk.state = "playing".to_string();
+            trk.source = "pc_audio".to_string();
+            trk.title = "HDMI Digital Audio (48kHz)".to_string();
+            trk.artist = "Real-time Host PC Signal (PCM PipeWire)".to_string();
+            trk.album = "Ext-Monitor Low-Latency Audio".to_string();
+        }
+    }
+}
+
+/// Start background UDP listener on port 5006 for real-time audio spectrum telemetry
+pub fn start_audio_telemetry_listener(running: Arc<AtomicBool>) {
+    thread::Builder::new()
+        .name("audio-telemetry".to_string())
+        .spawn(move || {
+            let bind_addr = SocketAddr::from(([0, 0, 0, 0], 5006));
+            let socket = match UdpSocket::bind(bind_addr) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("\x1b[1;33m[audio-telemetry]\x1b[0m Failed to bind UDP 5006: {}. Running without direct UDP telemetry.", e);
+                    return;
+                }
+            };
+            let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
+            println!("\x1b[1;32m[audio-telemetry]\x1b[0m Real-time audio spectrum UDP listener active on port 5006");
+
+            let mut buf = [0u8; 1024];
+            while running.load(Ordering::Relaxed) {
+                if let Ok((len, _)) = socket.recv_from(&mut buf) {
+                    if len >= 24 {
+                        let mut bands = [0.0f32; 24];
+                        for i in 0..24 {
+                            bands[i] = (buf[i] as f32) / 255.0f32;
+                        }
+                        let rms_byte = if len >= 25 { buf[24] } else { 128 };
+                        let rms_db = ((rms_byte as f32) / 255.0f32 * 60.0) - 60.0;
+                        update_audio_spectrum(&bands, rms_db);
+                    }
+                }
+            }
+        })
+        .expect("Failed to spawn audio telemetry thread");
+}
+
 // -----------------------------------------------------------------------------
 // Visualizer Engine on /dev/fb0 (30 FPS Dynamic Animated Spectrum & Metadata)
 // -----------------------------------------------------------------------------
@@ -187,64 +274,77 @@ pub struct VisualizerEngine;
 
 impl VisualizerEngine {
     /// Launches the HDMI visualizer daemon. Runs only when audio is playing and video is idle.
-    pub fn start(running: Arc<AtomicBool>) {
+    pub fn start(running: Arc<AtomicBool>, pipeline_mgr: Arc<crate::pipeline::PipelineManager>) {
         thread::Builder::new()
             .name("hdmi-visualizer".to_string())
             .spawn(move || {
                 let state_arc = get_media_state();
+                let spec_arc = get_audio_spectrum();
                 let mut frame_buf = vec![0u8; FB_SIZE];
-                let mut spectrum_heights = [0.0f32; 24];
-                let mut spectrum_peaks = [0.0f32; 24];
-                let mut tick: u32 = 0;
+                let mut was_drawing = false;
 
-                println!("\x1b[1;36m[visualizer]\x1b[0m HDMI Dynamic Audio Visualizer Engine ready.");
+                println!("\x1b[1;36m[visualizer]\x1b[0m HDMI Dynamic Audio Visualizer Engine ready (Single-HDMI Multiplexed).");
 
                 while running.load(Ordering::Relaxed) {
-                    let (is_active, title, artist, album, vol) = {
-                        let st = state_arc.lock().unwrap();
-                        (
-                            st.visualizer_enabled && (st.state == "playing" || st.state == "active"),
-                            st.title.clone(),
-                            st.artist.clone(),
-                            st.album.clone(),
-                            st.volume,
-                        )
-                    };
-
-                    if !is_active {
-                        thread::sleep(Duration::from_millis(300));
+                    // 1. Dependency Rule: Single HDMI Port on Raspberry Pi Zero
+                    // If Desktop Video streaming is active, video owns 100% of HDMI scanout.
+                    // Visualizer must NOT write to /dev/fb0.
+                    if pipeline_mgr.current_kind().is_some() {
+                        if was_drawing {
+                            was_drawing = false;
+                        }
+                        thread::sleep(Duration::from_millis(200));
                         continue;
                     }
 
-                    // Animate 24 spectrum equalizer bars using fast precomputed lookup table
-                    const SINE_LUT: [f32; 32] = [
-                        0.10, 0.28, 0.46, 0.64, 0.79, 0.90, 0.97, 1.00,
-                        0.97, 0.90, 0.79, 0.64, 0.46, 0.28, 0.15, 0.32,
-                        0.52, 0.72, 0.88, 0.98, 0.95, 0.84, 0.68, 0.48,
-                        0.30, 0.18, 0.35, 0.58, 0.80, 0.95, 0.85, 0.50,
-                    ];
-                    tick = tick.wrapping_add(1);
-                    for i in 0..24 {
-                        let idx1 = ((tick as usize) + i * 3) % 32;
-                        let idx2 = ((tick as usize * 2) + i * 5) % 32;
-                        let base_amp = (SINE_LUT[idx1] * 0.65) + (SINE_LUT[idx2] * 0.35);
-                        let target = base_amp * (0.35 + ((i % 5) as f32 * 0.15)) * (vol as f32 / 100.0);
-                        spectrum_heights[i] = spectrum_heights[i] * 0.7 + target * 0.3;
-                        if spectrum_heights[i] > spectrum_peaks[i] {
-                            spectrum_peaks[i] = spectrum_heights[i];
-                        } else {
-                            spectrum_peaks[i] = (spectrum_peaks[i] - 0.015).max(0.0);
+                    // 2. Audio Spectrum Telemetry Evaluation
+                    let (is_audio_active, bands, peaks, rms_db) = {
+                        let mut s = spec_arc.lock().unwrap();
+                        let active = s.is_active && s.last_update.elapsed() < Duration::from_millis(1500);
+                        if !active {
+                            s.is_active = false;
+                            // Smooth decay of bars towards zero
+                            for i in 0..24 {
+                                s.bands[i] *= 0.85;
+                                s.peaks[i] = (s.peaks[i] - 0.02).max(0.0);
+                            }
                         }
+                        (active || s.bands.iter().any(|&b| b > 0.02), s.bands, s.peaks, s.rms_db)
+                    };
+
+                    let (vis_enabled, title, artist, album) = {
+                        let mut st = state_arc.lock().unwrap();
+                        if !is_audio_active && st.state == "playing" && st.source == "pc_audio" {
+                            st.state = "idle".to_string();
+                        }
+                        (
+                            st.visualizer_enabled && (st.state == "playing" || is_audio_active),
+                            st.title.clone(),
+                            st.artist.clone(),
+                            st.album.clone(),
+                        )
+                    };
+
+                    // 3. If audio has stopped and visualizer was drawing, restore Splash screen
+                    if !vis_enabled {
+                        if was_drawing {
+                            crate::display::SplashEngine::show_ready();
+                            was_drawing = false;
+                        }
+                        thread::sleep(Duration::from_millis(150));
+                        continue;
                     }
+
+                    was_drawing = true;
 
                     // Render background gradient (Deep Night Blue to Charcoal)
                     render_gradient_background(&mut frame_buf);
 
-                    // Render Glassmorphic Media Player Card
-                    render_player_card(&mut frame_buf, &title, &artist, &album);
+                    // Render Glassmorphic Media Player Card with live metadata & VU meter
+                    render_player_card(&mut frame_buf, &title, &artist, &album, rms_db);
 
-                    // Render Dynamic Equalizer Spectrum Bars at bottom
-                    render_spectrum_bars(&mut frame_buf, &spectrum_heights, &spectrum_peaks);
+                    // Render Dynamic Equalizer Spectrum Bars from REAL AUDIO TELEMETRY
+                    render_spectrum_bars(&mut frame_buf, &bands, &peaks);
 
                     // Blit buffer to /dev/fb0
                     blit_to_fb0(&frame_buf);
@@ -276,8 +376,8 @@ fn render_gradient_background(buf: &mut [u8]) {
     }
 }
 
-/// Render modern player card with title, artist and album
-fn render_player_card(buf: &mut [u8], title: &str, artist: &str, album: &str) {
+/// Render modern player card with title, artist, album and live stereo VU meter
+fn render_player_card(buf: &mut [u8], title: &str, artist: &str, album: &str, rms_db: f32) {
     let card_x = 240;
     let card_y = 120;
     let card_w = 800;
@@ -339,9 +439,34 @@ fn render_player_card(buf: &mut [u8], title: &str, artist: &str, album: &str) {
     let gray = rgb565(180, 190, 210);
 
     draw_text_bitmap(buf, text_x, card_y + 45, "● TOCANDO AGORA - IOT MEDIA RENDERER", badge_color, 2);
-    draw_text_bitmap(buf, text_x, card_y + 90, title, white, 3);
-    draw_text_bitmap(buf, text_x, card_y + 150, artist, cyan, 2);
-    draw_text_bitmap(buf, text_x, card_y + 185, album, gray, 2);
+    draw_text_bitmap(buf, text_x, card_y + 85, title, white, 3);
+    draw_text_bitmap(buf, text_x, card_y + 140, artist, cyan, 2);
+    draw_text_bitmap(buf, text_x, card_y + 175, album, gray, 2);
+
+    // Live Stereo VU Meter Bar (Green -> Amber -> Red Peak)
+    let vu_y = card_y + 215;
+    let vu_w = 480;
+    let vu_h = 14;
+    let normalized = ((rms_db + 60.0) / 60.0).clamp(0.0, 1.0);
+    let fill_w = (normalized * vu_w as f32) as usize;
+
+    // Meter background
+    draw_rect(buf, text_x, vu_y, vu_w, vu_h, rgb565(15, 20, 35));
+    // Meter fill
+    for bx in 0..fill_w {
+        let ratio = bx as f32 / vu_w as f32;
+        let c = if ratio < 0.65 {
+            rgb565(126, 231, 135) // Green
+        } else if ratio < 0.88 {
+            rgb565(255, 171, 64) // Amber
+        } else {
+            rgb565(255, 82, 82) // Red
+        };
+        draw_rect(buf, text_x + bx, vu_y, 1, vu_h, c);
+    }
+    // Meter border
+    draw_rect(buf, text_x, vu_y, vu_w, 1, border_cyan);
+    draw_rect(buf, text_x, vu_y + vu_h - 1, vu_w, 1, border_cyan);
 
     // Decorative soundwave horizontal accent line
     let line_y = card_y + card_h - 35;

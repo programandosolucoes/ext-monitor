@@ -100,8 +100,9 @@ fn main() {
     // 4. Start UPnP / DLNA SSDP auto-discovery daemon on UDP 1900
     media_renderer::start_ssdp_responder(running.clone(), 8080);
 
-    // 5. Start HDMI dynamic visualizer engine (active when playing audio)
-    media_renderer::VisualizerEngine::start(running.clone());
+    // 5. Start HDMI dynamic visualizer engine (active when playing audio, multiplexed with video)
+    media_renderer::VisualizerEngine::start(running.clone(), pipeline_mgr.clone());
+    media_renderer::start_audio_telemetry_listener(running.clone());
 
     if let Ok(mut cfg) = web::CONFIG.lock() {
         cfg.mode3 = is_usb_bulk_mode;
