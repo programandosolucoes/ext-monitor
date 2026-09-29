@@ -25,6 +25,7 @@ pub enum StreamerHandle {
     Composite {
         video: Box<StreamerHandle>,
         audio: Option<Child>,
+        audio_spectrum: Option<Child>,
         audio_running: Option<Arc<AtomicBool>>,
     },
 }
@@ -37,10 +38,13 @@ impl StreamerHandle {
                 n.stop();
                 Ok(())
             }
-            StreamerHandle::Composite { ref mut video, ref mut audio, ref mut audio_running } => {
+            StreamerHandle::Composite { ref mut video, ref mut audio, ref mut audio_spectrum, ref mut audio_running } => {
                 let _ = video.kill();
                 if let Some(ref mut a) = audio {
                     let _ = a.kill();
+                }
+                if let Some(ref mut spec) = audio_spectrum {
+                    let _ = spec.kill();
                 }
                 if let Some(ref r) = audio_running {
                     r.store(false, Ordering::Relaxed);
@@ -54,9 +58,12 @@ impl StreamerHandle {
         match self {
             StreamerHandle::Child(ref mut c) => c.wait(),
             StreamerHandle::Native(_) => Ok(ExitStatus::from_raw(0)),
-            StreamerHandle::Composite { ref mut video, ref mut audio, .. } => {
+            StreamerHandle::Composite { ref mut video, ref mut audio, ref mut audio_spectrum, .. } => {
                 if let Some(ref mut a) = audio {
                     let _ = a.wait();
+                }
+                if let Some(ref mut spec) = audio_spectrum {
+                    let _ = spec.wait();
                 }
                 video.wait()
             }
@@ -194,17 +201,18 @@ impl PipelineBuilder {
             StreamerHandle::Child(child)
         };
 
-        let (audio_child, audio_running) = if self.audio {
+        let (audio_child, spectrum_child, audio_running) = if self.audio {
             let running = Arc::new(AtomicBool::new(true));
-            spawn_audio_spectrum_monitor(self.target_ip.clone(), running.clone());
-            (self.spawn_audio(), Some(running))
+            let spec_child = spawn_audio_spectrum_monitor(self.target_ip.clone(), running.clone());
+            (self.spawn_audio(), spec_child, Some(running))
         } else {
-            (None, None)
+            (None, None, None)
         };
 
         Ok(StreamerHandle::Composite {
             video: Box::new(video_handle),
             audio: audio_child,
+            audio_spectrum: spectrum_child,
             audio_running,
         })
     }
@@ -555,7 +563,16 @@ fn fft_512(real: &mut [f32; 512], imag: &mut [f32; 512]) {
     }
 }
 
-pub fn spawn_audio_spectrum_monitor(target_ip: String, running: Arc<AtomicBool>) {
+pub fn spawn_audio_spectrum_monitor(target_ip: String, running: Arc<AtomicBool>) -> Option<Child> {
+    let mut child = Command::new("parec")
+        .args(["--device=Raspberry_Pi_HDMI_Audio.monitor", "--rate=48000", "--channels=2", "--format=s16le", "--raw"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let mut stdout = child.stdout.take()?;
+
     thread::Builder::new()
         .name("audio-spectrum-tx".to_string())
         .spawn(move || {
@@ -564,21 +581,6 @@ pub fn spawn_audio_spectrum_monitor(target_ip: String, running: Arc<AtomicBool>)
                 Err(_) => return,
             };
             let dest_addr = format!("{}:5006", target_ip);
-
-            // Spawn parec reading from Raspberry_Pi_HDMI_Audio.monitor
-            let mut child = match Command::new("parec")
-                .args(["--device=Raspberry_Pi_HDMI_Audio.monitor", "--rate=48000", "--channels=2", "--format=s16le", "--raw"])
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .spawn() {
-                    Ok(c) => c,
-                    Err(_) => return,
-                };
-
-            let mut stdout = match child.stdout.take() {
-                Some(s) => s,
-                None => return,
-            };
 
             // 512 stereo samples = 512 * 4 = 2048 bytes (~10.7ms of audio)
             let mut raw_buf = [0u8; 2048];
@@ -626,9 +628,9 @@ pub fn spawn_audio_spectrum_monitor(target_ip: String, running: Arc<AtomicBool>)
                 let _ = socket.send_to(&packet, &dest_addr);
                 thread::sleep(Duration::from_millis(20)); // ~50 FPS spectrum refresh
             }
-
-            let _ = child.kill();
         })
-        .ok();
+        .ok()?;
+
+    Some(child)
 }
 

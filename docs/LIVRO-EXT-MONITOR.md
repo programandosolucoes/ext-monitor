@@ -3,7 +3,7 @@
 
 **Autor:** Carlos Alberto  
 **E-mail:** [psncarlosalberto4ti@gmail.com](mailto:psncarlosalberto4ti@gmail.com)  
-**Versão do Projeto:** 2.2.0-final  
+**Versão do Projeto:** 2.3.0-final  
 **Data:** Setembro de 2026  
 **Repositório:** `ext-monitor`  
 
@@ -35,6 +35,7 @@
   - [Capítulo 17: O Subsistema de Áudio Híbrido: Rede IP Opus 48kHz vs Bluetooth A2DP Sink](#capítulo-17-o-subsistema-de-áudio-híbrido-rede-ip-opus-48khz-vs-bluetooth-a2dp-sink)
   - [Capítulo 18: Isolamento Acústico: Preservando Fones Locais (Yealink UH34) e Guia Operacional Definitivo](#capítulo-18-isolamento-acústico-preservando-fones-locais-yealink-uh34-e-guia-operacional-definitivo)
   - [Capítulo 19: O Appliance IoT Media Renderer — Google Cast, UPnP/DLNA e Visualizador Gráfico HDMI](#capítulo-19-o-appliance-iot-media-renderer--google-cast-upnpdlna-e-visualizador-gráfico-hdmi)
+  - [Capítulo 20: Multiplexador HDMI de Porta Única, Engine FFT Realtime, i18n Simétrico e Arquitetura Zero-Reboot](#capítulo-20-multiplexador-hdmi-de-porta-única-engine-fft-realtime-i18n-simétrico-e-arquitetura-zero-reboot)
 - [Epílogo e Apêndices](#epílogo-e-apêndices)
   - [Apêndice A: Tabela Completa de Portas de Rede, Endpoints USB e Dispositivos](#apêndice-a-tabela-completa-de-portas-de-rede-endpoints-usb-e-dispositivos)
   - [Apêndice B: Matriz Definitiva de Solução de Problemas](#apêndice-b-matriz-definitiva-de-solução-de-problemas)
@@ -506,6 +507,37 @@ O appliance responde a pacotes SSDP multicast na porta UDP 1900 (`urn:schemas-up
 
 ---
 
+## Capítulo 20: Multiplexador HDMI de Porta Única, Engine FFT Realtime, i18n Simétrico e Arquitetura Zero-Reboot
+
+Na versão **v2.3.0**, a convergência entre monitor secundário profissional e central de mídia inteligente atingiu maturidade de produção através de quatro avanços arquiteturais fundamentais:
+
+### 20.1 Multiplexador de Scanout de Porta Única HDMI (`HDMI-A-1`)
+O Raspberry Pi Zero possui apenas uma porta HDMI física conectada à TV. Se o transmissor de vídeo e o visualizador de áudio tentassem escrever simultaneamente no `/dev/fb0`, ocorreria rasgo de imagem e travamento de GPU. A solução foi a exclusão mútua do scanout:
+1. **Vídeo de Desktop Ativo:** O pipeline de vídeo detém 100% do scanout HDMI; o visualizador gráfico dorme para não competir pelo barramento. O áudio do PC toca diretamente pelas caixas da TV via canal HDMI digital.
+2. **Vídeo Inativo + Áudio Tocando:** O visualizador de hardware acorda e desenha a 30 FPS no HDMI as 24 barras de frequência calculadas em tempo real a partir da música, mantendo o televisor ativo e impedindo a entrada em modo de suspensão/tela preta.
+3. **Standby / Ocioso:** Retorna suavemente para a Splash Screen em 4 idiomas com status de conexão e endereço IP.
+
+### 20.2 Engine de Áudio FFT Realtime de Hardware (512 Pontos Cooley-Tukey)
+Erradicou-se qualquer uso de tabelas sintéticas ou dados simulados:
+- O módulo `sender/src/pipeline.rs` monitora diretamente o sink virtual `Raspberry_Pi_HDMI_Audio.monitor` via `parec` (48kHz, 16-bit estéreo).
+- Uma rotina FFT de 512 pontos com janelamento de Hann calcula a densidade de potência acústica, quantiza o RMS em dB e agrupa as frequências em 24 bandas logarítmicas (94 Hz a 24 kHz).
+- Pacotes binários de 25 bytes são transmitidos a 50 FPS via UDP na porta 5006 para o Pi Zero.
+- No painel web, um `<canvas id="audioVisualizerCanvas">` desenha as 24 barras verticais em gradiente com marcadores de queda de pico e medidores estéreo VU Meter L/R em tempo real a 30 FPS.
+
+### 20.3 Arquitetura Zero-Reboot para Troca e Desligamento de Serviços
+Com base na lição aprendida no diagnóstico do deadlock de USB Bulk (onde leituras síncronas bloqueavam o driver de kernel `dwc2`), o sistema foi blindado para garantir que serviços possam ser ligados, desligados e alternados sem qualquer necessidade de reinicialização da placa ou do computador:
+1. **Polling Não-Blocante com Timeout:** Todas as chamadas de socket ou barramento utilizam `libc::poll` com timeout de 100ms ou `set_read_timeout(10ms)`, permitindo saída limpa de threads em milissegundos sem congelamento de `join()`.
+2. **Gestão do Processo Filho:** O supervisor do `ext-sender` rastreia o processo filho do `parec` e `gst-launch-1.0` de áudio e vídeo, finalizando-os via `kill()` e coletando-os com `wait()` nas trocas a quente.
+3. **Desmapeamento Limpo de Recursos:** Desmapeamento imediato (`munmap`) de `/dev/fb0` e fechamento de `/dev/video10` ao desativar o pipeline.
+4. **Deduplicação de Módulos PipeWire:** Verificação prévia de existência de sinks virtuais antes do carregamento do `module-null-sink`.
+5. **Alocação Dinâmica de Monitores Mutter:** O transmissor utiliza `RecordVirtual` para criar dinamicamente monitores estendidos no GNOME Wayland sem demandar reinicialização de sessão.
+
+### 20.4 Internacionalização (i18n) e Swagger OAS 3.0 v2.3.0
+- Interface web com baseline 100% em inglês mundial (`EN`) e dicionários simétricos de 230 chaves para Português, Italiano e Chinês, sem vazamento de strings.
+- Documentação interativa Swagger OpenAPI 3.0.3 v2.3.0 disponível em `http://192.168.7.2:8080/swagger`.
+
+---
+
 # Epílogo e Apêndices
 
 ---
@@ -516,8 +548,10 @@ O appliance responde a pacotes SSDP multicast na porta UDP 1900 (`urn:schemas-up
 | :--- | :--- | :--- | :--- | :--- |
 | **UDP 5000** | RTP H.264 | Host (192.168.7.1) | Pi Zero (192.168.7.2) | Fluxo principal de vídeo H.264 fatiado em RFC 6184 FU-A. |
 | **UDP 5001** | JSON RPC | Pi Zero (192.168.7.2) | Host (192.168.7.1) | Controle bidirecional do Agente Rust (start/stop/mode/fps). |
-| **UDP 5002** | RTP Opus | Host (192.168.7.1) | Pi Zero (192.168.7.2) | Fluxo de áudio digital 48kHz estéreo para a saída HDMI da TV. |
-| **TCP 8080** | HTTP / REST | Navegador | Pi Zero (192.168.7.2) | Painel de controle Web e Dashboard de Telemetria em tempo real. |
+| **UDP 5001** | JSON RPC | Pi Zero (192.168.7.2) | Host (192.168.7.1) | Controle bidirecional do Agente Rust (start/stop/mode/fps). |
+| **UDP 5004** | RTP Opus | Host (192.168.7.1) | Pi Zero (192.168.7.2) | Fluxo de áudio digital 48kHz estéreo para a saída HDMI da TV. |
+| **UDP 5006** | Binário 25B | Host (192.168.7.1) | Pi Zero (192.168.7.2) | Telemetria de espectro de áudio FFT (24 bandas + RMS dB) a 50 FPS. |
+| **TCP 8080** | HTTP / REST | Navegador | Pi Zero (192.168.7.2) | Painel Web, Swagger UI OpenAPI 3.0 e Telemetria em tempo real. |
 | **TCP 7236** | RTSP WFD | Windows (Win+K) | Pi Zero (192.168.7.2) | Sessão de projeção de tela sem drivers Windows Miracast. |
 | **`/dev/video10`** | V4L2 M2M | Userspace (Rust) | Silício VideoCore IV | Decodificador de hardware Broadcom BCM2835 H.264. |
 | **`/dev/dri/card0`** | DRM/KMS | Userspace (Rust) | Controlador HDMI | Scanout atômico zero-copy via DMA-BUF no plano primário. |
@@ -530,10 +564,11 @@ O appliance responde a pacotes SSDP multicast na porta UDP 1900 (`urn:schemas-up
 | Sintoma Observado | Causa Mais Provável | Procedimento de Resolução |
 | :--- | :--- | :--- |
 | **Tela HDMI preta ao conectar cabo USB** | Pi Zero ainda no ciclo de boot (1.8s) ou porta USB sem energia. | Verifique se o cabo está na porta USB OTG central. A tela de splash quadrilíngue surge em 1.8s. |
-| **GNOME desloga imediatamente ao iniciar** | Caps forçadas `format=BGRx` no `pipewiresrc` causando assert no Mutter. | Recompile o sender com a versão 2.2.0 que utiliza negociação dinâmica e cursor embutido. |
+| **GNOME desloga imediatamente ao iniciar** | Caps forçadas `format=BGRx` no `pipewiresrc` causando assert no Mutter. | Recompile o sender com a versão 2.3.0 que utiliza negociação dinâmica e cursor embutido. |
 | **Vídeo congela quando o mouse para de mover** | Quiescência do compositor Wayland desligando o ciclo de renderização. | Inicie o pacer de batimento cardíaco com `python3 scripts/wayland-damage-pacer.py`. |
 | **Áudio toca no notebook e não na TV** | Sink virtual da TV não selecionado como saída padrão. | Execute `./scripts/audio-route.sh pi` ou ative o botão de áudio no Painel Web. |
 | **Bluetooth do celular não encontra a TV** | Modo pareável inativo no Pi Zero W. | Clique em `[📡 Parear Bluetooth A2DP]` no painel ou execute `./scripts/bluetooth-audio.sh pair`. |
+| **Travamento ao alternar entre USB Bulk e Rede** | Leituras síncronas bloqueando o driver dwc2 do kernel. | Resolvido na v2.3.0 via `libc::poll` com timeout de 100ms e liberação limpa de descritores sem reiniciar. |
 
 ---
 
@@ -564,5 +599,5 @@ Qualquer computador antigo rodando Linux pode se transformar em um receptor de u
 
 ---
 
-*Fim do Livro do Ext-Monitor — Versão 2.2.0-final.*  
+*Fim do Livro do Ext-Monitor — Versão 2.3.0-final.*  
 *Projeto de Engenharia de Sistemas Embarcados por Carlos Alberto <psncarlosalberto4ti@gmail.com>.*

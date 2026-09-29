@@ -39,6 +39,7 @@ Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silí
 | **17** | **Agente Host Rust e Controle Web Bidirecional** | [`17-agente-host-rust-controle-web-bidirecional.md`](17-agente-host-rust-controle-web-bidirecional.md) | Arquitetura RPC UDP 5001, controle completo do host pelo painel web, proteção contra Mutter stride assert crash (`SIGABRT 6`) e quirks AMD DCN 3.1. |
 | **18** | **Áudio Híbrido: Rede IP Opus e Bluetooth A2DP Sink** | [`18-audio-hibrido-rede-opus-e-bluetooth-a2dp.md`](18-audio-hibrido-rede-opus-e-bluetooth-a2dp.md) | Isolamento de áudio local (headset USB Yealink UH34) vs TV HDMI, pareamento Bluetooth 4.1 no Pi Zero W e roteamento ALSA `hw:0,0`. |
 | **19** | **Appliance IoT Media Renderer: Google Cast, UPnP/DLNA e Visualizador HDMI** | [`19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md`](19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md) | Transformação em dongle multimídia inteligente: Google Cast (CastV2), DIAL (YouTube), UPnP/DLNA e tela visual com capa/espectro sonoro em áudio IoT. |
+| **20** | **Multiplexador HDMI Scanout, FFT Realtime, i18n e Arquitetura Zero-Reboot** | [`20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md`](20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md) | Exclusão mútua do scanout HDMI único (vídeo vs visualizador), motor FFT 512 pontos com Hann, Canvas 30 FPS, i18n quadrilíngue 230 chaves, Swagger OAS 3.0 v2.3.0 e ciclo de vida zero-reboot contra travamentos estilo USB Bulk. |
 
 ---
 
