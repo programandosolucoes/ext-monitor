@@ -73,8 +73,33 @@ impl UsbBulkIngress {
         let run_read = running.clone();
         let read_handle = thread::spawn(move || {
             let mut buffer = [0u8; 65536];
+            let mut pfd = libc::pollfd {
+                fd: read_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            };
 
             while run_read.load(Ordering::SeqCst) {
+                // Poll with 100ms timeout so thread checks run_read flag periodically and never deadlocks
+                let ret = unsafe { libc::poll(&mut pfd, 1, 100) };
+                if ret < 0 {
+                    let err = io::Error::last_os_error();
+                    if err.kind() == io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    break;
+                }
+                if ret == 0 {
+                    // Poll timeout (100ms): loop restarts and checks run_read.load()
+                    continue;
+                }
+                if (pfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL)) != 0 {
+                    break;
+                }
+                if (pfd.revents & libc::POLLIN) == 0 {
+                    continue;
+                }
+
                 let n = unsafe {
                     libc::read(
                         read_fd,

@@ -19,31 +19,25 @@
 
 set -e
 
+PI_IP="${PI_IP:-192.168.7.2}"
 MODE="${1:-status}"
 
 case "$MODE" in
-    network|mode1|1)
-        echo -e "\x1b[1;34m[*] Activating MODE 1: Network + Miracast Hybrid...\x1b[0m"
-        sudo systemctl restart ext-receiver
-        echo -e "\x1b[1;32m[+] Mode 1 active.\x1b[0m"
-        echo -e "    - Linux Wayland UDP: port 5000"
-        echo -e "    - Windows Miracast:  RTSP port 7236 (Win + K)"
-        echo -e "    - Web Dashboard:     http://192.168.7.2:8080"
-        echo -e "    - Serial Console:    /dev/ttyGS0 (/dev/ttyACM0 on Host)"
+    miracast|windows|win|wfd|network|mode1|1)
+        echo -e "\x1b[1;34m[*] Ativando Modo Miracast / Rede no Pi Zero ($PI_IP)...\x1b[0m"
+        curl -s --max-time 3 -X POST -H "Content-Type: application/json" -d '{"mode1":true,"mode2":true,"mode3":false}' "http://$PI_IP:8080/api/modes" >/dev/null 2>&1 || true
+        echo -e "\x1b[1;32m[+] Modo Miracast (Windows Win + K / WFD) ativo!\x1b[0m"
+        echo -e "    - Windows Miracast:  Porta RTSP 7236 (Win + K)"
+        echo -e "    - Linux Wayland UDP: Porta 5000"
+        echo -e "    - Painel Web:        http://$PI_IP:8080"
         ;;
 
-    usb-bulk|mode3|mode2|3|2)
-        echo -e "\x1b[1;34m[*] Activating MODE 3: USB Bulk Direct...\x1b[0m"
-        # Ensure FunctionFS display endpoint is mounted
-        /usr/local/bin/setup-usb-bulk.sh 2>/dev/null || true
-
-        # Restart ext-receiver in USB Bulk mode
-        sudo pkill -f ext-receiver 2>/dev/null || true
-        sudo ext-receiver --mode=usb-bulk >/dev/null 2>&1 &
-        echo -e "\x1b[1;32m[+] Mode 3 (USB Bulk Direct) active.\x1b[0m"
-        echo -e "    - Video Input:    USB Bulk Endpoint 1 (Direct 480 Mbps)"
-        echo -e "    - Web Dashboard:  http://192.168.7.2:8080 (Preserved)"
-        echo -e "    - Serial Console: /dev/ttyGS0 (Preserved)"
+    usb-bulk|bulk|usb|mode3|mode2|3|2)
+        echo -e "\x1b[1;34m[*] Ativando Modo USB Bulk Direto no Pi Zero ($PI_IP)...\x1b[0m"
+        curl -s --max-time 3 -X POST -H "Content-Type: application/json" -d '{"mode1":false,"mode2":false,"mode3":true}' "http://$PI_IP:8080/api/modes" >/dev/null 2>&1 || true
+        echo -e "\x1b[1;32m[+] Modo USB Bulk Direto ativo!\x1b[0m"
+        echo -e "    - Canal de Vídeo:    USB FunctionFS Endpoint (480 Mbps)"
+        echo -e "    - Painel Web:        http://$PI_IP:8080"
         ;;
 
     status)

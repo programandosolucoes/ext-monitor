@@ -26,21 +26,21 @@ use std::time::Duration;
 
 pub const HTTP_PORT: u16 = 8080;
 
-struct ConfigState {
-    fps: u32,
-    bitrate: u32,
-    color: String,
-    drop_only: bool,
-    skip_to_first: bool,
-    key_int_max: u32,
-    capture: String,
-    monitor: String,
-    mode1: bool,
-    mode2: bool,
-    mode3: bool,
+pub struct ConfigState {
+    pub fps: u32,
+    pub bitrate: u32,
+    pub color: String,
+    pub drop_only: bool,
+    pub skip_to_first: bool,
+    pub key_int_max: u32,
+    pub capture: String,
+    pub monitor: String,
+    pub mode1: bool,
+    pub mode2: bool,
+    pub mode3: bool,
 }
 
-static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
+pub static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
     fps: 30,
     bitrate: 400,
     color: String::new(),
@@ -249,15 +249,25 @@ fn handle_http_client(
                             eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
                         }
                     });
+                } else if let Some(false) = m3_change {
+                    println!("\x1b[1;33m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) disabled. Returning to Miracast / Standby.");
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        pipe.stop();
+                        let _ = pipe.start(PipelineKind::MiracastMp2t { port: crate::wfd::WFD_RTP_PORT });
+                    });
                 } else if let Some(m1) = m1_change {
-                    if !m1 {
-                        println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) turned OFF by user flag.");
-                        pipeline_mgr.pause();
-                    } else {
-                        println!("\x1b[1;32m[web-server]\x1b[0m Mode 1 (Linux UDP) turned ON by user flag.");
-                        let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
-                        let _ = pipeline_mgr.resume(default_kind);
-                    }
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        if !m1 {
+                            println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) turned OFF by user flag.");
+                            pipe.pause();
+                        } else {
+                            println!("\x1b[1;32m[web-server]\x1b[0m Mode 1 (Linux UDP) turned ON by user flag.");
+                            let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                            let _ = pipe.resume(default_kind);
+                        }
+                    });
                 }
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
@@ -390,6 +400,10 @@ fn handle_http_client(
                 let body = &req_str[idx + 4..];
                 if body.contains("usb-bulk") || body.contains("bulk") || body.contains("\"mode\":3") || body.contains("\"mode\":\"3\"") {
                     println!("\x1b[1;32m[web-server]\x1b[0m Switching to Mode 3 (USB Bulk Direct)...");
+                    if let Ok(mut cfg) = CONFIG.lock() {
+                        cfg.mode3 = true;
+                        cfg.mode1 = false;
+                    }
                     let run = running.clone();
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
@@ -397,10 +411,28 @@ fn handle_http_client(
                             eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
                         }
                     });
+                } else if body.contains("miracast") || body.contains("wfd") || body.contains("\"mode\":2") || body.contains("\"mode\":\"2\"") {
+                    println!("\x1b[1;32m[web-server]\x1b[0m Switching to Mode 2 (Windows Miracast WFD)...");
+                    if let Ok(mut cfg) = CONFIG.lock() {
+                        cfg.mode3 = false;
+                        cfg.mode2 = true;
+                    }
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        pipe.stop();
+                        let _ = pipe.start(PipelineKind::MiracastMp2t { port: crate::wfd::WFD_RTP_PORT });
+                    });
                 } else if body.contains("network") || body.contains("udp") || body.contains("\"mode\":1") || body.contains("\"mode\":\"1\"") {
                     println!("\x1b[1;32m[web-server]\x1b[0m Switching to Mode 1 (Network UDP 5000)...");
-                    let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
-                    let _ = pipeline_mgr.resume(default_kind);
+                    if let Ok(mut cfg) = CONFIG.lock() {
+                        cfg.mode3 = false;
+                        cfg.mode1 = true;
+                    }
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                        let _ = pipe.resume(default_kind);
+                    });
                 }
             }
             send_response(

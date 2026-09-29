@@ -122,7 +122,8 @@ fn main() {
             let has_crashed = pipeline_mgr.has_exited();
 
             if is_idle || has_crashed {
-                if is_usb_bulk_mode {
+                let want_bulk = web::CONFIG.lock().map(|c| c.mode3).unwrap_or(is_usb_bulk_mode);
+                if want_bulk {
                     println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring USB Bulk pipeline...");
                     if let Err(e) = usb_bulk::activate_usb_bulk(running.clone(), pipeline_mgr.clone()) {
                         eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to restore USB Bulk: {} (retrying in 2s)", e);
