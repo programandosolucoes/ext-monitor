@@ -1231,6 +1231,57 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                         </p>
                     </div>
 
+                    <!-- Section 16: Hybrid Audio & Virtual HDMI Device -->
+                    <div style="background: rgba(0, 229, 255, 0.08); border-left: 4px solid var(--accent-cyan); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: var(--accent-cyan); margin: 0 0 0.5rem 0;">16. 🔊 Roteamento de Áudio Híbrido & Dispositivo Virtual HDMI</h3>
+                        <p style="margin: 0 0 0.6rem 0; color: #fff;">
+                            O ext-monitor implementa arquitetura de áudio 100% isolada e híbrida utilizando um dispositivo virtual no PipeWire/PulseAudio (<code>Raspberry_Pi_HDMI_Audio</code>). Você pode trabalhar na tela estendida da TV enquanto escuta YouTube, reuniões e músicas no seu Headset ou caixas do laptop:
+                        </p>
+                        <pre style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 6px; font-family: monospace; color: var(--accent-cyan); overflow-x: auto;"><code># Modo Híbrido: Mantém o áudio do PC saindo no seu Headset USB ou caixas locais
+./scripts/audio-route.sh local
+
+# Modo TV: Envia todo o áudio do sistema para a TV HDMI via Opus 48kHz (UDP 5004)
+./scripts/audio-route.sh pi
+
+# Exibe o status e o dispositivo ativo em tempo real
+./scripts/audio-route.sh status</code></pre>
+                    </div>
+
+                    <!-- Section 17: Subhardware Clocks & Power -->
+                    <div style="background: rgba(46, 160, 67, 0.08); border-left: 4px solid #2ea043; border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: #2ea043; margin: 0 0 0.5rem 0;">17. ⚙️ Clocks de Subhardware (H.264/VPU/ARM) & Consumo Energético</h3>
+                        <p style="margin: 0; color: #fff;">
+                            O Raspberry Pi Zero W expõe a telemetria interna de cada bloco de silício do SoC Broadcom BCM2835 via <code>debugfs</code>. O ext-monitor monitora continuamente os clocks em tempo real:
+                        </p>
+                        <ul style="margin: 0.6rem 0 0 1.2rem; color: #ccc; font-size: 0.88rem; line-height: 1.6;">
+                            <li><strong>Decodificador H.264 V4L2 M2M:</strong> <code>200 MHz / 250 MHz</code> (bloco dedicado de descompressão por hardware)</li>
+                            <li><strong>VPU VideoCore IV:</strong> <code>400 MHz</code> (processador de vídeo e pipeline KMS)</li>
+                            <li><strong>CPU ARM1176:</strong> <code>700 MHz - 1000 MHz</code> (governor ondemand econômico)</li>
+                            <li><strong>Motor 3D V3D:</strong> <code>250 MHz</code> | <strong>SDRAM:</strong> <code>166 MHz LPDDR</code></li>
+                            <li><strong>Potência & Corrente:</strong> <code>~0.85W</code> (idle) a <code>~1.15W</code> (streaming contínuo 60 FPS a 5V / 230mA)</li>
+                        </ul>
+                    </div>
+
+                    <!-- Section 18: Full CLI Manual & Troubleshooting -->
+                    <div style="background: rgba(255, 179, 0, 0.08); border-left: 4px solid var(--accent-amber); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: var(--accent-amber); margin: 0 0 0.5rem 0;">18. 📖 Manual Completo de Operação, Flags CLI & Troubleshooting</h3>
+                        <p style="margin: 0 0 0.5rem 0; color: #fff;">
+                            Sintaxe do inicializador: <code>./scripts/start.sh [modo] [encoder] [fps] [hud] [opções]</code>
+                        </p>
+                        <ul style="margin: 0.4rem 0 0 1.2rem; color: #ccc; font-size: 0.88rem; line-height: 1.6;">
+                            <li><code>extend</code>: Cria ou conecta a tela estendida secundária no HDMI-1.</li>
+                            <li><code>clone</code>: Espelha 1:1 a tela principal do notebook (eDP-1) para o monitor externo.</li>
+                            <li><code>--continuous</code> ou <code>--no-drop-only</code>: Força envio CFR a 60 FPS estáveis mesmo com tela parada (elimina congelamentos).</li>
+                            <li><code>--network</code> ou <code>--udp</code>: Transmite via rede UDP (porta 5000).</li>
+                            <li><code>--transport=usb</code>: Transmite via canal USB Bulk direto (480 Mbps).</li>
+                            <li><code>--no-audio</code>: Desativa a transmissão do canal de áudio.</li>
+                            <li><code>--capture=kms</code>: Captura direta por hardware DRM da GPU (/dev/dri/card*), imune ao compositor Wayland.</li>
+                        </ul>
+                        <div style="margin-top: 0.6rem; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.84rem; color: #ffab40;">
+                            <strong>Solução Rápida:</strong> Se a tela HDMI ficar preta ao alternar modos, reinicie o pipeline com <code>./scripts/start.sh extend auto 30 false --continuous</code>. O receptor detecta o fluxo e sincroniza os quadros IDR automaticamente em menos de 1 segundo.
+                        </div>
+                    </div>
+
                     <!-- Comparison Table -->
                     <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="protoHeader">Tabela Comparativa de Métodos</h3>
 

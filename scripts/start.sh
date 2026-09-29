@@ -4,9 +4,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Auto-inclusão da automação udev / watcher na primeira execução (com ou sem sudo)
-"$SCRIPT_DIR/setup-autoconnect.sh" 2>/dev/null || true
-
 MODE="${1:-extend}"
 ENCODER="${2:-auto}"
 FPS="${3:-30}"
@@ -53,6 +50,8 @@ for arg in "$@"; do
         EXTRA_FLAGS+=("$arg")
     elif [ "$arg" = "--transport=usb" ] || [ "$arg" = "--usb" ] || [ "$arg" = "--usb-bulk" ] || [[ "$arg" =~ ^--transport= ]]; then
         EXTRA_FLAGS+=("$arg")
+    elif [ "$arg" = "--transport=network" ] || [ "$arg" = "--network" ] || [ "$arg" = "--udp" ] || [ "$arg" = "--net" ]; then
+        EXTRA_FLAGS+=("$arg")
     elif [ "$arg" = "--kms" ] || [ "$arg" = "kms" ] || [ "$arg" = "--drm" ]; then
         EXTRA_FLAGS+=("--capture=kms")
     elif [ "$arg" = "--mutter" ] || [ "$arg" = "mutter" ] || [ "$arg" = "--gnome" ]; then
@@ -69,6 +68,9 @@ for arg in "$@"; do
         EXTRA_FLAGS+=("$arg")
     fi
 done
+
+# Garante dispositivo de áudio virtual pronto
+"$SCRIPT_DIR/audio-route.sh" setup >/dev/null 2>&1 || true
 
 # Otimização do barramento USB e filas no Host (Elimina Buffer Bloat)
 if ip link show enx122233445566 >/dev/null 2>&1; then

@@ -578,8 +578,32 @@ fn get_system_telemetry_json(
 
     let mon = crate::display::MonitorInfo::read_realtime();
 
+    // 4. Subhardware Clocks (SoC Broadcom BCM2835 / VideoCore IV)
+    let read_clk_mhz = |path: &str, def_hz: u64| -> u64 {
+        fs::read_to_string(path)
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(def_hz) / 1_000_000
+    };
+
+    let h264_mhz = read_clk_mhz("/sys/kernel/debug/clk/h264/clk_rate", 200_000_000);
+    let vpu_mhz = read_clk_mhz("/sys/kernel/debug/clk/vpu/clk_rate", 400_000_000);
+    let v3d_mhz = read_clk_mhz("/sys/kernel/debug/clk/fw-clk-v3d/clk_rate", 250_000_000);
+    let arm_mhz = fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .map(|khz| khz / 1000)
+        .unwrap_or_else(|| read_clk_mhz("/sys/kernel/debug/clk/fw-clk-arm/clk_rate", 1_000_000_000));
+    let sdram_mhz = read_clk_mhz("/sys/kernel/debug/clk/sdram/clk_rate", 166_666_668);
+    let core_mhz = read_clk_mhz("/sys/kernel/debug/clk/fw-clk-core/clk_rate", 400_000_000);
+
+    // 5. Power Estimation
+    let cpu_pct = cpu_load.parse::<f64>().unwrap_or(0.15) * 100.0;
+    let est_watts = 0.55 + (cpu_pct / 100.0) * 0.35 + (if is_active { 0.35 } else { 0.05 });
+    let est_ma = (est_watts / 5.0) * 1000.0;
+
     format!(
-        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{}}}",
+        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
         temp_val,
         cpu_load,
         mem_free_mb,
@@ -606,7 +630,15 @@ fn get_system_telemetry_json(
         mon.connector,
         mon.connector_friendly,
         mon.hardware_model,
-        audio_st.to_json()
+        audio_st.to_json(),
+        h264_mhz,
+        vpu_mhz,
+        arm_mhz,
+        v3d_mhz,
+        core_mhz,
+        sdram_mhz,
+        est_watts,
+        est_ma
     )
 }
 

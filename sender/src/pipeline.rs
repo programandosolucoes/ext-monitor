@@ -102,17 +102,43 @@ impl PipelineBuilder {
             return None;
         }
 
+        // 1. Ensure virtual sink Raspberry_Pi_HDMI_Audio exists in PulseAudio/PipeWire
+        let _ = Command::new("pactl")
+            .args([
+                "load-module",
+                "module-null-sink",
+                "sink_name=Raspberry_Pi_HDMI_Audio",
+                "sink_properties=device.description=Raspberry_Pi_HDMI_Audio",
+            ])
+            .output();
+
+        let use_pulse = Command::new("pactl")
+            .args(["list", "sources", "short"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("Raspberry_Pi_HDMI_Audio.monitor"))
+            .unwrap_or(false);
+
         println!(
-            "\x1b[1;34m[*] Starting low-latency PipeWire Opus audio streamer to {}:{}...\x1b[0m",
-            self.target_ip, self.audio_port
+            "\x1b[1;34m[*] Starting low-latency Opus audio streamer to {}:{} (source: {})...\x1b[0m",
+            self.target_ip,
+            self.audio_port,
+            if use_pulse { "Raspberry_Pi_HDMI_Audio.monitor" } else { "pipewiresrc (auto)" }
         );
 
-        Command::new("gst-launch-1.0")
-            .arg("-q")
-            .arg("pipewiresrc")
-            .arg("client-name=ext-hdmi-audio")
-            .arg("do-timestamp=true")
-            .arg("!")
+        let mut cmd = Command::new("gst-launch-1.0");
+        cmd.arg("-q");
+
+        if use_pulse {
+            cmd.arg("pulsesrc")
+                .arg("device=Raspberry_Pi_HDMI_Audio.monitor")
+                .arg("do-timestamp=true");
+        } else {
+            cmd.arg("pipewiresrc")
+                .arg("client-name=ext-hdmi-audio")
+                .arg("do-timestamp=true");
+        }
+
+        cmd.arg("!")
             .arg("audioconvert")
             .arg("!")
             .arg("audioresample")

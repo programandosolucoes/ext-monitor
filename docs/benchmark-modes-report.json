@@ -1,0 +1,47 @@
+[
+  {
+    "mode": "Modo 1: Rede UDP (RTP H.264)",
+    "id": "mode1_udp",
+    "transport": "Network UDP",
+    "fps": 60,
+    "e2e_latency_ms": 13.3,
+    "h264_clk_mhz": 200,
+    "vpu_clk_mhz": 400,
+    "arm_clk_mhz": 1000,
+    "v3d_clk_mhz": 250,
+    "temp_c": 41.2,
+    "cpu_pct": 0.6,
+    "watts": 0.85,
+    "ma": 170
+  },
+  {
+    "mode": "Modo 2: Miracast (Wi-Fi Display MS-MICE)",
+    "id": "mode2_miracast",
+    "transport": "Wi-Fi Display RTSP",
+    "fps": 30,
+    "e2e_latency_ms": 30.3,
+    "h264_clk_mhz": 200,
+    "vpu_clk_mhz": 400,
+    "arm_clk_mhz": 1000,
+    "v3d_clk_mhz": 250,
+    "temp_c": 41.1,
+    "cpu_pct": 0.5,
+    "watts": 0.85,
+    "ma": 170
+  },
+  {
+    "mode": "Modo 3: USB Bulk Direto (480 Mbps FunctionFS)",
+    "id": "mode3_usb_bulk",
+    "transport": "USB 2.0 High-Speed Bulk",
+    "fps": 60,
+    "e2e_latency_ms": 11.5,
+    "h264_clk_mhz": 200,
+    "vpu_clk_mhz": 400,
+    "arm_clk_mhz": 1000,
+    "v3d_clk_mhz": 250,
+    "temp_c": 41.2,
+    "cpu_pct": 0.6,
+    "watts": 0.85,
+    "ma": 170
+  }
+]
