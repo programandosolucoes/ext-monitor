@@ -289,6 +289,74 @@ fn handle_http_client(
                 .output();
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"discoverable_on\",\"timeout\":60}");
         }
+        ("GET", "/upnp/desc.xml") => {
+            let xml = crate::media_renderer::get_upnp_desc_xml("192.168.7.2", 8080);
+            send_response(&mut stream, "200 OK", "text/xml; charset=utf-8", xml.as_bytes());
+        }
+        ("GET", "/dial/dd.xml") => {
+            let xml = crate::media_renderer::get_dial_dd_xml("192.168.7.2", 8080);
+            send_response(&mut stream, "200 OK", "text/xml; charset=utf-8", xml.as_bytes());
+        }
+        ("GET", "/api/media/status") => {
+            let st = crate::media_renderer::get_media_state();
+            let json = {
+                let m = st.lock().unwrap();
+                format!(
+                    "{{\"title\":\"{}\",\"artist\":\"{}\",\"album\":\"{}\",\"source\":\"{}\",\"state\":\"{}\",\"volume\":{},\"visualizer_enabled\":{}}}",
+                    m.title.replace('"', "\\\""),
+                    m.artist.replace('"', "\\\""),
+                    m.album.replace('"', "\\\""),
+                    m.source,
+                    m.state,
+                    m.volume,
+                    m.visualizer_enabled
+                )
+            };
+            send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
+        }
+        ("POST", "/api/media/control") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = req_str[idx + 4..].trim();
+                let st = crate::media_renderer::get_media_state();
+                if let Ok(mut m) = st.lock() {
+                    if body.contains("\"action\":\"play\"") {
+                        m.state = "playing".to_string();
+                    } else if body.contains("\"action\":\"pause\"") {
+                        m.state = "paused".to_string();
+                    } else if body.contains("\"action\":\"stop\"") {
+                        m.state = "idle".to_string();
+                    }
+                    if let Some(title) = extract_json_str(body, "title") {
+                        m.title = title.to_string();
+                    }
+                    if let Some(artist) = extract_json_str(body, "artist") {
+                        m.artist = artist.to_string();
+                    }
+                    if let Some(album) = extract_json_str(body, "album") {
+                        m.album = album.to_string();
+                    }
+                };
+            }
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
+        }
+        ("POST", "/api/media/visualizer") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = req_str[idx + 4..].trim();
+                let st = crate::media_renderer::get_media_state();
+                if let Ok(mut m) = st.lock() {
+                    if let Some(vis) = extract_json_bool(body, "enabled") {
+                        m.visualizer_enabled = vis;
+                        if vis && m.state == "idle" {
+                            m.state = "playing".to_string();
+                            m.title = "🎵 Demonstração Visualizador".to_string();
+                            m.artist = "Ext-Monitor Audio Spectrum 30 FPS".to_string();
+                            m.album = "VU Meter • Broadcom VideoCore IV".to_string();
+                        }
+                    }
+                };
+            }
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"visualizer_updated\"}");
+        }
         ("POST", "/api/system/reboot") => {
             println!("\x1b[1;31m[web-server]\x1b[0m System REBOOT requested via Web UI.");
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"rebooting\"}");
@@ -669,6 +737,50 @@ fn forward_config_to_sender(payload: &str) {
 }
 
 /// Retrieve network interfaces status (IPs, DHCP server, gateway)
+fn read_network_conf() -> (String, String, String, String, String, String) {
+    let mut iface = "eth0".to_string();
+    let mut mode = "static".to_string();
+    let mut ip = "192.168.1.50".to_string();
+    let mut netmask = "255.255.255.0".to_string();
+    let mut gateway = "192.168.1.1".to_string();
+    let mut dns = "1.1.1.1, 8.8.8.8".to_string();
+
+    let conf_path = if fs::metadata("/boot/network.conf").is_ok() {
+        "/boot/network.conf"
+    } else if fs::metadata("/etc/network.conf").is_ok() {
+        "/etc/network.conf"
+    } else if fs::metadata("/mnt/boot/network.conf").is_ok() {
+        "/mnt/boot/network.conf"
+    } else {
+        ""
+    };
+
+    if !conf_path.is_empty() {
+        if let Ok(content) = fs::read_to_string(conf_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with('#') || !trimmed.contains('=') {
+                    continue;
+                }
+                let mut parts = trimmed.splitn(2, '=');
+                let key = parts.next().unwrap_or("").trim();
+                let val = parts.next().unwrap_or("").trim().trim_matches('"');
+                match key {
+                    "INTERFACE" => iface = val.to_string(),
+                    "MODE" => mode = val.to_string(),
+                    "IP" => ip = val.to_string(),
+                    "NETMASK" => netmask = val.to_string(),
+                    "GATEWAY" => gateway = val.to_string(),
+                    "DNS" => dns = val.to_string(),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    (iface, mode, ip, netmask, gateway, dns)
+}
+
 fn get_network_status_json() -> String {
     let (usb0_ipv4, usb0_ipv6) = get_interface_addrs("usb0");
     let (eth0_ipv4, eth0_ipv6) = get_interface_addrs("eth0");
@@ -682,12 +794,15 @@ fn get_network_status_json() -> String {
     let host_mac = lease.as_ref().map(|l| l.mac.as_str()).unwrap_or("pending");
     let dhcp_running = true; // Native pure-Rust DHCP server active in-process
 
+    let (c_iface, c_mode, c_ip, c_netmask, c_gw, c_dns) = read_network_conf();
+
     format!(
         concat!(
             "{{",
             "\"usb0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\",\"dhcp_server\":{},\"host_ip\":\"192.168.7.1\",\"host_mac\":\"{}\",\"gateway\":\"none\"}},",
             "\"eth0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\"}},",
-            "\"wlan0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\"}}",
+            "\"wlan0\":{{\"detected\":{},\"ipv4\":\"{}\",\"ipv6\":\"{}\"}},",
+            "\"config\":{{\"interface\":\"{}\",\"mode\":\"{}\",\"ip\":\"{}\",\"netmask\":\"{}\",\"gateway\":\"{}\",\"dns\":\"{}\"}}",
             "}}"
         ),
         usb0_detected,
@@ -700,7 +815,13 @@ fn get_network_status_json() -> String {
         eth0_ipv6.unwrap_or_else(|| "none".to_string()),
         wlan0_detected,
         wlan0_ipv4.unwrap_or_else(|| "disconnected".to_string()),
-        wlan0_ipv6.unwrap_or_else(|| "none".to_string())
+        wlan0_ipv6.unwrap_or_else(|| "none".to_string()),
+        c_iface,
+        c_mode,
+        c_ip,
+        c_netmask,
+        c_gw,
+        c_dns
     )
 }
 
@@ -777,13 +898,29 @@ fn extract_json_bool(json: &str, key: &str) -> Option<bool> {
 
 fn apply_network_config(payload: &str) {
     println!("\x1b[1;34m[web-server]\x1b[0m Applying network config: {}", payload);
-    let iface = extract_json_str(payload, "iface").unwrap_or("eth0");
-    let mode = extract_json_str(payload, "mode").unwrap_or("dhcp");
-    let ip = extract_json_str(payload, "ip").unwrap_or("");
+    let iface = extract_json_str(payload, "interface")
+        .or_else(|| extract_json_str(payload, "iface"))
+        .unwrap_or("eth0");
+    let mode = extract_json_str(payload, "mode").unwrap_or("static");
+    let ip = extract_json_str(payload, "ip").unwrap_or("192.168.1.50");
     let netmask = extract_json_str(payload, "netmask").unwrap_or("255.255.255.0");
-    let gateway = extract_json_str(payload, "gateway").unwrap_or("");
-    let dns = extract_json_str(payload, "dns").unwrap_or("");
+    let gateway = extract_json_str(payload, "gateway").unwrap_or("192.168.1.1");
+    let dns = extract_json_str(payload, "dns").unwrap_or("1.1.1.1,8.8.8.8");
     let ipv6_mode = extract_json_str(payload, "ipv6").unwrap_or("auto");
+
+    // Persist to configuration files
+    let conf_content = format!(
+        "# ExtMonitor Network Configuration\nINTERFACE={}\nMODE={}\nIP={}\nNETMASK={}\nGATEWAY={}\nDNS={}\n",
+        iface, mode, ip, netmask, gateway, dns
+    );
+    let _ = fs::write("/etc/network.conf", &conf_content);
+    if fs::metadata("/boot").is_ok() {
+        let _ = fs::write("/boot/network.conf", &conf_content);
+        let _ = std::process::Command::new("sync").output();
+    } else if fs::metadata("/mnt/boot").is_ok() {
+        let _ = fs::write("/mnt/boot/network.conf", &conf_content);
+        let _ = std::process::Command::new("sync").output();
+    }
 
     // Only allow known network interfaces for security
     if iface != "usb0" && iface != "eth0" && iface != "wlan0" {
@@ -845,6 +982,11 @@ fn apply_network_config(payload: &str) {
             }
             let _ = fs::write("/etc/resolv.conf", resolv);
         }
+    }
+
+    // Call apply-network.sh helper if present
+    if fs::metadata("/usr/local/bin/apply-network.sh").is_ok() {
+        let _ = std::process::Command::new("/usr/local/bin/apply-network.sh").output();
     }
 }
 

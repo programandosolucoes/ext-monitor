@@ -34,7 +34,7 @@ impl SplashEngine {
     pub fn show_ready() {
         if let Ok(raw_bytes) = decompress_gzip(SPLASH_READY_GZ) {
             blit_to_framebuffer(&raw_bytes);
-            println!("\x1b[1;32m[splash]\x1b[0m Ready splash screen displayed (3 Modes • 4 Languages).");
+            println!("\x1b[1;32m[splash]\x1b[0m Ready splash screen displayed (4 Modes • 4 Languages • IoT Media).");
         }
     }
 

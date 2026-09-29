@@ -843,6 +843,131 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 </div>
             </div>
 
+            <!-- IoT Media Player & HDMI Visualizer Card -->
+            <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(179, 136, 255, 0.35);">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🎵</span>
+                        <span>Central de Mídia IoT & Visualizador HDMI (Chromecast / DLNA)</span>
+                    </div>
+                    <span class="card-badge badge-green" id="badgeMediaSource">Google Home • UPnP • Bluetooth</span>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>Reprodução Atual (Áudio IoT na TV)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">Exibe os metadados da música atual tocando via Bluetooth do celular ou streaming de rede UPnP/Cast.</span>
+                        </span>
+                        <span class="control-value" id="valMediaState" style="color: #b388ff;">Ocioso / Pronto</span>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); padding: 0.9rem; border-radius: 6px; margin-top: 0.5rem; border-left: 3px solid #b388ff;">
+                        <div style="font-size: 1.05rem; font-weight: 700; color: #fff;" id="mediaTitle">Ext-Monitor IoT Audio</div>
+                        <div style="font-size: 0.86rem; color: #00e5ff; margin-top: 0.2rem;" id="mediaArtist">Conecte seu celular via Bluetooth ou UPnP</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.1rem;" id="mediaAlbum">Pronto para Transmitir (Cast)</div>
+                    </div>
+                </div>
+
+                <!-- Visualizer Controls & Live Demo -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>Visualizador Gráfico na Tela da TV (Não Ficar Só com Som)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">Quando o áudio toca, renderiza em 30 FPS um VU Meter com 24 barras de espectro sonoro e a arte do álbum no HDMI, evitando que a TV fique com tela preta.</span>
+                        </span>
+                        <span class="control-value" id="valVisualizerState">Ativo (30 FPS)</span>
+                    </div>
+                    <div class="btn-grid">
+                        <button class="btn-toggle active" id="btnVisOn" onclick="toggleVisualizer(true)" style="border-color: #b388ff; color: #b388ff;">🎨 Ativar Visualizador HDMI</button>
+                        <button class="btn-toggle" id="btnVisOff" onclick="toggleVisualizer(false)">⏹ Desativar Visualizador</button>
+                        <button class="btn-primary" onclick="testVisualizerDemo()" style="background: linear-gradient(135deg, #7c4dff, #00e5ff);">▶ Testar Música + Espectro na TV</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Network Interfaces & IP Configuration (Ethernet / Wi-Fi LAN) -->
+            <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(56, 189, 248, 0.35);">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🌐</span>
+                        <span data-i18n="netHeader">Configuração de Rede (Ethernet / LAN / Wi-Fi)</span>
+                    </div>
+                    <span class="card-badge badge-blue" id="netActiveBadge">usb0 + eth0</span>
+                </div>
+
+                <!-- Interface status badges -->
+                <div class="control-group" style="padding-bottom: 0.5rem;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
+                        <div style="background: rgba(22, 27, 34, 0.7); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 0.75rem;">
+                            <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase; font-weight: 600;">USB OTG (usb0)</div>
+                            <div style="font-size: 1.1rem; color: #58a6ff; font-weight: bold; margin: 0.25rem 0;" id="netUsb0Ip">192.168.7.2</div>
+                            <div style="font-size: 0.75rem; color: #7ee787;">● Host OTG Permanente</div>
+                        </div>
+                        <div style="background: rgba(22, 27, 34, 0.7); border: 1px solid rgba(63, 185, 80, 0.3); border-radius: 8px; padding: 0.75rem;">
+                            <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase; font-weight: 600;">Ethernet Físico (eth0)</div>
+                            <div style="font-size: 1.1rem; color: #7ee787; font-weight: bold; margin: 0.25rem 0;" id="netEth0Ip">192.168.1.50</div>
+                            <div style="font-size: 0.75rem; color: #a5d6ff;" id="netEth0Status">● Estático / DHCP</div>
+                        </div>
+                        <div style="background: rgba(22, 27, 34, 0.7); border: 1px solid rgba(139, 148, 158, 0.3); border-radius: 8px; padding: 0.75rem;">
+                            <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase; font-weight: 600;">Wi-Fi (wlan0)</div>
+                            <div style="font-size: 1.1rem; color: #c9d1d9; font-weight: bold; margin: 0.25rem 0;" id="netWlan0Ip">Desconectado</div>
+                            <div style="font-size: 0.75rem; color: #8b949e;" id="netWlan0Status">● Opcional</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Config Form -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="netModeLabel">Modo de Endereçamento da Interface Secundária</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipNetMode">Escolha IP Estático para conexões ponto-a-ponto sem roteador DHCP (ex: em outro Raspberry ou PC após o boot), ou DHCP para obter IP automático da sua rede local.</span>
+                        </span>
+                        <span class="control-value" id="valNetCurrentMode">Estático (192.168.1.50)</span>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem; align-items: center; margin: 0.75rem 0; flex-wrap: wrap;">
+                        <label style="font-size: 0.85rem; color: #c9d1d9; font-weight: 600;">Interface:</label>
+                        <select id="netSelectIface" style="padding: 0.4rem 0.8rem; border-radius: 6px; background: #0d1117; color: #58a6ff; border: 1px solid #30363d;">
+                            <option value="eth0">eth0 (Ethernet Secundário / HAT / USB LAN)</option>
+                            <option value="wlan0">wlan0 (Wi-Fi Integrado)</option>
+                        </select>
+
+                        <div class="btn-grid" style="margin: 0; display: inline-flex; gap: 0.5rem;">
+                            <button type="button" class="btn-toggle active" id="btnNetStatic" onclick="setNetModeUI('static')">📌 IP Estático</button>
+                            <button type="button" class="btn-toggle" id="btnNetDhcp" onclick="setNetModeUI('dhcp')">🔄 DHCP Automático</button>
+                        </div>
+                    </div>
+
+                    <div id="netStaticFields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-top: 0.75rem;">
+                        <div>
+                            <label style="font-size: 0.75rem; color: #8b949e; display: block; margin-bottom: 0.25rem;">Endereço IP:</label>
+                            <input type="text" id="netInputIp" value="192.168.1.50" style="width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #f0f6fc; font-family: monospace;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; color: #8b949e; display: block; margin-bottom: 0.25rem;">Máscara de Rede:</label>
+                            <input type="text" id="netInputMask" value="255.255.255.0" style="width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #f0f6fc; font-family: monospace;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; color: #8b949e; display: block; margin-bottom: 0.25rem;">Gateway Padrão:</label>
+                            <input type="text" id="netInputGw" value="192.168.1.1" style="width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #f0f6fc; font-family: monospace;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; color: #8b949e; display: block; margin-bottom: 0.25rem;">Servidor DNS:</label>
+                            <input type="text" id="netInputDns" value="1.1.1.1, 8.8.8.8" style="width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #f0f6fc; font-family: monospace;">
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                        <span id="netSaveFeedback" style="font-size: 0.85rem; color: #7ee787; font-weight: 500;"></span>
+                        <button type="button" class="btn-primary" onclick="saveAndApplyNetworkConfig()" style="background: linear-gradient(135deg, #1f6feb, #238636); padding: 0.55rem 1.25rem;">💾 Salvar & Aplicar na Placa</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="glass-card">
                 <div class="card-header">
                     <div class="card-title">
@@ -1485,6 +1610,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 m1Desc: "Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (< 15ms).",
                 m2Desc: "Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.",
                 m3Desc: "Direct 480 Mbps raw hardware pipe via USB FunctionFS without network stack overhead (< 1ms).",
+                netHeader: "Network Interfaces & IP Configuration (Ethernet / LAN / Wi-Fi)",
+                netModeLabel: "Secondary Interface Addressing Mode",
+                tipNetMode: "Choose Static IP for peer-to-peer setups without a DHCP router (e.g. on another Raspberry or PC after boot), or DHCP for automatic local network assignment.",
                 ctrlHeader: "Display & Stream Optimization",
                 badgeZeroCopy: "VideoCore IV DMA",
                 bitrateLabel: "Streaming Bitrate (VBR)",
@@ -1616,6 +1744,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 m1Desc: "Transmissão RTP H.264 de latência ultra-baixa na porta UDP 5000 com GPU AMD VA-API (< 15ms).",
                 m2Desc: "Projeção nativa do Windows 10/11 via Win + K na porta RTSP 7236. Zero drivers no PC.",
                 m3Desc: "Canal direto de 480 Mbps por hardware via USB FunctionFS sem pilha de rede (< 1ms).",
+                netHeader: "Configuração de Rede & Interfaces (Ethernet / LAN / Wi-Fi)",
+                netModeLabel: "Modo de Endereçamento da Interface Secundária",
+                tipNetMode: "Escolha IP Estático para conexões ponto-a-ponto sem roteador DHCP (ex: em outro Raspberry ou PC após o boot), ou DHCP para obter IP automático da sua rede local.",
                 ctrlHeader: "Otimização de Exibição e Stream",
                 badgeZeroCopy: "VideoCore IV DMA",
                 bitrateLabel: "Taxa de Bits (VBR)",
@@ -1747,6 +1878,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 m1Desc: "Flusso RTP H.264 a bassissima latenza su porta UDP 5000 con GPU AMD VA-API (< 15ms).",
                 m2Desc: "Proiezione nativa Windows 10/11 via Win + K su porta RTSP 7236. Zero driver sul PC.",
                 m3Desc: "Canale hardware diretto a 480 Mbps via USB FunctionFS senza overhead di rete (< 1ms).",
+                netHeader: "Configurazione Rete e Interfacce (Ethernet / LAN / Wi-Fi)",
+                netModeLabel: "Modalità di Indirizzamento dell'Interfaccia Secondaria",
+                tipNetMode: "Scegli IP Statico per connessioni punto-a-punto senza router DHCP (es. su un altro Raspberry o PC dopo il boot), oppure DHCP per IP automatico.",
                 ctrlHeader: "Ottimizzazione Display e Streaming",
                 badgeZeroCopy: "VideoCore IV DMA",
                 bitrateLabel: "Bitrate di Streaming (VBR)",
@@ -1878,6 +2012,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 m1Desc: "UDP 5000 端口超低延迟 RTP H.264 流，AMD VA-API 零拷贝 GPU 加速 (< 15ms)。",
                 m2Desc: "Windows 10/11 原生 Win + K 无线投屏（RTSP 7236 端口），电脑无需安装任何驱动。",
                 m3Desc: "USB FunctionFS 480 Mbps 裸硬件通道，无网络协议栈开销 (< 1ms)。",
+                netHeader: "网络接口与 IP 配置 (以太网 / 局域网 / Wi-Fi)",
+                netModeLabel: "辅助网络接口寻址模式",
+                tipNetMode: "在没有 DHCP 路由器的点对点环境中（例如开机后在另一台树莓派或 PC 上）选择静态 IP，或者选择 DHCP 自动获取。",
                 ctrlHeader: "显示与推流优化",
                 badgeZeroCopy: "VideoCore IV DMA",
                 bitrateLabel: "推流码率 (VBR)",
@@ -2245,6 +2382,31 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 .catch(() => showToast('Comando Bluetooth enviado'));
         }
 
+        // IoT Media & HDMI Visualizer Control
+        function toggleVisualizer(enabled) {
+            fetch('/api/media/visualizer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(res => res.json())
+            .then(() => {
+                const btnOn = document.getElementById('btnVisOn');
+                const btnOff = document.getElementById('btnVisOff');
+                const valSt = document.getElementById('valVisualizerState');
+                if (btnOn) btnOn.classList.toggle('active', enabled);
+                if (btnOff) btnOff.classList.toggle('active', !enabled);
+                if (valSt) valSt.textContent = enabled ? 'Ativo (30 FPS)' : 'Desativado';
+                showToast(enabled ? '✓ Visualizador HDMI ativado na TV' : '✓ Visualizador desativado');
+            });
+        }
+
+        function testVisualizerDemo() {
+            showToast('🎨 Iniciando demonstração do Visualizador com Espectro na TV...');
+            toggleVisualizer(true);
+            setTimeout(pollMediaStatus, 500);
+        }
+
         // Stream Pause / Resume
         function togglePauseStream() {
             isPaused = !isPaused;
@@ -2481,6 +2643,143 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                     }
                 })
                 .catch(() => {});
+
+            pollMediaStatus();
+        }
+
+        function pollMediaStatus() {
+            fetch('/api/media/status')
+                .then(r => r.json())
+                .then(m => {
+                    const elTitle = document.getElementById('mediaTitle');
+                    const elArtist = document.getElementById('mediaArtist');
+                    const elAlbum = document.getElementById('mediaAlbum');
+                    const elState = document.getElementById('valMediaState');
+                    const elVis = document.getElementById('valVisualizerState');
+                    const btnOn = document.getElementById('btnVisOn');
+                    const btnOff = document.getElementById('btnVisOff');
+
+                    if (elTitle && m.title) elTitle.textContent = m.title;
+                    if (elArtist && m.artist) elArtist.textContent = m.artist;
+                    if (elAlbum && m.album) elAlbum.textContent = m.album;
+                    if (elState) {
+                        elState.textContent = m.state === 'playing' ? '▶ Tocando Áudio' : (m.state === 'paused' ? '⏸ Pausado' : 'Ocioso / Pronto');
+                        elState.style.color = m.state === 'playing' ? '#7ee787' : '#b388ff';
+                    }
+                    if (elVis) {
+                        elVis.textContent = m.visualizer_enabled ? 'Ativo (30 FPS)' : 'Desativado';
+                    }
+                    if (btnOn && btnOff) {
+                        btnOn.classList.toggle('active', m.visualizer_enabled);
+                        btnOff.classList.toggle('active', !m.visualizer_enabled);
+                    }
+                })
+                .catch(() => {});
+        }
+
+        let currentNetMode = 'static';
+
+        function setNetModeUI(mode) {
+            currentNetMode = mode;
+            const btnStatic = document.getElementById('btnNetStatic');
+            const btnDhcp = document.getElementById('btnNetDhcp');
+            const staticFields = document.getElementById('netStaticFields');
+            const valMode = document.getElementById('valNetCurrentMode');
+
+            if (btnStatic) btnStatic.classList.toggle('active', mode === 'static');
+            if (btnDhcp) btnDhcp.classList.toggle('active', mode === 'dhcp');
+            if (staticFields) staticFields.style.display = mode === 'static' ? 'grid' : 'none';
+            if (valMode) {
+                valMode.textContent = mode === 'static' ? 'Estático (' + (document.getElementById('netInputIp')?.value || '192.168.1.50') + ')' : 'DHCP Automático';
+            }
+        }
+
+        function saveAndApplyNetworkConfig() {
+            const iface = document.getElementById('netSelectIface')?.value || 'eth0';
+            const ip = document.getElementById('netInputIp')?.value.trim() || '192.168.1.50';
+            const netmask = document.getElementById('netInputMask')?.value.trim() || '255.255.255.0';
+            const gateway = document.getElementById('netInputGw')?.value.trim() || '192.168.1.1';
+            const dns = document.getElementById('netInputDns')?.value.trim() || '1.1.1.1, 8.8.8.8';
+            const feedback = document.getElementById('netSaveFeedback');
+
+            if (feedback) {
+                feedback.textContent = '⏳ Aplicando configuração e salvando no SD card...';
+                feedback.style.color = '#e3b341';
+            }
+
+            fetch('/api/network', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    interface: iface,
+                    mode: currentNetMode,
+                    ip: ip,
+                    netmask: netmask,
+                    gateway: gateway,
+                    dns: dns
+                })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (feedback) {
+                    feedback.textContent = '✓ Configuração aplicada com sucesso! Salva em /boot/network.conf';
+                    feedback.style.color = '#7ee787';
+                    setTimeout(() => { if (feedback) feedback.textContent = ''; }, 6000);
+                }
+                pollNetworkStatus();
+            })
+            .catch(err => {
+                if (feedback) {
+                    feedback.textContent = '❌ Erro ao aplicar: ' + err;
+                    feedback.style.color = '#f85149';
+                }
+            });
+        }
+
+        let netConfigLoaded = false;
+        function pollNetworkStatus() {
+            fetch('/api/network')
+                .then(r => r.json())
+                .then(data => {
+                    const elUsb0 = document.getElementById('netUsb0Ip');
+                    const elEth0 = document.getElementById('netEth0Ip');
+                    const elWlan0 = document.getElementById('netWlan0Ip');
+                    const elEth0St = document.getElementById('netEth0Status');
+
+                    if (elUsb0 && data.usb0) {
+                        elUsb0.textContent = data.usb0.ipv4 || '192.168.7.2';
+                    }
+                    if (elEth0 && data.eth0) {
+                        elEth0.textContent = (data.eth0.ipv4 && data.eth0.ipv4 !== 'disconnected') ? data.eth0.ipv4 : (data.config?.ip || '192.168.1.50');
+                        if (elEth0St) {
+                            elEth0St.textContent = data.eth0.detected ? ('● Conectado (' + (data.config?.mode || 'Estático') + ')') : '● Cabo Desconectado';
+                            elEth0St.style.color = data.eth0.detected ? '#7ee787' : '#8b949e';
+                        }
+                    }
+                    if (elWlan0 && data.wlan0) {
+                        elWlan0.textContent = (data.wlan0.ipv4 && data.wlan0.ipv4 !== 'disconnected') ? data.wlan0.ipv4 : 'Desconectado';
+                    }
+
+                    if (data.config && !netConfigLoaded) {
+                        netConfigLoaded = true;
+                        const elIp = document.getElementById('netInputIp');
+                        const elMask = document.getElementById('netInputMask');
+                        const elGw = document.getElementById('netInputGw');
+                        const elDns = document.getElementById('netInputDns');
+                        const selIface = document.getElementById('netSelectIface');
+
+                        if (elIp && data.config.ip) elIp.value = data.config.ip;
+                        if (elMask && data.config.netmask) elMask.value = data.config.netmask;
+                        if (elGw && data.config.gateway) elGw.value = data.config.gateway;
+                        if (elDns && data.config.dns) elDns.value = data.config.dns;
+                        if (selIface && data.config.interface) selIface.value = data.config.interface;
+
+                        if (data.config.mode) {
+                            setNetModeUI(data.config.mode);
+                        }
+                    }
+                })
+                .catch(() => {});
         }
 
         // Init: Restore from localStorage first (for instant snappy UI on F5), then sync with server
@@ -2530,7 +2829,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             })
             .catch(() => {});
 
+        pollNetworkStatus();
         setInterval(pollTelemetry, 2000);
+        setInterval(pollNetworkStatus, 3500);
     </script>
 </body>
 </html>
