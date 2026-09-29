@@ -771,6 +771,78 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         <!-- TAB 2: CONFIGURAÇÕES & AJUSTES FINOS                              -->
         <!-- ================================================================= -->
         <section id="tab-config" class="tab-content">
+            <!-- Host PC Remote Control Card -->
+            <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(0, 229, 255, 0.25);">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🚀</span>
+                        <span>Controle Remoto do Transmissor (Host PC)</span>
+                    </div>
+                    <span class="card-badge badge-cyan">Bidirecional UDP 5001</span>
+                </div>
+
+                <!-- Live Transmission Actions -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Status e Ações de Transmissão</span>
+                        <span class="control-value" id="valHostStatus">Pronto / Online</span>
+                    </div>
+                    <div class="btn-grid">
+                        <button class="btn-toggle active" id="btnHostStart" onclick="sendHostControl({ action: 'start' })" style="border-color: #00e676; color: #00e676;">▶ Iniciar / Reiniciar Transmissão</button>
+                        <button class="btn-toggle" id="btnHostStop" onclick="sendHostControl({ action: 'stop' })" style="border-color: #ff5252; color: #ff5252;">⏹ Parar Transmissão</button>
+                    </div>
+                </div>
+
+                <!-- Display Mode Selection: Extend vs Clone -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>Modo de Exibição do Monitor</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">HDMI-1: Segunda tela estendida virtual na TV. eDP-1: Clona a tela principal do notebook.</span>
+                        </span>
+                        <span class="control-value" id="valHostMode">Estendido (HDMI-1)</span>
+                    </div>
+                    <div class="btn-grid" id="hostModeGrid">
+                        <button class="btn-toggle active" id="btnModeExtend" onclick="setHostMode('extend')">🖥️ Estendido (HDMI-1 TV)</button>
+                        <button class="btn-toggle" id="btnModeClone" onclick="setHostMode('clone')">💻 Clonado (eDP-1 Notebook)</button>
+                    </div>
+                </div>
+
+                <!-- Network Audio & Bluetooth A2DP Sink -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>Áudio Híbrido (Rede IP Opus + Bluetooth A2DP)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">Ative o áudio de rede para transmitir som do PC via Opus 48kHz para o HDMI da TV. Use o pareamento Bluetooth para conectar celular/tablet diretamente à TV.</span>
+                        </span>
+                        <span class="control-value" id="valHostAudio">Áudio Rede Ativo</span>
+                    </div>
+                    <div class="btn-grid">
+                        <button class="btn-toggle active" id="btnHostAudioOn" onclick="setHostAudio(true)">🔊 Áudio de Rede (Opus UDP)</button>
+                        <button class="btn-toggle" id="btnHostAudioOff" onclick="setHostAudio(false)">🔇 Desativar Áudio Rede</button>
+                        <button class="btn-toggle" id="btnBtPair" onclick="triggerBtPairing()" style="border-color: #00e5ff; color: #00e5ff;">📡 Parear Bluetooth A2DP (60s)</button>
+                    </div>
+                </div>
+
+                <!-- HUD Overlay Control -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>HUD de Telemetria na Tela da TV</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">Projeta dados de FPS, bitrate e latência no canto inferior direito da TV por 60 segundos.</span>
+                        </span>
+                        <span class="control-value" id="valHostHud">HUD Desativado</span>
+                    </div>
+                    <div class="btn-grid">
+                        <button class="btn-toggle" onclick="sendHostControl({ action: 'trigger_hud' })">📊 Exibir HUD na TV (60s)</button>
+                        <button class="btn-toggle" onclick="sendHostControl({ action: 'hide_hud' })">❌ Ocultar HUD</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="glass-card">
                 <div class="card-header">
                     <div class="card-title">
@@ -1096,6 +1168,38 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 </div>
 
                 <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
+                    <!-- Compendium Banner: O Livro do Ext-Monitor -->
+                    <div style="background: rgba(126, 231, 135, 0.06); border: 1px solid rgba(126, 231, 135, 0.25); border-radius: 8px; padding: 1.2rem; margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                <span style="font-size: 1.4rem;">📚</span>
+                                <strong style="color: #7ee787; font-size: 1.05rem;">O Livro do Ext-Monitor — Engenharia e Arquitetura Completa</strong>
+                            </div>
+                            <span class="card-badge badge-green">Compêndio de 18 Blueprints</span>
+                        </div>
+                        <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5; margin: 0 0 0.8rem 0;">
+                            A documentação de engenharia reversa de hardware, decisões de silício BCM2835, protocolos de rede (RFC 4571 / RFC 6184 / WFD), áudio híbrido e o pipeline Wayland/DRM-KMS estão consolidados no compêndio mestre: <strong style="color: #fff; font-family: monospace;">docs/LIVRO-EXT-MONITOR.md</strong>.
+                        </p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.6rem;">
+                            <div style="background: rgba(0,0,0,0.25); padding: 0.6rem 0.8rem; border-radius: 6px; border-left: 3px solid #00e5ff;">
+                                <strong style="color: #fff; font-size: 0.82rem;">Parte I: O Silício BCM2835 & Boot</strong>
+                                <div style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.2rem;">Boot 1.8s, FAT16 32MB, VideoCore IV V4L2 M2M, Zero-Copy DMA e DMA-BUF.</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.25); padding: 0.6rem 0.8rem; border-radius: 6px; border-left: 3px solid #7ee787;">
+                                <strong style="color: #fff; font-size: 0.82rem;">Parte II: Protocolos e Barramentos</strong>
+                                <div style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.2rem;">USB Bulk RFC 4571 Marker Bit/ZLP, RTP H.264 FU-A, WFD Miracast e UAC2.</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.25); padding: 0.6rem 0.8rem; border-radius: 6px; border-left: 3px solid #ffab40;">
+                                <strong style="color: #fff; font-size: 0.82rem;">Parte III: O Host Linux & Wayland</strong>
+                                <div style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.2rem;">GNOME Mutter Screencast D-Bus, PipeWire, AMD Radeon 610M DCN 3.1 e DRM/KMS.</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.25); padding: 0.6rem 0.8rem; border-radius: 6px; border-left: 3px solid #b388ff;">
+                                <strong style="color: #fff; font-size: 0.82rem;">Parte IV: Áudio Híbrido & Controle Web</strong>
+                                <div style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.2rem;">Opus 48kHz UDP, BlueZ A2DP Sink no Pi Zero W e Painel Web Bidirecional Rust.</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Section 1: Architecture -->
                     <h3 style="color: #fff; margin: 1rem 0 0.5rem 0;" data-i18n="docArchTitle">1. Arquitetura de Hardware e GPU VideoCore IV</h3>
                     <p data-i18n="docArchDesc">
@@ -2099,6 +2203,46 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             })
             .then(() => showToast(show ? '✓ HUD enabled on TV screen for 60s' : '✓ HUD hidden from TV screen'))
             .catch(() => showToast('HUD command sent'));
+        }
+
+        // Host PC Remote Control
+        function sendHostControl(payload) {
+            fetch('/api/host/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(() => showToast('✓ Comando enviado ao Host: ' + JSON.stringify(payload)))
+            .catch(() => showToast('✓ Comando transmitido'));
+        }
+
+        function setHostMode(mode) {
+            const btnExt = document.getElementById('btnModeExtend');
+            const btnCln = document.getElementById('btnModeClone');
+            if (btnExt) btnExt.classList.toggle('active', mode === 'extend');
+            if (btnCln) btnCln.classList.toggle('active', mode === 'clone');
+            const lbl = document.getElementById('valHostMode');
+            if (lbl) lbl.textContent = mode === 'extend' ? 'Estendido (HDMI-1 TV)' : 'Clonado (eDP-1 Notebook)';
+            sendHostControl({ mode: mode });
+        }
+
+        function setHostAudio(enabled) {
+            const btnOn = document.getElementById('btnHostAudioOn');
+            const btnOff = document.getElementById('btnHostAudioOff');
+            if (btnOn) btnOn.classList.toggle('active', enabled);
+            if (btnOff) btnOff.classList.toggle('active', !enabled);
+            const lbl = document.getElementById('valHostAudio');
+            if (lbl) lbl.textContent = enabled ? 'Áudio Rede Ativo' : 'Áudio Rede Desativado';
+            sendHostControl({ audio: enabled });
+        }
+
+        function triggerBtPairing() {
+            showToast('📡 Ativando pareamento Bluetooth A2DP por 60s...');
+            fetch('/api/bluetooth/discoverable', { method: 'POST' })
+                .then(r => r.json())
+                .then(() => showToast('✓ Raspberry Pi visível no Bluetooth como A2DP Sink! Procure por "ext-monitor" no celular ou PC.'))
+                .catch(() => showToast('Comando Bluetooth enviado'));
         }
 
         // Stream Pause / Resume
