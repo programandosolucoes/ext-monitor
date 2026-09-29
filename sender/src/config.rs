@@ -26,10 +26,24 @@ impl ColorProfile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureEngine {
+    Mutter, // GNOME Mutter ScreenCast via D-Bus & PipeWire
+    Kms,    // Kernel DRM/KMS Direct Hardware Scanout via DMA-BUF
+}
+
+impl CaptureEngine {
+    pub fn name(&self) -> &'static str {
+        match self {
+            CaptureEngine::Mutter => "GNOME Mutter ScreenCast (PipeWire D-Bus)",
+            CaptureEngine::Kms => "Kernel Direct DRM/KMS (Hardware Scanout DMA-BUF)",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamEngine {
     NativeRust, // 100% Pure Rust Native In-Process GPU Pipeline
     GStreamer,  // GStreamer 1.0 (Hardware)
-    FFmpeg,     // FFmpeg (Lean Hardware)
 }
 
 impl StreamEngine {
@@ -37,7 +51,6 @@ impl StreamEngine {
         match self {
             StreamEngine::NativeRust => "100% Native Rust (In-Process GPU Pipeline)",
             StreamEngine::GStreamer => "GStreamer 1.0 (Hardware)",
-            StreamEngine::FFmpeg => "FFmpeg (Lean Hardware)",
         }
     }
 }
@@ -105,6 +118,9 @@ pub struct SenderConfig {
     pub key_int_max: u32,
     pub transport: TransportKind,
     pub engine: StreamEngine,
+    pub capture: CaptureEngine,
+    pub audio: bool,
+    pub audio_port: u16,
 }
 
 impl SenderConfig {
@@ -151,6 +167,18 @@ impl SenderConfig {
             s == "hud" || s == "--hud" || s == "true" || s == "1"
         });
 
+        let audio = !args.iter().any(|a| a == "--no-audio" || a == "--audio=off" || a == "--audio=false");
+        let audio_port = args
+            .iter()
+            .find_map(|a| {
+                if let Some(val) = a.strip_prefix("--audio-port=") {
+                    val.parse::<u16>().ok()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(5004);
+
         let color_profile = if args.iter().any(|a| {
             let s = a.to_lowercase();
             s == "256" || s == "--256" || s == "--colors=256" || s == "economy" || s == "--economy"
@@ -165,7 +193,11 @@ impl SenderConfig {
             ColorProfile::TrueColor
         };
 
-        let drop_only = args.iter().any(|a| a == "--drop-only" || a == "--drop-only=true");
+        let drop_only = if args.iter().any(|a| a == "--no-drop-only" || a == "--continuous" || a == "--cfr" || a == "--drop-only=false") {
+            false
+        } else {
+            args.iter().any(|a| a == "--drop-only" || a == "--drop-only=true" || a == "--economy" || a == "--battery-saver")
+        };
         let skip_to_first = !args.iter().any(|a| a == "--no-skip-to-first" || a == "--skip-to-first=false");
 
         let key_int_max = args
@@ -193,10 +225,14 @@ impl SenderConfig {
             }
         };
 
+        let capture = if args.iter().any(|a| a == "--capture=kms" || a == "--kms" || a == "--drm") {
+            CaptureEngine::Kms
+        } else {
+            CaptureEngine::Mutter
+        };
+
         let engine = if args.iter().any(|a| a == "--engine=native" || a == "--native" || a == "--rust") {
             StreamEngine::NativeRust
-        } else if args.iter().any(|a| a == "--engine=ffmpeg" || a == "--ffmpeg") {
-            StreamEngine::FFmpeg
         } else {
             StreamEngine::GStreamer
         };
@@ -215,6 +251,9 @@ impl SenderConfig {
             key_int_max,
             transport,
             engine,
+            capture,
+            audio,
+            audio_port,
         }))
     }
 }

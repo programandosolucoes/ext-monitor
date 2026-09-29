@@ -98,10 +98,10 @@ impl UdpRtpIngress {
                         display.render_frame(frame_rgb565);
                     });
 
-                    // If stream was active and now idle for > 2 seconds: return to splash screen
-                    if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(2) {
-                        println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP stream idle / disconnected -> Returning to Ready Splash Screen.");
-                        crate::display::SplashEngine::show_ready();
+                    // If stream was active and truly disconnected (> 15s without packets): clear to black screen
+                    if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(15) {
+                        println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP stream truly disconnected (>15s) -> Limpando tela do Raspberry (Black screen)...");
+                        crate::display::SplashEngine::clear();
                         splash_active = true;
                     }
                     thread::sleep(Duration::from_micros(500));
@@ -113,7 +113,7 @@ impl UdpRtpIngress {
             }
         }
 
-        crate::display::SplashEngine::show_ready();
-        println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP ingress worker stopped.");
+        crate::display::SplashEngine::clear();
+        println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP ingress worker stopped (Tela limpa).");
     }
 }

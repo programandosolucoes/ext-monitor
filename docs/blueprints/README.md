@@ -12,11 +12,11 @@
 
 Esta pasta reúne a documentação de engenharia reversa, decisões de arquitetura e especificações de baixo nível que tornaram possível transformar um dispositivo de computação de US$ 10 (Raspberry Pi Zero de núcleo único a 1.0 GHz) em um monitor secundário profissional de 60 FPS com latência inferior a 15 milissegundos.
 
-Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até o scanout zero-copy DRM/KMS no VideoCore IV, a recuperação autônoma de suspensão de energia no Linux Wayland, o motor visual quadrilíngue de splash e a telemetria EDID de monitores reais — estão formalizados nos 12 blueprints técnicos a seguir:
+Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até o scanout zero-copy DRM/KMS no VideoCore IV, a recuperação autônoma de suspensão de energia no Linux Wayland, o motor visual quadrilíngue de splash, a telemetria EDID de monitores reais e a captura direta de hardware DRM/KMS scanout — estão formalizados nos 14 blueprints técnicos a seguir:
 
 ---
 
-## 2. Mapa dos 12 Blueprints de Engenharia
+## 2. Mapa dos 14 Blueprints de Engenharia
 
 | # | Blueprint Técnico | Arquivo | Foco de Engenharia |
 | :---: | :--- | :--- | :--- |
@@ -32,6 +32,8 @@ Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silí
 | **10** | **Refatoração Modular Clean Code, Enquadramento AU e V4L2 M2M** | [`10-refatoracao-modular-clean-code-v4l2-m2m-e-enquadramento-au.md`](10-refatoracao-modular-clean-code-v4l2-m2m-e-enquadramento-au.md) | Decomposição SRP, Builder Pattern, correção ABI 32-bit ARM ioctls (`0xC0CC5605`), remontagem RFC 6184/4571 e conversão SIMD YUV->RGB565. |
 | **11** | **Scanout Zero-Copy via DRM/KMS, DMA-BUF e Correção ioctl -EFAULT** | [`11-kms-drm-dma-buf-scanout-zero-copy-e-correcao-efault.md`](11-kms-drm-dma-buf-scanout-zero-copy-e-correcao-efault.md) | Resolução do bug `os error 14`, ativação de Universal Planes no VideoCore IV (`vc4-drm`), importação DMA-BUF direta sem cópia por CPU e double-buffering seguro. |
 | **12** | **Splash Quadrilíngue, Telemetria EDID Realtime e Ciclo de Vida de Desconexão** | [`12-splash-quadrilingue-telemetria-edid-realtime-e-ciclo-vida-desconexao.md`](12-splash-quadrilingue-telemetria-edid-realtime-e-ciclo-vida-desconexao.md) | Prevenção de imagem congelada na desconexão, telas de splash embutidas em Rust (PT/EN/ES/FR) via `miniz_oxide` e decodificação do hardware VESA EDID no painel web. |
+| **13** | **Captura Direta no Kernel Linux DRM/KMS e Dual-Engine Universal** | [`13-captura-direta-drm-kms-e-dual-engine-universal.md`](13-captura-direta-drm-kms-e-dual-engine-universal.md) | Bypassa GNOME Mutter/Wayland, extração atômica PRIME DMA-BUF do scanout da GPU AMD/Intel/NVIDIA via ioctl `GETFB2`, eliminação de congelamentos por oclusão de janelas e suporte multi-monitor genérico. |
+| **14** | **Subsistema de Áudio HDMI Digital, Codec Opus e ALSA** | [`14-subsistema-audio-hdmi-digital-opus-alsa-e-sincronismo-av.md`](14-subsistema-audio-hdmi-digital-opus-alsa-e-sincronismo-av.md) | Transmissão de áudio digital de ultra-baixa latência (< 25ms) via PipeWire e Opus 48kHz estéreo na porta UDP 5004, decodificação ALSA `vc4-hdmi`, sincronia A/V e controle Web de volume. |
 
 ---
 

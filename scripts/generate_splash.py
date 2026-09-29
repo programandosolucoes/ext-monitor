@@ -79,7 +79,7 @@ def generate_loading_splash(output_dir):
     draw.text((WIDTH // 2, 80), "EXT-MONITOR PI ZERO", fill=(88, 166, 255), anchor="mm", font=font_brand)
 
     font_sub = get_font(16, bold=False)
-    draw.text((WIDTH // 2, 115), "Appliance Minimal 33MB • 100% Pure Rust • VideoCore IV Hardware VPU", fill=(139, 148, 158), anchor="mm", font=font_sub)
+    draw.text((WIDTH // 2, 115), "Appliance Minimal 33MB • VideoCore IV VPU • Áudio Digital HDMI (ALSA Opus)", fill=(139, 148, 158), anchor="mm", font=font_sub)
 
     # Center Glowing Frame
     cx, cy = WIDTH // 2, 280
@@ -107,10 +107,10 @@ def generate_loading_splash(output_dir):
     font_tag = get_font(14, bold=True)
 
     messages = [
-        ("[PT]", "Aguarde o carregamento do hardware, drivers GPU e rede...", (56, 189, 248), False),
-        ("[EN]", "Please wait, initializing GPU, network drivers & display...", (88, 166, 255), False),
-        ("[IT]", "Attendere il caricamento di hardware, driver GPU e rete...", (163, 113, 247), False),
-        ("[ZH]", "正在加载硬件、GPU驱动和网络，请稍候...", (63, 185, 80), True),
+        ("[PT]", "Carregando drivers GPU VideoCore IV, áudio HDMI e rede...", (56, 189, 248), False),
+        ("[EN]", "Initializing VideoCore IV GPU, HDMI audio & network...", (88, 166, 255), False),
+        ("[IT]", "Caricamento driver GPU VideoCore IV, audio HDMI e rete...", (163, 113, 247), False),
+        ("[ZH]", "正在加载 VideoCore IV GPU、HDMI 音频与网络驱动...", (63, 185, 80), True),
     ]
 
     for idx, (tag, text, col, is_cjk) in enumerate(messages):
@@ -121,7 +121,7 @@ def generate_loading_splash(output_dir):
 
     # Footer
     font_foot = get_font(14, bold=False)
-    draw.text((WIDTH // 2, 680), "Carregando serviços USB Gadget, Wi-Fi Display e Servidor Web...", fill=(110, 118, 129), anchor="mm", font=font_foot)
+    draw.text((WIDTH // 2, 680), "Iniciando USB Gadget, Wi-Fi Display, Áudio Opus 48kHz e Painel Web...", fill=(110, 118, 129), anchor="mm", font=font_foot)
 
     # Save PNG and Raw RGB565 GZ
     os.makedirs(output_dir, exist_ok=True)
@@ -147,9 +147,12 @@ def generate_ready_splash(output_dir):
     draw.text((40, 38), "EXT-MONITOR PI ZERO", fill=(56, 189, 248), anchor="lm", font=font_brand)
 
     font_badge = get_font(13, bold=True)
-    badge_text = "● PRONTO PARA CONEXÃO / READY FOR CONNECTION"
-    draw.rounded_rectangle([(WIDTH - 420, 24), (WIDTH - 40, 52)], radius=6, fill=(18, 48, 28), outline=(46, 160, 67), width=1)
-    draw.text((WIDTH - 230, 38), badge_text, fill=(86, 211, 100), anchor="mm", font=font_badge)
+    badge_text = "● VÍDEO & ÁUDIO HDMI PRONTOS / READY"
+    draw.rounded_rectangle([(WIDTH - 380, 24), (WIDTH - 40, 52)], radius=6, fill=(18, 48, 28), outline=(46, 160, 67), width=1)
+    draw.text((WIDTH - 210, 38), badge_text, fill=(86, 211, 100), anchor="mm", font=font_badge)
+
+    font_aud_tag = get_font(13, bold=True)
+    draw.text((360, 38), "•  ÁUDIO DIGITAL HDMI ATIVO (ALSA Opus 48kHz)", fill=(163, 113, 247), anchor="lm", font=font_aud_tag)
 
     draw.line([(40, 68), (WIDTH - 40, 68)], fill=(33, 38, 45), width=1)
 
@@ -164,8 +167,8 @@ def generate_ready_splash(output_dir):
             "x": 40, "y": 80, "w": 580, "h": 270,
             "border": (31, 111, 235),
             "modes": [
-                ("Modo 1 (Rede IP):", "Execute ./scripts/start.sh ou acesse http://192.168.7.2:8080"),
-                ("Modo 2 (Miracast):", "No Windows 10/11 tecle Win+K e selecione \"ExtMonitor-Pi0\""),
+                ("Modo 1 (Rede IP):", "Execute ./scripts/start.sh (Vídeo H.264 + Áudio HDMI Opus 48k)"),
+                ("Modo 2 (Miracast):", "No Windows 10/11 tecle Win+K e projete tela e áudio nativos"),
                 ("Modo 3 (USB Direto):", "Conecte cabo USB e use --transport=usb (Latência < 1ms)"),
             ]
         },
@@ -175,8 +178,8 @@ def generate_ready_splash(output_dir):
             "x": 660, "y": 80, "w": 580, "h": 270,
             "border": (56, 189, 248),
             "modes": [
-                ("Mode 1 (Network IP):", "Run ./scripts/start.sh or open http://192.168.7.2:8080"),
-                ("Mode 2 (Miracast):", "On Windows 10/11 press Win+K and select \"ExtMonitor-Pi0\""),
+                ("Mode 1 (Network IP):", "Run ./scripts/start.sh (H.264 Video + HDMI Audio Opus 48k)"),
+                ("Mode 2 (Miracast):", "On Windows 10/11 press Win+K to project screen & native sound"),
                 ("Mode 3 (Direct USB):", "Connect USB cable and pass --transport=usb (< 1ms latency)"),
             ]
         },
@@ -187,8 +190,8 @@ def generate_ready_splash(output_dir):
             "border": (163, 113, 247),
             "is_cjk": False,
             "modes": [
-                ("Modo 1 (Rete IP):", "Esegui ./scripts/start.sh o apri http://192.168.7.2:8080"),
-                ("Modo 2 (Miracast):", "Su Windows 10/11 premi Win+K e seleziona \"ExtMonitor-Pi0\""),
+                ("Modo 1 (Rete IP):", "Esegui ./scripts/start.sh (Video H.264 + Audio HDMI Opus 48k)"),
+                ("Modo 2 (Miracast):", "Su Windows 10/11 premi Win+K per schermo e audio nativi"),
                 ("Modo 3 (USB Diretto):", "Collega cavo USB e usa --transport=usb (Latenza < 1ms)"),
             ]
         },
@@ -199,8 +202,8 @@ def generate_ready_splash(output_dir):
             "border": (63, 185, 80),
             "is_cjk": True,
             "modes": [
-                ("模式 1 (网络 IP):", "运行 ./scripts/start.sh 或访问 http://192.168.7.2:8080"),
-                ("模式 2 (Miracast):", "Windows 10/11 按 Win+K 并选择 \"ExtMonitor-Pi0\""),
+                ("模式 1 (网络 IP):", "运行 ./scripts/start.sh (H.264 视频 + HDMI 音频 Opus 48k)"),
+                ("模式 2 (Miracast):", "Windows 10/11 按 Win+K 投影屏幕与声音"),
                 ("模式 3 (USB 直连):", "连接 USB 线并使用 --transport=usb (超低延迟 < 1ms)"),
             ]
         },
@@ -236,7 +239,7 @@ def generate_ready_splash(output_dir):
     # Footer Information Bar
     draw.line([(40, 650), (WIDTH - 40, 650)], fill=(33, 38, 45), width=1)
     font_foot = get_font(14, bold=False)
-    foot_text = "IP: 192.168.7.2  •  Dashboard: http://192.168.7.2:8080  •  RTSP: 7236  •  VideoCore IV KMS Scanout"
+    foot_text = "IP: 192.168.7.2  •  Dashboard: http://192.168.7.2:8080  •  Áudio HDMI: Opus 48kHz (UDP 5004)  •  VideoCore IV KMS"
     draw.text((WIDTH // 2, 680), foot_text, fill=(110, 118, 129), anchor="mm", font=font_foot)
 
     # Save PNG and Raw RGB565 GZ

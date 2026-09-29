@@ -36,6 +36,7 @@ echo "========================================================================"
 
 # 2. Load essential kernel modules
 modprobe i2c-bcm2835 2>/dev/null || true
+modprobe snd-bcm2835 2>/dev/null || true
 modprobe snd-soc-hdmi-codec 2>/dev/null || true
 modprobe vc4 2>/dev/null || true
 modprobe bcm2835-codec 2>/dev/null || true

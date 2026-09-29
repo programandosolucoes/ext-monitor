@@ -6,7 +6,7 @@
 //! License: MIT
 //! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
 
-use crate::config::ColorProfile;
+use crate::config::{CaptureEngine, ColorProfile};
 use std::net::UdpSocket;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,6 +17,8 @@ pub enum ControlAction {
     SetDropOnly(bool),
     SetSkipToFirst(bool),
     SetKeyIntMax(u32),
+    SetCapture(CaptureEngine),
+    SetMonitor(String),
     TriggerHud,
     HideHud,
 }
@@ -97,6 +99,20 @@ impl ControlListener {
                 if let Some(key_int) = v.get("key_int_max").and_then(|x| x.as_u64()).map(|x| x as u32) {
                     if (5..=300).contains(&key_int) {
                         actions.push(ControlAction::SetKeyIntMax(key_int));
+                    }
+                }
+
+                if let Some(capture_str) = v.get("capture").and_then(|x| x.as_str()) {
+                    let eng = match capture_str {
+                        "kms" | "drm" => CaptureEngine::Kms,
+                        _ => CaptureEngine::Mutter,
+                    };
+                    actions.push(ControlAction::SetCapture(eng));
+                }
+
+                if let Some(mon_str) = v.get("monitor").and_then(|x| x.as_str()) {
+                    if !mon_str.trim().is_empty() {
+                        actions.push(ControlAction::SetMonitor(mon_str.trim().to_string()));
                     }
                 }
             }

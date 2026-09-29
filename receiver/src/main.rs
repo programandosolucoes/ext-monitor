@@ -19,6 +19,7 @@
 mod decoder;
 mod display;
 mod drm;
+pub mod audio;
 pub mod dhcp;
 mod i18n;
 mod ingress;
@@ -109,6 +110,9 @@ fn main() {
         if let Err(e) = pipeline_mgr.start(default_kind) {
             eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to start initial UDP pipeline: {}", e);
         }
+
+        // Show Ready splash screen (waiting for incoming stream)
+        display::SplashEngine::show_ready();
     }
 
     // Supervisor loop: restores active decode pipeline if session ends or pipeline exits

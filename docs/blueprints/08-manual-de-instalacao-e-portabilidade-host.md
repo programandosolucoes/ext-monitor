@@ -42,25 +42,37 @@ Para usuários que desejam instalar o driver e as ferramentas de forma definitiv
 
 ### 3.1 Etapas Executadas Pelo Instalador:
 
-#### 1. Resolução Automática de Dependências Multi-Distro
-O instalador detecta a distribuição Linux em uso e instala os pacotes necessários:
+#### 1. Resolução Automática de Dependências Multi-Distro e Aceleração Gráfica
+O instalador detecta a distribuição Linux em uso e instala os pacotes necessários para streaming e codificação acelerada por hardware (AMD, Intel e NVIDIA):
 * **Debian / Ubuntu / Pop!_OS / Linux Mint:**
   ```bash
-  sudo apt-get install -y gstreamer1.0-tools pipewire pipewire-bin gstreamer1.0-vaapi
+  sudo apt-get install -y gstreamer1.0-tools pipewire pipewire-bin ffmpeg libcap2-bin vainfo mesa-va-drivers
+  # Se GPU Intel:
+  sudo apt-get install -y intel-media-va-driver-non-free || sudo apt-get install -y intel-media-va-driver
   ```
 * **Fedora / RHEL:**
   ```bash
-  sudo dnf install -y gstreamer1-tools pipewire pipewire-utils gstreamer1-vaapi
+  sudo dnf install -y gstreamer1-tools pipewire pipewire-utils ffmpeg libcap mesa-va-drivers libva-utils
   ```
 * **Arch Linux / Manjaro:**
   ```bash
-  sudo pacman -S --noconfirm gstreamer pipewire pipewire-media-session gst-vaapi
+  sudo pacman -S --noconfirm gstreamer pipewire pipewire-media-session ffmpeg libva-mesa-driver libva-utils
   ```
 
-#### 2. Instalação dos Binários em `/usr/local/bin/`
-* `ext-sender`: Binário em Rust para captura e codificação de tela.
-* `ext-monitor-start`: Script de controle com suporte a múltiplos modos (`extend`, `mirror`, `auto`).
-* `ext-monitor-connect`: Conector rápido universal.
+#### 2. Instalação dos Binários e Concessão de Capacidades KMS (`cap_sys_admin`)
+* `ext-sender`: Binário em Rust com arquitetura Dual-Engine (`kms` e `mutter`).
+* `ext_kms_probe`: Utilitário para varredura e diagnóstico das placas de vídeo e conectores DRM/KMS.
+* `ext-monitor-start`: Script de controle com suporte a `--kms`, `--mutter`, `--monitor=<nome>` e taxas de 15 a 60 FPS.
+* `ext-monitor-connect`: Conector rápido universal em 1 clique.
+
+**Segurança e Operação sem Root:**
+O instalador executa:
+```bash
+sudo setcap cap_sys_admin+ep /usr/local/bin/ext-sender
+sudo setcap cap_sys_admin+ep /usr/bin/ffmpeg
+sudo usermod -a -G video,render $USER
+```
+Isso permite que o `ext-sender` interaja diretamente com o subsistema DRM/KMS do Kernel Linux (`/dev/dri/card*`) e exporte buffers PRIME DMA-BUF do scanout da GPU sem exigir execução como `root` ou `sudo`.
 
 #### 3. Regras Udev de Baixa Latência e Retomada de Suspensão (`/etc/udev/rules.d/99-ext-monitor.rules`)
 ```udev

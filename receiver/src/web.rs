@@ -33,6 +33,8 @@ struct ConfigState {
     drop_only: bool,
     skip_to_first: bool,
     key_int_max: u32,
+    capture: String,
+    monitor: String,
     mode1: bool,
     mode2: bool,
     mode3: bool,
@@ -45,6 +47,8 @@ static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
     drop_only: false,
     skip_to_first: true,
     key_int_max: 30,
+    capture: String::new(),
+    monitor: String::new(),
     mode1: true,
     mode2: true,
     mode3: true,
@@ -153,18 +157,49 @@ fn handle_http_client(
         ("GET", "/api/status") => {
             let is_paused = pipeline_mgr.is_paused();
             let is_active = pipeline_mgr.current_kind().is_some();
-            let status_json = get_system_telemetry_json(is_paused, is_active);
+            let audio_st = pipeline_mgr.audio_status();
+            let status_json = get_system_telemetry_json(is_paused, is_active, &audio_st);
             send_response(&mut stream, "200 OK", "application/json", status_json.as_bytes());
+        }
+        ("GET", "/api/audio/status") => {
+            let audio_st = pipeline_mgr.audio_status();
+            send_response(&mut stream, "200 OK", "application/json", audio_st.to_json().as_bytes());
+        }
+        ("POST", "/api/audio/volume") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = &req_str[idx + 4..];
+                if let Some(vol) = extract_json_u32(body, "volume") {
+                    pipeline_mgr.set_audio_volume(vol);
+                    let audio_st = pipeline_mgr.audio_status();
+                    send_response(&mut stream, "200 OK", "application/json", audio_st.to_json().as_bytes());
+                    return;
+                }
+            }
+            send_response(&mut stream, "400 Bad Request", "text/plain", b"Missing volume");
+        }
+        ("POST", "/api/audio/mute") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = &req_str[idx + 4..];
+                if let Some(muted) = extract_json_bool(body, "muted") {
+                    pipeline_mgr.set_audio_muted(muted);
+                    let audio_st = pipeline_mgr.audio_status();
+                    send_response(&mut stream, "200 OK", "application/json", audio_st.to_json().as_bytes());
+                    return;
+                }
+            }
+            send_response(&mut stream, "400 Bad Request", "text/plain", b"Missing muted");
         }
         ("GET", "/api/config") => {
             let json = if let Ok(cfg) = CONFIG.lock() {
                 let col = if cfg.color.is_empty() { "full" } else { &cfg.color };
+                let cap = if cfg.capture.is_empty() { "kms" } else { &cfg.capture };
+                let mon = if cfg.monitor.is_empty() { "HDMI-1" } else { &cfg.monitor };
                 format!(
-                    "{{\"fps\":{},\"bitrate\":{},\"color\":\"{}\",\"drop_only\":{},\"skip_to_first\":{},\"key_int_max\":{},\"mode1\":{},\"mode2\":{},\"mode3\":{}}}",
-                    cfg.fps, cfg.bitrate, col, cfg.drop_only, cfg.skip_to_first, cfg.key_int_max, cfg.mode1, cfg.mode2, cfg.mode3
+                    "{{\"fps\":{},\"bitrate\":{},\"color\":\"{}\",\"drop_only\":{},\"skip_to_first\":{},\"key_int_max\":{},\"capture\":\"{}\",\"monitor\":\"{}\",\"mode1\":{},\"mode2\":{},\"mode3\":{}}}",
+                    cfg.fps, cfg.bitrate, col, cfg.drop_only, cfg.skip_to_first, cfg.key_int_max, cap, mon, cfg.mode1, cfg.mode2, cfg.mode3
                 )
             } else {
-                "{\"fps\":30,\"bitrate\":400,\"color\":\"full\",\"drop_only\":false,\"skip_to_first\":true,\"key_int_max\":30,\"mode1\":true,\"mode2\":true,\"mode3\":true}".to_string()
+                "{\"fps\":30,\"bitrate\":400,\"color\":\"full\",\"drop_only\":false,\"skip_to_first\":true,\"key_int_max\":30,\"capture\":\"kms\",\"monitor\":\"HDMI-1\",\"mode1\":true,\"mode2\":true,\"mode3\":true}".to_string()
             };
             send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
         }
@@ -179,6 +214,8 @@ fn handle_http_client(
                     if let Some(drop_only) = extract_json_bool(body, "drop_only") { cfg.drop_only = drop_only; }
                     if let Some(skip_to_first) = extract_json_bool(body, "skip_to_first") { cfg.skip_to_first = skip_to_first; }
                     if let Some(key_int_max) = extract_json_u32(body, "key_int_max") { cfg.key_int_max = key_int_max; }
+                    if let Some(capture) = extract_json_str(body, "capture") { cfg.capture = capture.to_string(); }
+                    if let Some(monitor) = extract_json_str(body, "monitor") { cfg.monitor = monitor.to_string(); }
                     if let Some(m1) = extract_json_bool(body, "mode1") { cfg.mode1 = m1; }
                     if let Some(m2) = extract_json_bool(body, "mode2") { cfg.mode2 = m2; }
                     if let Some(m3) = extract_json_bool(body, "mode3") { cfg.mode3 = m3; }
@@ -307,6 +344,7 @@ fn handle_http_client(
         ("POST", "/api/stream/stop") => {
             println!("\x1b[1;33m[web-server]\x1b[0m User requested stream PAUSE via Web UI.");
             pipeline_mgr.pause();
+            crate::display::SplashEngine::clear();
             send_response(
                 &mut stream,
                 "200 OK",
@@ -432,7 +470,7 @@ fn send_response(stream: &mut TcpStream, status: &str, content_type: &str, body:
 }
 
 /// Query real-time SoC telemetry (temperature, CPU load, RAM)
-fn get_system_telemetry_json(is_paused: bool, is_active: bool) -> String {
+fn get_system_telemetry_json(is_paused: bool, is_active: bool, audio_st: &crate::audio::AudioStatus) -> String {
     // 1. Temperature
     let temp_str = fs::read_to_string("/sys/class/thermal/thermal_zone0/temp")
         .unwrap_or_else(|_| "45000".to_string());
@@ -469,8 +507,8 @@ fn get_system_telemetry_json(is_paused: bool, is_active: bool) -> String {
     let mon = crate::display::MonitorInfo::read_realtime();
 
     format!(
-        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\"}}}}",
-        temp_val, cpu_load, mem_free_mb, pipeline_state, mon.connected, mon.name, mon.preferred_mode, mon.active_mode, mon.vpu
+        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\"}},\"audio\":{}}}",
+        temp_val, cpu_load, mem_free_mb, pipeline_state, mon.connected, mon.name, mon.preferred_mode, mon.active_mode, mon.vpu, audio_st.to_json()
     )
 }
 

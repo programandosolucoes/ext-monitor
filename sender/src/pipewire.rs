@@ -57,21 +57,20 @@ pub fn ensure_gnome_displays() {
             1
         };
 
-        let is_logical = (stdout.contains("('HDMI-1', 'LRX'") || stdout.contains("[('HDMI-1'"))
-            && stdout.contains("'1280x720@60.000'");
+        let is_logical = stdout.contains("('HDMI-1'") && stdout.contains("(1920, 0");
         (serial, is_logical)
     } else {
         (1, false)
     };
 
     if is_configured {
-        println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1 in extended mode (1280x720@60).\x1b[0m");
+        println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1 in extended mode (side-by-side).\x1b[0m");
         return;
     }
 
-    println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side 1280x720@60, serial={})...\x1b[0m", serial);
+    println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side 1600x900, serial={})...\x1b[0m", serial);
     let apply_cmd = format!(
-        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '1280x720@60.000', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '1600x900@59.946', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
         serial
     );
     let _ = Command::new("bash").arg("-c").arg(&apply_cmd).status();
@@ -79,6 +78,7 @@ pub fn ensure_gnome_displays() {
 }
 
 /// Discovers the PipeWire capture output port for `node_id` and links it to `ext-hdmi-sender`
+#[allow(dead_code)]
 pub fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
     for _ in 0..10 {
         if let Ok(output) = Command::new("pw-dump").output() {
@@ -87,27 +87,62 @@ pub fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
                     let mut out_port = None;
 
                     for item in items {
-                        if item["type"] == "PipeWire:Interface:Port" {
+                        if item["type"].as_str() == Some("PipeWire:Interface:Port") {
                             let props = &item["info"]["props"];
-                            if props["node.id"] == node_id && props["port.direction"] == "out" {
+                            let nid = props["node.id"].as_u64().or_else(|| {
+                                props["node.id"].as_str().and_then(|s| s.parse::<u64>().ok())
+                            });
+                            let dir = props["port.direction"].as_str().unwrap_or("");
+
+                            if nid == Some(node_id as u64) && dir == "out" {
                                 out_port = item["id"].as_u64();
                                 break;
                             }
                         }
                     }
 
+                    let mut in_port = None;
+                    for item in items {
+                        if item["type"].as_str() == Some("PipeWire:Interface:Port") {
+                            let props = &item["info"]["props"];
+                            let dir = props["port.direction"].as_str().unwrap_or("");
+                            if dir == "in" {
+                                if let Some(alias) = props["port.alias"].as_str() {
+                                    if alias.contains("ext-hdmi-sender") || alias.contains("gst-launch") {
+                                        in_port = item["id"].as_u64();
+                                        break;
+                                    }
+                                }
+                                if let Some(path) = props["object.path"].as_str() {
+                                    if path.contains("ext-hdmi-sender") {
+                                        in_port = item["id"].as_u64();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     if let Some(p) = out_port {
                         println!("\x1b[1;34m[*] Found {} Output Port: {}\x1b[0m", monitor_name, p);
-                        let output = Command::new("pw-link")
-                            .arg(p.to_string())
-                            .arg("ext-hdmi-sender:input_1")
-                            .output();
+                        let targets: Vec<String> = if let Some(inp) = in_port {
+                            vec![inp.to_string(), "ext-hdmi-sender:input_0".to_string(), "ext-hdmi-sender:input_1".to_string()]
+                        } else {
+                            vec!["ext-hdmi-sender:input_0".to_string(), "ext-hdmi-sender:input_1".to_string()]
+                        };
 
-                        if let Ok(out) = output {
-                            let err_str = String::from_utf8_lossy(&out.stderr);
-                            if out.status.success() || err_str.contains("File exists") || err_str.contains("existe") {
-                                println!("\x1b[1;32m[+] Successfully linked {} (port {}) -> ext-hdmi-sender!\x1b[0m", monitor_name, p);
-                                return;
+                        for target in targets {
+                            let output = Command::new("pw-link")
+                                .arg(p.to_string())
+                                .arg(&target)
+                                .output();
+
+                            if let Ok(out) = output {
+                                let err_str = String::from_utf8_lossy(&out.stderr);
+                                if out.status.success() || err_str.contains("File exists") || err_str.contains("existe") {
+                                    println!("\x1b[1;32m[+] Successfully linked {} (port {}) -> {}!\x1b[0m", monitor_name, p, target);
+                                    return;
+                                }
                             }
                         }
                     }

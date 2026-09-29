@@ -51,8 +51,10 @@ if [ -f "${PROJECT_ROOT}/target/release/ext-sender" ]; then
     cp "${PROJECT_ROOT}/target/release/ext-sender" "${TMP_CLIENT}/ext-sender"
     strip "${TMP_CLIENT}/ext-sender" 2>/dev/null || true
     cp "${PROJECT_ROOT}/scripts/start.sh" "${TMP_CLIENT}/start.sh"
+    cp "${PROJECT_ROOT}/scripts/stop.sh" "${TMP_CLIENT}/stop.sh"
     cp "${PROJECT_ROOT}/scripts/connect.sh" "${TMP_CLIENT}/connect.sh"
     cp "${PROJECT_ROOT}/scripts/install-host.sh" "${TMP_CLIENT}/install-host.sh"
+    cp "${PROJECT_ROOT}/scripts/wayland-damage-pacer.py" "${TMP_CLIENT}/wayland-damage-pacer.py"
     cp "${PROJECT_ROOT}/scripts/99-ext-monitor.rules" "${TMP_CLIENT}/99-ext-monitor.rules"
     cp "${PROJECT_ROOT}/scripts/show-welcome-window.py" "${TMP_CLIENT}/show-welcome-window.py"
     cat << 'EOF' > "${TMP_CLIENT}/README.txt"

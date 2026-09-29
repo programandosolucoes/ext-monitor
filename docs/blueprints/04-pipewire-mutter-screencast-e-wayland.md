@@ -106,19 +106,42 @@ Para assegurar que vídeos reproduzam em 60 FPS contínuos no monitor secundári
   1. Digite na barra de navegação: `chrome://flags/#calculate-native-win-occlusion`
   2. Altere o valor de **Default** para **Disabled**.
   3. Clique em **Relaunch** (Reiniciar).
-  4. *Alternativa via linha de comando:* Inicie o navegador com a flag:
-     ```bash
-     google-chrome --disable-backgrounding-occluded-windows &
+  4. *Configuração Permanente no Sistema:* Criados os arquivos `~/.config/chrome-flags.conf` e `~/.config/chromium-flags.conf` contendo:
+     ```text
+     --disable-backgrounding-occluded-windows
+     --disable-features=CalculateNativeWinOcclusion
+     --disable-renderer-backgrounding
      ```
+  5. *Alternativa via script dedicado:* Utilize o script [`scripts/launch-browser.sh`](file:///home/carlos/ide/ext-monitor/scripts/launch-browser.sh) que inicia o Chrome ou Firefox já posicionado na segunda tela e com todas as flags anti-oclusão ativas.
 
 * **No Mozilla Firefox:**
-  1. Digite na barra de navegação: `about:config`
-  2. Confirme o aviso de segurança.
-  3. Pesquise pela chave: `media.suspend-bkgnd-video.enabled`
-  4. Alterne o valor de `true` para **`false`**.
+  1. Configurado de forma permanente em `~/snap/firefox/common/.mozilla/firefox/*.default/user.js`:
+     ```javascript
+     user_pref("media.suspend-bkgnd-video.enabled", false);
+     ```
 
-* **Em Players Nativos de Vídeo (MPV, VLC, Celluloid):**
-  - Players de mídia dedicados não implementam *occlusion tracking* e reproduzem a 60 FPS ininterruptos por padrão, independentemente da posição do mouse.
+### 4.5 Configuração de Transmissão no ext-monitor: Contínuo (CFR) vs Econômico
+
+O `ext-monitor` opera em dois modos distintos de temporização de quadros, configuráveis tanto via linha de comando quanto via Painel Web (`http://192.168.7.2:8080`):
+
+1. **Modo Contínuo (CFR - Constant Frame Rate) [PADRÃO]:**
+   - Configuração: `drop-only=false`.
+   - **Comportamento:** O pipeline transmite pacotes de vídeo ininterruptamente a 30 ou 60 FPS, garantindo que o decodificador de hardware VideoCore IV do Pi Zero receba quadros constantes, eliminando qualquer dependência do cursor do mouse.
+   - **Aplicável a:** Modo Rede (UDP RTP 5000) e Modo 2 (USB Bulk Direct).
+   - **Ativação CLI:** É o padrão de execução. Pode ser forçado explicitamente via:
+     ```bash
+     ./scripts/start.sh extend auto 60 false full --continuous
+     ./scripts/start.sh extend auto 30 false full --transport=usb
+     ```
+
+2. **Modo Econômico (Damage / Drop-Only) [OPCIONAL]:**
+   - Configuração: `drop-only=true`.
+   - **Comportamento:** O elemento `videorate` descarta quadros repetidos enquanto a tela estiver estática, alocando 100% da banda de transmissão apenas quando ocorrem modificações (digitação ou arrasto). Economiza até 95% de banda e energia da bateria do notebook em leitura de textos ou terminais.
+   - **Ativação CLI:**
+     ```bash
+     ./scripts/start.sh extend auto 30 false full --economy
+     ```
+   - **Ativação via Web:** Na Aba "⚙️ Controles" do Painel Web, alterne o botão "Modo de Transmissão" para "Econômico" e clique em "💾 Aplicar Alterações".
 
 ---
 
