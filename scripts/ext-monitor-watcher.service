@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi Zero USB Monitor Watcher (User Space - No Sudo Required)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/carlos/ide/ext-monitor
+ExecStart=/home/carlos/ide/ext-monitor/scripts/usb-watcher.sh
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical-session.target

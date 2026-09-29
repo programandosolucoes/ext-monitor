@@ -1,0 +1,2393 @@
+//! Embedded Web Dashboard Frontend UI in 100% Pure Rust
+//!
+//! Stores the complete, self-contained HTML, CSS, JavaScript, and internationalization
+//! dictionary directly in the binary's read-only data segment.
+//!
+//! Features:
+//! - Tabbed Dashboard Interface:
+//!   * Tab 1: 📊 Live Telemetry & Monitoring (SoC Temp, CPU Load, RAM, HDMI Display)
+//!   * Tab 2: ⚙️ Stream Tuning & Controls (Bitrate 400-6000 kbps, FPS, Colors, Hot-Apply, Reboot)
+//!   * Tab 3: 📥 Client Tools & Driver Downloads (One-liner curl install, tar.gz package, udev rules)
+//!   * Tab 4: 💾 Micro-SD Card & RAM Upgrade (Physical SD mounting, firmware flash without card removal)
+//!   * Tab 5: 📖 Comprehensive Manual & Operation Guides (Linux Wayland, Windows Win+K, USB Serial)
+//! - Multilingual UI: English (en), Portuguese (pt), Italian (it), Chinese (zh)
+//! - Interactive Reboot Modal & Hot-Apply commit actions
+//!
+//! License: MIT
+//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+
+pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Zero Extended Monitor - Control Dashboard</title>
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-surface: rgba(16, 23, 38, 0.85);
+            --bg-surface-hover: rgba(22, 32, 54, 0.95);
+            --bg-surface-border: rgba(0, 229, 255, 0.18);
+            --accent-cyan: #00e5ff;
+            --accent-emerald: #00ff66;
+            --accent-purple: #b388ff;
+            --accent-red: #ff5252;
+            --accent-amber: #ffb300;
+            --text-primary: #f0f6fc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.5;
+        }
+        .glow-bg {
+            position: fixed;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 900px;
+            height: 450px;
+            background: radial-gradient(circle, rgba(0, 229, 255, 0.08) 0%, rgba(179, 136, 255, 0.04) 50%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.9rem 2rem;
+            background: rgba(10, 14, 23, 0.92);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--bg-surface-border);
+        }
+        .brand { display: flex; align-items: center; gap: 1rem; }
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: rgba(0, 229, 255, 0.12);
+            border: 1px solid var(--accent-cyan);
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .logo-icon .dot {
+            width: 10px; height: 10px;
+            background: var(--accent-emerald);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--accent-emerald);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 102, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(0, 255, 102, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 102, 0); }
+        }
+        .brand-text h1 { font-size: 1.15rem; font-weight: 700; color: #fff; }
+        .brand-text p { font-size: 0.75rem; color: var(--text-secondary); }
+        .nav-controls { display: flex; align-items: center; gap: 1rem; }
+        .lang-flags { display: flex; align-items: center; gap: 0.35rem; }
+        .flag-btn {
+            background: rgba(16, 23, 38, 0.9);
+            border: 1px solid var(--bg-surface-border);
+            color: var(--text-primary);
+            padding: 0.35rem 0.65rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+            transition: var(--transition);
+        }
+        .flag-btn:hover { border-color: var(--accent-cyan); }
+        .flag-btn.active {
+            background: rgba(0, 229, 255, 0.22);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+        }
+
+        /* Tab Navigation Bar */
+        .tabs-nav {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.75rem 2rem;
+            background: rgba(13, 19, 32, 0.7);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            overflow-x: auto;
+            position: relative;
+            z-index: 10;
+        }
+        .tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            padding: 0.55rem 1.1rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .tab-btn.active {
+            color: var(--accent-cyan);
+            background: rgba(0, 229, 255, 0.12);
+            border-color: rgba(0, 229, 255, 0.3);
+        }
+
+        /* Container & Tabs */
+        .container {
+            max-width: 1280px;
+            margin: 1.5rem auto 3rem auto;
+            padding: 0 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.25s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Stat Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--bg-surface-border);
+            border-radius: var(--radius-md);
+            padding: 1.1rem 1.3rem;
+            backdrop-filter: blur(16px);
+            transition: var(--transition);
+        }
+        .stat-card:hover { border-color: rgba(0, 229, 255, 0.4); transform: translateY(-2px); }
+        .stat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+        .stat-title { font-size: 0.82rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-badge { font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 20px; font-weight: 600; }
+        .badge-cyan { background: rgba(0, 229, 255, 0.15); color: var(--accent-cyan); border: 1px solid rgba(0, 229, 255, 0.3); }
+        .badge-green { background: rgba(0, 255, 102, 0.15); color: var(--accent-emerald); border: 1px solid rgba(0, 255, 102, 0.3); }
+        .badge-purple { background: rgba(179, 136, 255, 0.15); color: var(--accent-purple); border: 1px solid rgba(179, 136, 255, 0.3); }
+        .badge-red { background: rgba(255, 82, 82, 0.15); color: var(--accent-red); border: 1px solid rgba(255, 82, 82, 0.3); }
+        .badge-amber { background: rgba(255, 179, 0, 0.15); color: var(--accent-amber); border: 1px solid rgba(255, 179, 0, 0.3); }
+        .stat-value { font-size: 1.6rem; font-weight: 700; color: #fff; }
+        .stat-footer { font-size: 0.76rem; color: var(--text-muted); margin-top: 0.3rem; }
+
+        /* General Card Layout */
+        .glass-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--bg-surface-border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            backdrop-filter: blur(16px);
+            margin-bottom: 1.5rem;
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; }
+        .card-title { display: flex; align-items: center; gap: 0.6rem; font-size: 1.15rem; font-weight: 700; color: #fff; }
+        .card-badge { font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 20px; font-weight: 600; background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); }
+
+        /* Forms & Controls */
+        .control-group { margin-bottom: 1.2rem; }
+        .control-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.88rem; color: var(--text-secondary); font-weight: 600; }
+        .control-value { color: var(--accent-cyan); font-weight: 700; font-family: monospace; }
+        .btn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; }
+        .btn-toggle {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+            padding: 0.65rem 0.8rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            text-align: center;
+        }
+        .btn-toggle:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+        .btn-toggle.active {
+            background: rgba(0, 229, 255, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+        }
+        .slider-wrap { padding: 0.4rem 0; }
+        .range-slider {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.12);
+            outline: none;
+        }
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--accent-cyan);
+        }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem; }
+
+        /* Interactive Cyberpunk Tooltips */
+        .tip-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: help;
+        }
+        .tip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(0, 229, 255, 0.15);
+            border: 1px solid rgba(0, 229, 255, 0.45);
+            color: var(--accent-cyan);
+            font-size: 10px;
+            font-weight: 700;
+            margin-left: 6px;
+            transition: var(--transition);
+            user-select: none;
+        }
+        .tip-wrap:hover .tip-icon {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.8);
+            transform: scale(1.15);
+        }
+        .tip-box {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%) translateY(4px);
+            width: 280px;
+            padding: 0.7rem 0.85rem;
+            background: rgba(12, 18, 32, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 0.78rem;
+            font-weight: 400;
+            line-height: 1.45;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75), 0 0 15px rgba(0, 229, 255, 0.2);
+            z-index: 1000;
+            pointer-events: none;
+            transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+            text-align: left;
+            white-space: normal;
+        }
+        .tip-box::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: rgba(12, 18, 32, 0.98) transparent transparent transparent;
+        }
+        .tip-wrap:hover .tip-box {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* iOS / Cyberpunk Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.15);
+            transition: .25s ease;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #cbd5e1;
+            transition: .25s ease;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+            background-color: #0b0f17;
+        }
+        .mode-card {
+            transition: all 0.3s ease;
+        }
+        .mode-card.disabled {
+            opacity: 0.45;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+            filter: grayscale(0.7);
+        }
+
+        /* Action Buttons */
+        .action-row { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 1rem; }
+        .btn-primary {
+            background: linear-gradient(135deg, rgba(0, 229, 255, 0.25) 0%, rgba(0, 255, 102, 0.2) 100%);
+            border: 1px solid var(--accent-cyan);
+            color: #fff;
+            padding: 0.7rem 1.4rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-primary:hover { background: rgba(0, 229, 255, 0.35); box-shadow: 0 0 14px rgba(0, 229, 255, 0.3); transform: translateY(-1px); }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            padding: 0.7rem 1.2rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-secondary:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.3); }
+        .btn-danger {
+            background: rgba(255, 82, 82, 0.15);
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+            padding: 0.7rem 1.2rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-danger:hover { background: rgba(255, 82, 82, 0.28); box-shadow: 0 0 12px rgba(255, 82, 82, 0.3); }
+
+        /* Code & Command Blocks */
+        .cmd-box {
+            background: #06090f;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-sm);
+            padding: 0.9rem 1.2rem;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.88rem;
+            color: #7ee787;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin: 0.6rem 0;
+            overflow-x: auto;
+        }
+        .cmd-text { user-select: all; }
+        .copy-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            padding: 0.35rem 0.75rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+        .copy-btn:hover { background: var(--accent-cyan); color: #000; border-color: var(--accent-cyan); }
+        .copy-btn.copied { background: var(--accent-emerald); color: #000; border-color: var(--accent-emerald); }
+
+        /* Download Cards */
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.2rem;
+            margin-top: 1rem;
+        }
+        .dl-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--bg-surface-border);
+            border-radius: var(--radius-md);
+            padding: 1.3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: var(--transition);
+        }
+        .dl-card:hover { border-color: var(--accent-cyan); transform: translateY(-2px); }
+        .dl-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .dl-title { font-size: 1.05rem; font-weight: 700; color: #fff; margin-bottom: 0.2rem; }
+        .dl-desc { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4; }
+        .dl-link {
+            text-decoration: none;
+            background: rgba(0, 229, 255, 0.12);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 0.6rem 1rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-align: center;
+            transition: var(--transition);
+            display: block;
+        }
+        .dl-link:hover { background: var(--accent-cyan); color: #000; box-shadow: 0 0 12px rgba(0, 229, 255, 0.3); }
+
+        /* Table */
+        .proto-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin-top: 1rem; }
+        .proto-table th, .proto-table td { padding: 0.8rem 1rem; text-align: left; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+        .proto-table th { background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); font-size: 0.78rem; text-transform: uppercase; }
+        .proto-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-overlay.active { display: flex; animation: fadeIn 0.15s ease-out; }
+        .modal-box {
+            background: #111827;
+            border: 1px solid var(--accent-red);
+            border-radius: var(--radius-md);
+            padding: 1.8rem;
+            max-width: 440px;
+            width: 90%;
+            box-shadow: 0 0 30px rgba(255, 82, 82, 0.25);
+        }
+        .modal-title { font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.6rem; }
+        .modal-desc { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.4rem; line-height: 1.5; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.8rem; }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #101726;
+            border: 1px solid var(--accent-cyan);
+            border-radius: var(--radius-sm);
+            padding: 0.8rem 1.4rem;
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.9rem;
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+            display: none;
+            z-index: 1000;
+        }
+        .toast.show { display: block; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Display Visualizer */
+        .monitor-frame {
+            background: #000;
+            border: 2px solid rgba(0, 229, 255, 0.4);
+            border-radius: var(--radius-sm);
+            aspect-ratio: 16 / 9;
+            max-height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 30px rgba(0, 229, 255, 0.15);
+        }
+        .monitor-scanline {
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: rgba(0, 229, 255, 0.6);
+            box-shadow: 0 0 8px var(--accent-cyan);
+            animation: scan 3s linear infinite;
+        }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+        .monitor-text { text-align: center; color: var(--accent-cyan); font-family: monospace; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <div class="glow-bg"></div>
+
+    <!-- Navigation Bar -->
+    <header class="navbar">
+        <div class="brand">
+            <div class="logo-icon"><div class="dot"></div></div>
+            <div class="brand-text">
+                <h1 data-i18n="title">Pi Zero Extended Monitor</h1>
+                <p data-i18n="subtitle">Hardware GPU VideoCore IV Display Appliance</p>
+            </div>
+        </div>
+        <div class="nav-controls">
+            <div class="lang-flags">
+                <button type="button" onclick="setLanguage('en')" class="flag-btn" id="btnLang_en" title="English">🇺🇸 EN</button>
+                <button type="button" onclick="setLanguage('pt')" class="flag-btn active" id="btnLang_pt" title="Português">🇧🇷 PT</button>
+                <button type="button" onclick="setLanguage('it')" class="flag-btn" id="btnLang_it" title="Italiano">🇮🇹 IT</button>
+                <button type="button" onclick="setLanguage('zh')" class="flag-btn" id="btnLang_zh" title="中文">🇨🇳 中文</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs Navigation Bar -->
+    <nav class="tabs-nav">
+        <button class="tab-btn active" onclick="switchTab('monitor')" id="tabBtn_monitor">
+            <span>📊</span> <span data-i18n="tabMonitor">Monitoring & Telemetry</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('config')" id="tabBtn_config">
+            <span>⚙️</span> <span data-i18n="tabConfig">Tuning & Settings</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('downloads')" id="tabBtn_downloads">
+            <span>📥</span> <span data-i18n="tabDownloads">Client Tools & Drivers</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('sdcard')" id="tabBtn_sdcard">
+            <span>💾</span> <span data-i18n="tabSdCard">SD Card & RAM Upgrade</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('manual')" id="tabBtn_manual">
+            <span>📖</span> <span data-i18n="tabManual">Operation Manual</span>
+        </button>
+        <a href="/swagger" target="_blank" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:0.5rem;" id="tabBtn_swagger">
+            <span>⚡</span> <span>Swagger API</span>
+        </a>
+    </nav>
+
+    <main class="container">
+        <!-- ================================================================= -->
+        <!-- TAB 1: MONITORAMENTO & TELEMETRIA                                 -->
+        <!-- ================================================================= -->
+        <section id="tab-monitor" class="tab-content active">
+            <!-- Live Streaming Mode & Active HDMI Output Banner -->
+            <div class="glass-card" id="activeStreamBanner" style="border: 1px solid var(--accent-cyan); background: linear-gradient(135deg, rgba(0, 229, 255, 0.08) 0%, rgba(16, 23, 38, 0.95) 100%); margin-bottom: 1.5rem; padding: 1.25rem 1.6rem; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4); transition: var(--transition);">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; align-items: center;">
+                    <!-- Left: Active Mode Feedback -->
+                    <div style="display: flex; align-items: center; gap: 1.1rem;">
+                        <div id="activeModeIcon" style="font-size: 2.2rem; width: 56px; height: 56px; min-width: 56px; display: flex; align-items: center; justify-content: center; background: rgba(0, 229, 255, 0.12); border-radius: var(--radius-md); border: 1px solid var(--accent-cyan); box-shadow: 0 0 16px rgba(0, 229, 255, 0.25);">🐧</div>
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.2rem;">
+                                <span style="font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); font-weight: 700;" data-i18n="lblActiveMode">Modo de Transmissão em Execução</span>
+                                <span id="activeModeBadge" class="stat-badge badge-green" style="animation: pulse 2s infinite;">● TRANSMITINDO</span>
+                            </div>
+                            <div id="activeModeTitle" style="font-size: 1.25rem; font-weight: 800; color: #fff; line-height: 1.25;">Modo 1: Rede UDP (Linux Wayland / X11)</div>
+                            <div id="activeModeDesc" style="font-size: 0.84rem; color: var(--accent-cyan); font-family: monospace; margin-top: 0.25rem;">Porta UDP 5000 • Latência &lt; 15ms • Pipeline VA-API/M2M</div>
+                        </div>
+                    </div>
+                    <!-- Right: Active HDMI Output Feedback -->
+                    <div style="display: flex; align-items: center; gap: 1.1rem; border-left: 1px solid rgba(255, 255, 255, 0.08); padding-left: 1rem;">
+                        <div style="font-size: 2.2rem; width: 56px; height: 56px; min-width: 56px; display: flex; align-items: center; justify-content: center; background: rgba(179, 136, 255, 0.12); border-radius: var(--radius-md); border: 1px solid var(--accent-purple); box-shadow: 0 0 16px rgba(179, 136, 255, 0.25);">📺</div>
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.2rem;">
+                                <span style="font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); font-weight: 700;" data-i18n="lblActiveHdmi">Tela HDMI do Raspberry Pi</span>
+                                <span id="activeHdmiPortBadge" class="stat-badge badge-purple">HDMI-A-1</span>
+                            </div>
+                            <div id="activeHdmiTitle" style="font-size: 1.2rem; font-weight: 800; color: #fff; line-height: 1.25;">Porta Mini-HDMI (HDMI-A-1)</div>
+                            <div id="activeHdmiDetails" style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 0.25rem;">Detectando Monitor e Resolução...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Cards Row -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title tip-wrap">
+                            <span data-i18n="statTemp">SoC Temperature</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipTemp">Temperatura interna do processador BCM2835. Monitorada a cada 2s. Ideal: abaixo de 65°C.</span>
+                        </span>
+                        <span class="stat-badge badge-green" id="badgeTemp">Normal</span>
+                    </div>
+                    <div class="stat-value" id="valTemp">44.9°C</div>
+                    <div class="stat-footer">Broadcom BCM2835 @ 1.0 GHz</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title tip-wrap">
+                            <span data-i18n="statCpu">CPU Load</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipCpu">Carga da CPU ARM11. Permanece menor que 2% porque a decodificação H.264 ocorre na GPU VideoCore IV.</span>
+                        </span>
+                        <span class="stat-badge badge-cyan" data-i18n="badgeVpuOffload">VPU Offload</span>
+                    </div>
+                    <div class="stat-value" id="valCpu">0.67%</div>
+                    <div class="stat-footer" data-i18n="statCpuDesc">Hardware GPU V4L2 M2M Active</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title tip-wrap">
+                            <span data-i18n="statRam">Free RAM</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipRam">Memória RAM livre dos 512 MB SDRAM. O appliance opera 100% em RAM sem tocar no micro-SD.</span>
+                        </span>
+                        <span class="stat-badge badge-purple" data-i18n="badgeRamApp">100% RAM</span>
+                    </div>
+                    <div class="stat-value" id="valRam">318 MB</div>
+                    <div class="stat-footer">512 MB SDRAM (Zero SD wear)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title tip-wrap">
+                            <span data-i18n="statStream">Stream State</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipStream">Status de recebimento e decodificação do fluxo de vídeo transmitido para a porta HDMI.</span>
+                        </span>
+                        <span class="stat-badge badge-green" id="badgeStream">Active</span>
+                    </div>
+                    <div class="stat-value" id="valState">ONLINE</div>
+                    <div class="stat-footer">1280x720 @ 60 FPS (HDMI)</div>
+                </div>
+            </div>
+
+            <!-- Display Monitor & Quick Telemetry -->
+            <div class="glass-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>📺</span>
+                        <span data-i18n="displayHeader">HDMI Television & Display Telemetry</span>
+                    </div>
+                    <span class="card-badge badge-cyan" id="monitorBadge">HDMI-A-1 • Detectando...</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; align-items: center;">
+                    <div class="monitor-frame">
+                        <div class="monitor-scanline"></div>
+                        <div class="monitor-text">
+                            <p id="monitorName" style="font-size: 1.4rem; font-weight: 700;">🖥️ Detectando Monitor...</p>
+                            <p id="monitorVpu" style="margin-top: 0.3rem;">VideoCore IV Hardware VPU</p>
+                            <p id="monitorStatus" style="color: #7ee787; margin-top: 0.2rem;">● LIVE ZERO-COPY 60 FPS</p>
+                        </div>
+                    </div>
+                    <div>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1rem;" data-i18n="displayDesc">
+                            The VideoCore IV hardware VPU decodes H.264 video streams directly to the HDMI scanout plane without touching the CPU.
+                        </p>
+                        <div class="action-row">
+                            <button id="btnTriggerHud" class="btn-primary" onclick="triggerHud(true)" data-i18n="btnShowHud">✦ Show HUD on TV (60s)</button>
+                            <button id="btnHideHud" class="btn-danger" onclick="triggerHud(false)" data-i18n="btnHideHud">✕ Turn Off HUD</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Streaming Mode Selector -->
+            <div class="glass-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🔀</span>
+                        <span data-i18n="modeHeader">Active Streaming Modes</span>
+                    </div>
+                    <span class="card-badge badge-purple" data-i18n="badgeMultiMode">Concurrent Engine</span>
+                </div>
+                <div class="btn-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                            <div class="dl-title" style="margin: 0;">🐧 Mode 1: Linux Wayland</div>
+                            <label class="switch" title="Ligar / Desligar Modo 1">
+                                <input type="checkbox" id="toggleMode1" checked onchange="toggleMode('mode1', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="dl-desc" data-i18n="m1Desc">Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (&lt; 15ms).</div>
+                        <span id="badgeMode1" class="stat-badge badge-cyan" style="align-self: flex-start;">Ligado (UDP 5000)</span>
+                    </div>
+                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                            <div class="dl-title" style="margin: 0;">🪟 Mode 2: Windows Miracast</div>
+                            <label class="switch" title="Ligar / Desligar Modo 2">
+                                <input type="checkbox" id="toggleMode2" checked onchange="toggleMode('mode2', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="dl-desc" data-i18n="m2Desc">Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.</div>
+                        <span id="badgeMode2" class="stat-badge badge-green" style="align-self: flex-start;">Ligado (TCP 7236)</span>
+                    </div>
+                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                            <div class="dl-title" style="margin: 0;">⚡ Mode 3: USB Bulk Direct</div>
+                            <label class="switch" title="Ligar / Desligar Modo 3">
+                                <input type="checkbox" id="toggleMode3" checked onchange="toggleMode('mode3', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="dl-desc" data-i18n="m3Desc">Direct 480 Mbps raw hardware pipe via USB FunctionFS without network stack overhead (&lt; 1ms).</div>
+                        <span id="badgeMode3" class="stat-badge badge-purple" style="align-self: flex-start;">Ligado (USB Bulk)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 2: CONFIGURAÇÕES & AJUSTES FINOS                              -->
+        <!-- ================================================================= -->
+        <section id="tab-config" class="tab-content">
+            <div class="glass-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>⚙️</span>
+                        <span data-i18n="ctrlHeader">Display & Stream Optimization</span>
+                    </div>
+                    <span class="card-badge badge-green" data-i18n="badgeZeroCopy">VideoCore IV DMA</span>
+                </div>
+
+                <!-- Bitrate Control with 400kbps preset -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="bitrateLabel">Streaming Bitrate (VBR)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipBitrate">Taxa de bits de codificação. 400k economiza 85% para texto/código. 3000k a 6000k entrega vídeo fluido em 1080p/720p.</span>
+                        </span>
+                        <span class="control-value" id="valBitrate">400 kbps</span>
+                    </div>
+                    <div class="slider-wrap">
+                        <input type="range" min="150" max="15000" step="50" value="400" class="range-slider" id="bitrateSlider" oninput="updateBitrateValue(this.value)">
+                        <div class="slider-labels">
+                            <span>150k</span>
+                            <span>400k (Eco)</span>
+                            <span>800k</span>
+                            <span>1500k</span>
+                            <span>3000k</span>
+                            <span>6000k</span>
+                            <span>15M</span>
+                        </div>
+                    </div>
+                    <!-- Quick Bitrate Buttons -->
+                    <div class="btn-grid" style="margin-top: 0.6rem;">
+                        <button class="btn-toggle active" data-bitrate="400" onclick="setBitrate(400)">400k (Ultra-Eco)</button>
+                        <button class="btn-toggle" data-bitrate="800" onclick="setBitrate(800)">800k (Recomendado)</button>
+                        <button class="btn-toggle" data-bitrate="1500" onclick="setBitrate(1500)">1500k (Balanceado)</button>
+                        <button class="btn-toggle" data-bitrate="3000" onclick="setBitrate(3000)">3000k (HD)</button>
+                        <button class="btn-toggle" data-bitrate="6000" onclick="setBitrate(6000)">6000k (Fluidez)</button>
+                    </div>
+                </div>
+
+                <!-- Framerate (FPS) -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="fpsLabel">Framerate (FPS)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipFps">Taxa de quadros por segundo. 15 FPS para ultra-economia, 30 FPS padrão balanceado, 60 FPS fluidez total.</span>
+                        </span>
+                        <span class="control-value" id="valFps">30 FPS</span>
+                    </div>
+                    <div class="btn-grid" id="fpsGrid">
+                        <button class="btn-toggle" data-fps="15" onclick="setFps(15)">15 FPS (Ultra-Leve)</button>
+                        <button class="btn-toggle active" data-fps="30" onclick="setFps(30)">30 FPS (Recomendado)</button>
+                        <button class="btn-toggle" data-fps="60" onclick="setFps(60)">60 FPS (Máxima Fluidez)</button>
+                    </div>
+                </div>
+
+                <!-- Color Profile -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="colorLabel">Color Profile</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipColor">24-bit TrueColor para fidelidade RGB nativa. 256 Cores quantiza para economia máxima de barramento.</span>
+                        </span>
+                        <span class="control-value" id="valColor">24-bit TrueColor</span>
+                    </div>
+                    <div class="btn-grid" id="colorGrid">
+                        <button class="btn-toggle active" data-color="full" onclick="setColor('full')" data-i18n="colorFull">24-bit TrueColor</button>
+                        <button class="btn-toggle" data-color="256" onclick="setColor('256')" data-i18n="color256">256 Cores (QP 30-44)</button>
+                        <button class="btn-toggle" data-color="gray" onclick="setColor('gray')" data-i18n="colorGray">Monocromático</button>
+                    </div>
+                </div>
+
+                <!-- HDMI Digital Audio (Opus 48kHz) -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="audioLabel">HDMI Digital Audio (Opus 48kHz)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipAudio">Volume do áudio digital enviado ao monitor/TV via cabo HDMI. Latência sub-25ms com sincronia A/V.</span>
+                        </span>
+                        <span class="control-value" id="valAudioVolume">100%</span>
+                    </div>
+                    <div class="slider-wrap">
+                        <input type="range" min="0" max="100" step="5" value="100" class="range-slider" id="audioVolumeSlider" oninput="updateAudioVolume(this.value)">
+                        <div class="slider-labels">
+                            <span>0% (Mudo)</span>
+                            <span>25%</span>
+                            <span>50%</span>
+                            <span>75%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+                    <div class="action-row" style="margin-top: 0.6rem;">
+                        <button id="btnAudioMute" class="btn-primary" onclick="toggleAudioMute()">🔊 Silenciar Áudio</button>
+                    </div>
+                </div>
+
+                <!-- Frame Skipping & Damage-Only Preservation -->
+                <div class="control-group">
+                <!-- Transmission Mode: Continuous CFR vs Drop-Only Economy -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="dropOnlyLabel">Modo de Transmissão (Contínuo vs Econômico)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipDropOnly">Contínuo (Padrão): Transmissão ininterrupta a 30/60 FPS no modo de Rede e USB Bulk, garantindo vídeos sem congelamento mesmo sem mouse na tela. Econômico (drop-only): Descarta quadros repetidos, economizando 95% de banda com telas estáticas.</span>
+                        </span>
+                        <span class="control-value" id="valDropOnly">drop-only=false (Contínuo - Padrão)</span>
+                    </div>
+                    <div class="btn-grid" id="dropOnlyGrid">
+                        <button class="btn-toggle" id="btnDropOnlyTrue" onclick="setDropOnly(true)" data-i18n="dropOnlyTrue">Econômico (Descarta estáticos)</button>
+                        <button class="btn-toggle active" id="btnDropOnlyFalse" onclick="setDropOnly(false)" data-i18n="dropOnlyFalse">Contínuo (Padrão: Vídeos / USB Bulk)</button>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.4rem; line-height: 1.4;" data-i18n="dropOnlyDesc">
+                        Padrão: Contínuo (drop-only=false). O stream entrega fluxo estável a 30/60 FPS no modo de Rede e USB Bulk. Para economia extrema em textos estáticos, ative 'Econômico' ou use a flag --economy no host.
+                    </div>
+                </div>
+
+                <!-- Skip to First Frame -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="skipFirstLabel">Entrega Imediata no Primeiro Quadro (skip-to-first)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipSkipFirst">Elimina atrasos acumulados, entregando imediatamente o primeiro quadro assim que o mouse se move.</span>
+                        </span>
+                        <span class="control-value" id="valSkipFirst">skip-to-first=true (Ativo)</span>
+                    </div>
+                    <div class="btn-grid" id="skipFirstGrid">
+                        <button class="btn-toggle active" id="btnSkipFirstTrue" onclick="setSkipToFirst(true)" data-i18n="skipFirstTrue">Ativo (Latência Zero ao Mover)</button>
+                        <button class="btn-toggle" id="btnSkipFirstFalse" onclick="setSkipToFirst(false)" data-i18n="skipFirstFalse">Desativado (Sincronismo Rígido)</button>
+                    </div>
+                </div>
+
+                <!-- IDR Keyframe Interval / Periodic Refresh -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="keyIntLabel">Varredura Periódica / Intervalo IDR (Refresh Clean)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipKeyInt">Frequência de quadros-chave I-Frame para autolimpeza de ruídos visuais e recuperação de perdas.</span>
+                        </span>
+                        <span class="control-value" id="valKeyInt">30 quadros (~1.0s)</span>
+                    </div>
+                    <div class="slider-wrap">
+                        <input type="range" min="10" max="120" step="5" value="30" class="range-slider" id="keyIntSlider" oninput="updateKeyIntValue(this.value)">
+                        <div class="slider-labels">
+                            <span>10q (0.3s)</span>
+                            <span>15q (0.5s)</span>
+                            <span>30q (1.0s)</span>
+                            <span>60q (2.0s)</span>
+                            <span>90q (3.0s)</span>
+                            <span>120q (4.0s)</span>
+                        </div>
+                    </div>
+                    <div class="btn-grid" id="keyIntGrid" style="margin-top: 0.6rem;">
+                        <button class="btn-toggle" data-keyint="15" onclick="setKeyInt(15)">15q (0.5s - Limpeza Rápida)</button>
+                        <button class="btn-toggle active" data-keyint="30" onclick="setKeyInt(30)">30q (1.0s - Recomendado)</button>
+                        <button class="btn-toggle" data-keyint="60" onclick="setKeyInt(60)">60q (2.0s - Baixo Bitrate)</button>
+                        <button class="btn-toggle" data-keyint="120" onclick="setKeyInt(120)">120q (4.0s - Leitura Estática)</button>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.4rem; line-height: 1.4;" data-i18n="keyIntDesc">
+                        Injeta um quadro-chave IDR completo periodicamente para limpar qualquer resíduo visual na TV ou monitor HDMI.
+                    </div>
+                </div>
+
+                <!-- Capture Engine: KMS Direct vs GNOME Mutter -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>Motor de Captura (Dual-Engine)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">KMS Direct: Lê os pixels diretamente do scanout do hardware da placa de vídeo via Linux Kernel DRM/KMS. Elimina congelamento mesmo sem mouse na tela. Mutter: Captura via D-Bus screencast do GNOME Mutter.</span>
+                        </span>
+                        <span class="control-value" id="valCapture">KMS Direct (Hardware Scanout)</span>
+                    </div>
+                    <div class="btn-grid" id="captureGrid">
+                        <button class="btn-toggle active" data-capture="kms" onclick="setCapture('kms')">⚡ KMS Direct (Anti-Freeze / GPU Scanout)</button>
+                        <button class="btn-toggle" data-capture="mutter" onclick="setCapture('mutter')">🐧 GNOME Mutter (PipeWire Screencast)</button>
+                    </div>
+                </div>
+
+                <!-- Active Display Monitor -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span>Monitor de Gravação</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box">Escolha a saída de vídeo a ser capturada. HDMI-1 para segunda tela estendida na TV/monitor, eDP-1 para clonar a tela do notebook.</span>
+                        </span>
+                        <span class="control-value" id="valMonitor">HDMI-1 (Segunda Tela)</span>
+                    </div>
+                    <div class="btn-grid" id="monitorGrid">
+                        <button class="btn-toggle active" data-monitor="HDMI-1" onclick="setMonitor('HDMI-1')">HDMI-1 (Segunda Tela Estendida)</button>
+                        <button class="btn-toggle" data-monitor="eDP-1" onclick="setMonitor('eDP-1')">eDP-1 (Tela do Notebook)</button>
+                        <button class="btn-toggle" data-monitor="auto" onclick="setMonitor('auto')">Auto (Primeiro Externo Ativo)</button>
+                    </div>
+                </div>
+
+                <!-- Commit & Hardware Actions -->
+                <div class="action-row" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 1.2rem;">
+                    <button id="btnApply" class="btn-primary" onclick="applyConfiguration()" data-i18n="btnApply">💾 Aplicar Alterações</button>
+                    <button id="btnPause" class="btn-secondary" onclick="togglePauseStream()" data-i18n="btnPauseStream">⏸ Pausar Exibição</button>
+                    <button id="btnReboot" class="btn-danger" onclick="confirmReboot()" data-i18n="btnReboot">🔄 Reiniciar Appliance (Reboot)</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 3: DOWNLOADS DE FERRAMENTAS & DRIVER                          -->
+        <!-- ================================================================= -->
+        <section id="tab-downloads" class="tab-content">
+            <div class="glass-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>⚡</span>
+                        <span data-i18n="oneLinerTitle">One-Line Host Connector (1 Clique)</span>
+                    </div>
+                    <span class="card-badge badge-green" data-i18n="badgeInstant">Instantâneo</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 0.8rem;" data-i18n="oneLinerDesc">
+                    Em qualquer novo PC com Linux, basta abrir o terminal e colar o comando abaixo para iniciar a segunda tela imediatamente:
+                </p>
+                <div class="cmd-box">
+                    <span class="cmd-text" id="cmdOneLine">curl -sSL http://192.168.7.2:8080/connect.sh | bash</span>
+                    <button class="copy-btn" onclick="copyCommand('cmdOneLine')" data-i18n="btnCopy">Copiar</button>
+                </div>
+            </div>
+
+            <!-- Direct File Downloads Grid -->
+            <div class="download-grid">
+                <div class="dl-card">
+                    <div>
+                        <div class="dl-icon">📦</div>
+                        <div class="dl-title" data-i18n="dlPkgTitle">Pacote Completo do Cliente</div>
+                        <div class="dl-desc" data-i18n="dlPkgDesc">Contém o executável ext-sender compilado, script start.sh, regras udev e instalador em tar.gz.</div>
+                    </div>
+                    <a href="/download/client.tar.gz" class="dl-link" download data-i18n="btnDlPkg">Baixar client.tar.gz</a>
+                </div>
+                <div class="dl-card">
+                    <div>
+                        <div class="dl-icon">⚙️</div>
+                        <div class="dl-title" data-i18n="dlSenderTitle">Executável ext-sender</div>
+                        <div class="dl-desc" data-i18n="dlSenderDesc">Binário standalone do transmissor GPU offload compilado em Rust para Linux x86_64.</div>
+                    </div>
+                    <a href="/download/ext-sender" class="dl-link" download data-i18n="btnDlSender">Baixar ext-sender</a>
+                </div>
+                <div class="dl-card">
+                    <div>
+                        <div class="dl-icon">📜</div>
+                        <div class="dl-title" data-i18n="dlScriptTitle">Script connect.sh</div>
+                        <div class="dl-desc" data-i18n="dlScriptDesc">Script portátil que detecta a conexão USB, baixa os componentes necessários e inicia o streaming.</div>
+                    </div>
+                    <a href="/connect.sh" class="dl-link" download data-i18n="btnDlScript">Baixar connect.sh</a>
+                </div>
+                <div class="dl-card">
+                    <div>
+                        <div class="dl-icon">🛡️</div>
+                        <div class="dl-title" data-i18n="dlUdevTitle">Regras udev (Plug-and-Play)</div>
+                        <div class="dl-desc" data-i18n="dlUdevDesc">Configura automaticamente o buffer USB (txqueuelen 100) para eliminar buffer bloat ao plugar o cabo.</div>
+                    </div>
+                    <a href="/download/99-ext-monitor.rules" class="dl-link" download data-i18n="btnDlUdev">Baixar 99-ext-monitor.rules</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 4: CARTÃO SD & UPGRADE EM MEMÓRIA RAM                         -->
+        <!-- ================================================================= -->
+        <section id="tab-sdcard" class="tab-content">
+            <div class="glass-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>💾</span>
+                        <span data-i18n="sdHeader">Arquitetura 100% RAM & Atualização de Firmware</span>
+                    </div>
+                    <span class="card-badge badge-purple" data-i18n="badgeZeroSdWear">Zero SD Wear</span>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
+                    <p style="margin-bottom: 0.8rem;" data-i18n="sdDesc1">
+                        O Raspberry Pi Zero carrega o sistema operacional inteiramente na memória RAM (<span style="color: var(--accent-cyan);">initramfs</span>). Após o boot em menos de 2 segundos, o cartão micro-SD físico (<span style="color: #7ee787;">/dev/mmcblk0</span>) é completamente desacoplado e nunca sofre escritas durante o uso diário.
+                    </p>
+                    <p style="margin-bottom: 1rem;" data-i18n="sdDesc2">
+                        Isso traz duas grandes vantagens: <strong>zero risco de corrupção do cartão</strong> (mesmo arrancando da tomada) e a capacidade de atualizar o kernel, DTBs e receptor direto pelo sistema sem precisar retirar o cartão!
+                    </p>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.2rem;">
+                        <div style="font-weight: 700; color: #fff; margin-bottom: 0.5rem;" data-i18n="sdPartitionStatus">Status da Mídia Física:</div>
+                        <p>Dispositivo: <span style="font-family: monospace; color: var(--accent-cyan);">/dev/mmcblk0</span> (Partição de Boot: <span style="font-family: monospace; color: var(--accent-cyan);">/dev/mmcblk0p1 FAT16</span>)</p>
+                        <p>Estado de Montagem: <span id="sdMountStatus" style="color: #7ee787; font-weight: 700;">Desmontado (Seguro / Desacoplado)</span></p>
+                    </div>
+
+                    <div class="action-row">
+                        <button class="btn-secondary" onclick="mountSdCard(true)" data-i18n="btnMountSd">Montar Partição (/mnt/boot)</button>
+                        <button class="btn-secondary" onclick="mountSdCard(false)" data-i18n="btnUnmountSd">Desmontar Partição</button>
+                    </div>
+
+                    <div style="margin-top: 1.5rem;">
+                        <h4 style="color: #fff; margin-bottom: 0.5rem;" data-i18n="sdUpgradeManualTitle">Como Atualizar o Appliance sem Retirar o Cartão:</h4>
+                        <div class="cmd-box">
+                            <span class="cmd-text" id="cmdUpgrade">mount -t vfat /dev/mmcblk0p1 /mnt && cp /tmp/ext-receiver /mnt/ && umount /mnt</span>
+                            <button class="copy-btn" onclick="copyCommand('cmdUpgrade')" data-i18n="btnCopy">Copiar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 5: MANUAL COMPLETO & GUIAS DE OPERAÇÃO                        -->
+        <!-- ================================================================= -->
+        <section id="tab-manual" class="tab-content">
+            <div class="glass-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>📖</span>
+                        <span data-i18n="manualHeader">Manual de Operação e Especificações Técnicas</span>
+                    </div>
+                    <span class="card-badge badge-cyan" data-i18n="badgeFullDocs">Documentação Completa</span>
+                </div>
+
+                <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
+                    <!-- Section 1: Architecture -->
+                    <h3 style="color: #fff; margin: 1rem 0 0.5rem 0;" data-i18n="docArchTitle">1. Arquitetura de Hardware e GPU VideoCore IV</h3>
+                    <p data-i18n="docArchDesc">
+                        O Raspberry Pi Zero utiliza o SoC Broadcom BCM2835 (ARM1176JZF-S a 1.0 GHz) integrado à GPU VideoCore IV a 500 MHz. O ext-monitor opera com pipeline 100% de hardware em userspace: o stream H.264 é alimentado diretamente no decodificador V4L2 M2M (<span style="font-family: monospace; color: var(--accent-cyan);">/dev/video10</span>), que grava os quadros renderizados por DMA direto no framebuffer HDMI (<span style="font-family: monospace; color: #7ee787;">/dev/fb0</span>). Isso garante latência inferior a 15 ms e consumo de CPU inferior a 2%.
+                    </p>
+
+                    <!-- Section 2: USB Protocol & RFC 4571 Framing -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docUsbProtoTitle">2. Protocolo USB Bulk, RFC 4571 e Marcador de Fim de Quadro (EOF / ZLP)</h3>
+                    <p data-i18n="docUsbProtoDesc1">
+                        No barramento USB 2.0 High-Speed (480 Mbps), pacotes de dados trafegam em micro-frames de até 512 bytes (<span style="font-family: monospace; color: var(--accent-cyan);">wMaxPacketSize</span>). Em fluxos H.264 Annex-B brutos, decodificadores precisavam aguardar o start code (<span style="font-family: monospace; color: var(--accent-cyan);">00 00 00 01</span>) do quadro seguinte para saber que o quadro atual terminou, causando congelamento quando o mouse parava ou vídeos estáticos entravam em pausa.
+                    </p>
+                    <p data-i18n="docUsbProtoDesc2" style="margin-top: 0.5rem;">
+                        O ext-monitor resolve isso implementando o padrão oficial <strong style="color: #fff;">RFC 4571</strong> com enquadramento de comprimento de 2 bytes e preservação do <strong style="color: var(--accent-cyan);">Bit Marcador RTP (Marker Bit / EOF)</strong>. No instante em que o último pedaço de um quadro chega pela USB, o receptor dispara a descarga imediata no display HDMI, eliminando qualquer dependência de movimento de mouse e permitindo reprodução estável de YouTube sem congelar. Além disso, pacotes múltiplos de 512 bytes disparam um ZLP (<span style="font-family: monospace; color: #7ee787;">Zero-Length Packet</span>), liberando a FIFO de hardware DWC2 sem travamentos.
+                    </p>
+
+                    <!-- Section 3: Audio Routing -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docAudioTitle">3. Roteamento de Áudio Multi-Modo (Normal vs. Híbrido)</h3>
+                    <p data-i18n="docAudioDesc1">
+                        O ext-monitor suporta roteamento de áudio digital estéreo para as caixas de som da TV HDMI através de 4 tecnologias de transporte:
+                    </p>
+                    <ul style="margin: 0.6rem 0 0.6rem 1.5rem; line-height: 1.5;">
+                        <li><strong style="color: #fff;">Modo 1 (Rede IP):</strong> Sink virtual PipeWire no PC transmitindo RTP Opus/PCM na porta UDP 5002 direto para o codec HDMI do Pi Zero.</li>
+                        <li><strong style="color: #fff;">Modo 2 (Windows Miracast):</strong> Protocolo nativo Wi-Fi Display (WFD) roteando áudio AAC/LPCM estéreo via RTSP TCP 7236.</li>
+                        <li><strong style="color: #fff;">Modo 3 (USB Audio Gadget - UAC2):</strong> Placa de som USB plug-and-play exposta pelo Composite Gadget no PC com encaminhamento PCM direto ao barramento I2S da TV.</li>
+                        <li><strong style="color: #fff;">Modo 4 (Bluetooth A2DP Sink):</strong> Receptor de áudio Bluetooth para pareamento com smartphones, tablets ou computadores secundários.</li>
+                    </ul>
+                    <p data-i18n="docAudioDesc2">
+                        <strong>Operação Normal vs Híbrida:</strong> No modo <em>Normal</em>, o vídeo e o som do seu PC tocam juntos na TV. No modo <em>Híbrido</em>, você pode escolher manter o áudio tocando nos alto-falantes locais do notebook enquanto apenas o vídeo vai para a TV, ou tocar músicas via Bluetooth do celular na TV enquanto o PC exibe seu editor de código.
+                    </p>
+
+                    <!-- Section 4: Serial Recovery -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docSerialTitle">4. Console de Recuperação Serial USB (/dev/ttyACM0)</h3>
+                    <p data-i18n="docSerialDesc">
+                        Caso o modo de rede seja desativado ou você esteja em um computador sem suporte a CDC-ECM, o Pi Zero expõe um console serial de recuperação independente no PC através do arquivo de dispositivo <span style="font-family: monospace; color: var(--accent-cyan);">/dev/ttyACM0</span> a 115200 baud.
+                    </p>
+                    <div class="cmd-box">
+                        <span class="cmd-text" id="cmdSerial">picocom -b 115200 /dev/ttyACM0  # ou: screen /dev/ttyACM0 115200</span>
+                        <button class="copy-btn" onclick="copyCommand('cmdSerial')" data-i18n="btnCopy">Copiar</button>
+                    </div>
+
+                    <!-- Section 5: Linux Wayland -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docLinuxTitle">5. Operação Normal no Linux Wayland (GNOME)</h3>
+                    <p data-i18n="docLinuxDesc">
+                        Basta conectar o cabo na porta USB de dados (a porta central). O PC receberá automaticamente o IP 192.168.7.1 pelo DHCP nativo em Rust. Em seguida execute o conector:
+                    </p>
+                    <div class="cmd-box">
+                        <span class="cmd-text" id="cmdStart">./scripts/start.sh extend auto 30 false full --bitrate=3000</span>
+                        <button class="copy-btn" onclick="copyCommand('cmdStart')" data-i18n="btnCopy">Copiar</button>
+                    </div>
+
+                    <!-- Section 6: Windows Miracast -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docWinTitle">6. Operação no Windows 10/11 (Miracast Sem Drivers)</h3>
+                    <p data-i18n="docWinDesc">
+                        Conecte o Pi Zero na porta USB. Pressione as teclas <strong style="color: #fff;">Win + K</strong> no teclado do Windows e selecione <em>'Pi Zero Wireless Display'</em>. A segunda tela será ativada instantaneamente sem instalar drivers adicionais.
+                    </p>
+
+                    <!-- Section 7: RAM Architecture -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docSdTitle">7. Arquitetura 100% RAM & Atualização sem Retirar o Cartão</h3>
+                    <p data-i18n="docSdDesc">
+                        O appliance roda 100% em initramfs RAM disk. Para atualizar o binário do receptor, basta montar a partição FAT de boot com <span style="font-family: monospace; color: var(--accent-cyan);">mount -t vfat /dev/mmcblk0p1 /mnt</span>, gravar a nova imagem e desmontar, sem necessidade de desligar o dispositivo.
+                    </p>
+
+                    <!-- Section 8: Browser Video Occlusion Tip -->
+                    <div style="background: rgba(88, 166, 255, 0.08); border-left: 4px solid var(--accent-cyan); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: var(--accent-cyan); margin: 0 0 0.5rem 0;" data-i18n="docBrowserVideoTitle">8. 💡 Dica: Reprodução Contínua de Vídeos no Navegador (Chrome / Firefox)</h3>
+                        <p data-i18n="docBrowserVideoDesc" style="margin-bottom: 0.75rem;">
+                            No Linux Wayland, navegadores como Chrome e Firefox ativam economia de energia ('Window Occlusion Tracking') e pausam a renderização de vídeos quando o cursor sai da janela ou ela perde o foco. Para manter 60 FPS contínuos mesmo sem o cursor sobre a janela:
+                        </p>
+                        <p style="margin: 0.35rem 0 0.2rem 1rem; color: #fff;">
+                            <strong>Chrome / Chromium / Edge / Brave:</strong> <span data-i18n="docBrowserChrome">Acesse chrome://flags/#calculate-native-win-occlusion, selecione 'Disabled' e reinicie o navegador (ou use a flag --disable-backgrounding-occluded-windows).</span>
+                        </p>
+                        <p style="margin: 0.35rem 0 0.2rem 1rem; color: #fff;">
+                            <strong>Mozilla Firefox:</strong> <span data-i18n="docBrowserFirefox">Acesse about:config, busque por media.suspend-bkgnd-video.enabled e altere para 'false'.</span>
+                        </p>
+                        <p style="margin: 0.35rem 0 0.2rem 1rem; color: #fff;">
+                            <strong>Players Nativos (VLC / MPV):</strong> <span data-i18n="docBrowserNative">Reproduzem a 60 FPS contínuos por padrão, sem interrupção por foco ou posição de mouse.</span>
+                        </p>
+                    </div>
+
+                    <!-- Section 9: ARMv6 Compilation -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docArmv6Title">9. Compilação para Raspberry Pi Zero (ARMv6)</h3>
+                    <p data-i18n="docArmv6Desc">
+                        O SoC BCM2835 do Pi Zero v1.2/v1.3/W requer arquitetura ARMv6l. Para compilar com cross (Docker):
+                    </p>
+                    <pre style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 6px; font-family: monospace; color: var(--accent-cyan); overflow-x: auto;"><code data-i18n="docArmv6Cmd">cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release</code></pre>
+
+                    <!-- Section 10: Non-OTG Models -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docNonOtgTitle">10. Modelos Raspberry Pi Não-OTG (Pi 2, Pi 3, Pi 4, Pi 5) & Ajuste de Boot</h3>
+                    <p data-i18n="docNonOtgDesc1">
+                        Esses modelos não possuem modo OTG periférico nas portas USB comuns. A conexão é feita via Ethernet ou Wi-Fi.
+                    </p>
+                    <p data-i18n="docNonOtgDesc2" style="color: #8b949e;">
+                        Ajustes obrigatórios no SD: No config.txt comente 'dtoverlay=dwc2'. No cmdline.txt remova 'modules-load=dwc2'. Conecte via: ./scripts/start.sh extend auto 60 false full &lt;IP_DO_PI&gt;:5000
+                    </p>
+
+                    <!-- Section 11: Conventional PC Receiver -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docPcReceiverTitle">11. Transformar PC / Notebook Convencional em Segunda Tela</h3>
+                    <p data-i18n="docPcReceiverDesc">
+                        Qualquer computador Linux pode atuar como receptor. Instale gstreamer1.0-tools e execute:
+                    </p>
+                    <pre style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 6px; font-family: monospace; color: var(--accent-cyan); overflow-x: auto;"><code data-i18n="docPcReceiverCmd">gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false</code></pre>
+
+                    <!-- Section 12: Multi-Monitor Targeting -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docMultiMonTitle">12. Direcionamento para Tela 1 ou 2 em PCs com Múltiplos Monitores</h3>
+                    <p data-i18n="docMultiMonDesc">
+                        Em PCs receptores com mais de uma tela conectada, use 'kmssink connector-id=&lt;ID&gt;' no modo direto KMS DRM ou 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' em sessão gráfica para projetar exatamente no monitor desejado.
+                    </p>
+
+                    <!-- Section 13: Wayland Damage Pacer -->
+                    <div style="background: rgba(46, 160, 67, 0.08); border-left: 4px solid #2ea043; border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: #2ea043; margin: 0 0 0.5rem 0;" data-i18n="docPacerTitle">13. 🚀 Wayland Damage Pacer: 60 FPS Contínuos no YouTube Sem Congelar</h3>
+                        <p data-i18n="docPacerDesc" style="margin: 0; color: #fff;">
+                            O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em 1x1 pixel invisível na tela estendida com máscara vazia 100% click-through (cairo.Region), forçando o GNOME Mutter a manter o compositor acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.
+                        </p>
+                    </div>
+
+                    <!-- Section 14: Non-GNOME Alternatives -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docAltPlayersTitle">14. Alternativas ao GStreamer em Ambientes Não-GNOME (FFmpeg, MPV, VLC)</h3>
+                    <p data-i18n="docAltPlayersDesc">
+                        O stream RTP H.264 (RFC 4571 / PT 96) gerado pelo ext-sender é universal e funciona perfeitamente em KDE, XFCE, i3, Windows e macOS sem depender de GNOME:
+                    </p>
+                    <pre style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 6px; font-family: monospace; color: var(--accent-cyan); overflow-x: auto;"><code data-i18n="docAltPlayersCmd"># FFmpeg / ffplay (Baixa Latência):
+ffplay -fflags nobuffer -flags low_delay -framedrop -an -sn -sync ext -protocol_whitelist file,udp,rtp rtp://0.0.0.0:5000
+
+# MPV Player (Aceleração Gráfica Vulkan/OpenGL):
+mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec=auto rtp://0.0.0.0:5000</code></pre>
+
+                    <!-- Section 15: USB Bulk Default & Auto-Fallback -->
+                    <div style="background: rgba(187, 134, 252, 0.08); border-left: 4px solid var(--accent-purple); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: var(--accent-purple); margin: 0 0 0.5rem 0;" data-i18n="docBulkFallbackTitle">15. ⚡ Modo USB Bulk Direto Padrão & Auto-Fallback para Rede UDP</h3>
+                        <p data-i18n="docBulkFallbackDesc" style="margin: 0; color: #fff;">
+                            O ext-sender e a imagem do Pi Zero vêm configurados por padrão para USB Bulk Direto (480 Mbps). Se o cabo estiver conectado a um dispositivo sem suporte USB gadget ou através de rede (como Pi 4 ou PC secundário), o transmissor detecta a ausência da interface USB e comuta automaticamente e em tempo real para transmissão via Rede UDP (porta 5000) sem travar.
+                        </p>
+                    </div>
+
+                    <!-- Section 16: Hybrid Audio & Virtual HDMI Device -->
+                    <div style="background: rgba(0, 229, 255, 0.08); border-left: 4px solid var(--accent-cyan); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: var(--accent-cyan); margin: 0 0 0.5rem 0;">16. 🔊 Roteamento de Áudio Híbrido & Dispositivo Virtual HDMI</h3>
+                        <p style="margin: 0 0 0.6rem 0; color: #fff;">
+                            O ext-monitor implementa arquitetura de áudio 100% isolada e híbrida utilizando um dispositivo virtual no PipeWire/PulseAudio (<code>Raspberry_Pi_HDMI_Audio</code>). Você pode trabalhar na tela estendida da TV enquanto escuta YouTube, reuniões e músicas no seu Headset ou caixas do laptop:
+                        </p>
+                        <pre style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 6px; font-family: monospace; color: var(--accent-cyan); overflow-x: auto;"><code># Modo Híbrido: Mantém o áudio do PC saindo no seu Headset USB ou caixas locais
+./scripts/audio-route.sh local
+
+# Modo TV: Envia todo o áudio do sistema para a TV HDMI via Opus 48kHz (UDP 5004)
+./scripts/audio-route.sh pi
+
+# Exibe o status e o dispositivo ativo em tempo real
+./scripts/audio-route.sh status</code></pre>
+                    </div>
+
+                    <!-- Section 17: Subhardware Clocks & Power -->
+                    <div style="background: rgba(46, 160, 67, 0.08); border-left: 4px solid #2ea043; border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: #2ea043; margin: 0 0 0.5rem 0;">17. ⚙️ Clocks de Subhardware (H.264/VPU/ARM) & Consumo Energético</h3>
+                        <p style="margin: 0; color: #fff;">
+                            O Raspberry Pi Zero W expõe a telemetria interna de cada bloco de silício do SoC Broadcom BCM2835 via <code>debugfs</code>. O ext-monitor monitora continuamente os clocks em tempo real:
+                        </p>
+                        <ul style="margin: 0.6rem 0 0 1.2rem; color: #ccc; font-size: 0.88rem; line-height: 1.6;">
+                            <li><strong>Decodificador H.264 V4L2 M2M:</strong> <code>200 MHz / 250 MHz</code> (bloco dedicado de descompressão por hardware)</li>
+                            <li><strong>VPU VideoCore IV:</strong> <code>400 MHz</code> (processador de vídeo e pipeline KMS)</li>
+                            <li><strong>CPU ARM1176:</strong> <code>700 MHz - 1000 MHz</code> (governor ondemand econômico)</li>
+                            <li><strong>Motor 3D V3D:</strong> <code>250 MHz</code> | <strong>SDRAM:</strong> <code>166 MHz LPDDR</code></li>
+                            <li><strong>Potência & Corrente:</strong> <code>~0.85W</code> (idle) a <code>~1.15W</code> (streaming contínuo 60 FPS a 5V / 230mA)</li>
+                        </ul>
+                    </div>
+
+                    <!-- Section 18: Full CLI Manual & Troubleshooting -->
+                    <div style="background: rgba(255, 179, 0, 0.08); border-left: 4px solid var(--accent-amber); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: var(--accent-amber); margin: 0 0 0.5rem 0;">18. 📖 Manual Completo de Operação, Flags CLI & Troubleshooting</h3>
+                        <p style="margin: 0 0 0.5rem 0; color: #fff;">
+                            Sintaxe do inicializador: <code>./scripts/start.sh [modo] [encoder] [fps] [hud] [opções]</code>
+                        </p>
+                        <ul style="margin: 0.4rem 0 0 1.2rem; color: #ccc; font-size: 0.88rem; line-height: 1.6;">
+                            <li><code>extend</code>: Cria ou conecta a tela estendida secundária no HDMI-1.</li>
+                            <li><code>clone</code>: Espelha 1:1 a tela principal do notebook (eDP-1) para o monitor externo.</li>
+                            <li><code>--continuous</code> ou <code>--no-drop-only</code>: Força envio CFR a 60 FPS estáveis mesmo com tela parada (elimina congelamentos).</li>
+                            <li><code>--network</code> ou <code>--udp</code>: Transmite via rede UDP (porta 5000).</li>
+                            <li><code>--transport=usb</code>: Transmite via canal USB Bulk direto (480 Mbps).</li>
+                            <li><code>--no-audio</code>: Desativa a transmissão do canal de áudio.</li>
+                            <li><code>--capture=kms</code>: Captura direta por hardware DRM da GPU (/dev/dri/card*), imune ao compositor Wayland.</li>
+                        </ul>
+                        <div style="margin-top: 0.6rem; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.84rem; color: #ffab40;">
+                            <strong>Solução Rápida:</strong> Se a tela HDMI ficar preta ao alternar modos, reinicie o pipeline com <code>./scripts/start.sh extend auto 30 false --continuous</code>. O receptor detecta o fluxo e sincroniza os quadros IDR automaticamente em menos de 1 segundo.
+                        </div>
+                    </div>
+
+                    <!-- Comparison Table -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="protoHeader">Tabela Comparativa de Métodos</h3>
+
+                    <table class="proto-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="thMethod">Método</th>
+                                <th data-i18n="thProtocol">Protocolo</th>
+                                <th data-i18n="thLatency">Latência</th>
+                                <th data-i18n="thBestFor">Caso de Uso Ideal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="color: #fff; font-weight: 700;">Linux Wayland Direto</td>
+                                <td>RTP H.264 (UDP 5000)</td>
+                                <td style="color: #7ee787; font-weight: 700;">&lt; 15 ms</td>
+                                <td>Desktop interativo, arrastar janelas com mouse suave</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #fff; font-weight: 700;">Windows 10/11 Miracast</td>
+                                <td>WFD RTSP (TCP 7236)</td>
+                                <td style="color: var(--accent-amber); font-weight: 700;">40–60 ms</td>
+                                <td>Projeção nativa sem drivers no Windows (Win + K)</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #fff; font-weight: 700;">USB Bulk Direto</td>
+                                <td>FunctionFS RFC 4571</td>
+                                <td style="color: #7ee787; font-weight: 700;">&lt; 1 ms</td>
+                                <td>Comunicação direta por hardware sem IP com Marker Bit</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal de Confirmação de Reboot -->
+    <div class="modal-overlay" id="rebootModal">
+        <div class="modal-box">
+            <div class="modal-title">
+                <span>⚠️</span> <span data-i18n="modalRebootTitle">Reiniciar Appliance?</span>
+            </div>
+            <div class="modal-desc" data-i18n="modalRebootDesc">
+                Tem certeza que deseja reiniciar o Raspberry Pi Zero? O sistema reiniciará em menos de 2 segundos diretamente na memória RAM.
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeRebootModal()" data-i18n="btnCancel">Cancelar</button>
+                <button class="btn-danger" onclick="executeReboot()" data-i18n="btnConfirmReboot">Sim, Reiniciar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // State
+        let currentFps = 30;
+        let currentBitrate = 400;
+        let currentColor = 'full';
+        let currentDropOnly = false;
+        let currentSkipToFirst = true;
+        let currentKeyIntMax = 30;
+        let currentCapture = 'kms';
+        let currentMonitor = 'HDMI-1';
+        let isPaused = false;
+
+        // Internationalization Dictionary
+        const I18N = {
+            en: {
+                title: "Pi Zero Extended Monitor",
+                subtitle: "Hardware GPU VideoCore IV Display Appliance",
+                tabMonitor: "Monitoring & Telemetry",
+                tabConfig: "Tuning & Settings",
+                tabDownloads: "Client Tools & Drivers",
+                tabSdCard: "SD Card & RAM Upgrade",
+                tabManual: "Operation Manual",
+                statTemp: "SoC Temperature",
+                statCpu: "CPU Load",
+                statRam: "Free RAM",
+                statStream: "Stream State",
+                badgeVpuOffload: "VPU Offload",
+                statCpuDesc: "Hardware GPU V4L2 M2M Active",
+                badgeRamApp: "100% RAM",
+                tipTemp: "Broadcom BCM2835 internal silicon temperature. Polled every 2s. Recommended: below 65°C.",
+                tipCpu: "ARM11 CPU load. Stays below 2% because H.264 decoding is 100% offloaded to VideoCore IV VPU.",
+                tipRam: "Free RAM out of 512 MB SDRAM. The entire system runs in RAM (initramfs) with zero SD card wear.",
+                tipStream: "Real-time state of the video decoding engine streaming to the HDMI TV screen.",
+                displayHeader: "HDMI Television & Display Telemetry",
+                displayDesc: "The VideoCore IV hardware VPU decodes H.264 video streams directly to the HDMI scanout plane without touching the CPU.",
+                btnShowHud: "✦ Show HUD on TV (60s)",
+                btnHideHud: "✕ Turn Off HUD",
+                modeHeader: "Active Streaming Modes",
+                badgeMultiMode: "Concurrent Engine",
+                m1Desc: "Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (< 15ms).",
+                m2Desc: "Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.",
+                m3Desc: "Direct 480 Mbps raw hardware pipe via USB FunctionFS without network stack overhead (< 1ms).",
+                ctrlHeader: "Display & Stream Optimization",
+                badgeZeroCopy: "VideoCore IV DMA",
+                bitrateLabel: "Streaming Bitrate (VBR)",
+                tipBitrate: "Video encoding bitrate per second. 400k saves 85% bandwidth for text and code. 3000k to 6000k delivers smooth 60 FPS motion.",
+                fpsLabel: "Framerate (FPS)",
+                tipFps: "Target framerate. 15 FPS for ultra-cool SoC, 30 FPS recommended balance, 60 FPS maximum fluidity.",
+                colorLabel: "Color Profile",
+                tipColor: "24-bit TrueColor provides 1:1 RGB fidelity. 256 Colors uses adaptive QP (30-44) to minimize USB bus bandwidth.",
+                colorFull: "24-bit TrueColor",
+                color256: "256 Cores (QP 30-44)",
+                colorGray: "Monochrome",
+                dropOnlyLabel: "Transmission Mode (Continuous vs Economy)",
+                tipDropOnly: "Continuous (Default): Steady 30/60 FPS stream for Network and USB Bulk, ensuring smooth YouTube playback without needing mouse movement. Economy: Drops duplicate frames, saving 95% bandwidth on static screens.",
+                dropOnlyTrue: "Economy (Drop static frames)",
+                dropOnlyFalse: "Continuous (Default: Videos / USB Bulk)",
+                dropOnlyDesc: "Default: Continuous (drop-only=false). Steady stream for Network and USB Bulk. Use Economy or --economy flag for extreme battery/bandwidth savings on static text.",
+                skipFirstLabel: "Instant Motion Delivery (skip-to-first)",
+                tipSkipFirst: "Eliminates backlog delay by delivering the very first frame of motion immediately without queue latency.",
+                skipFirstTrue: "Enabled (Zero latency on first motion)",
+                skipFirstFalse: "Disabled (Strict timestamp alignment)",
+                keyIntLabel: "Periodic Refresh / IDR Keyframe Interval (Clean Sweep)",
+                tipKeyInt: "Frequency of full IDR I-Frames to sweep and recover from visual artifacts or packet drops.",
+                keyIntDesc: "Injects a full IDR keyframe periodically to sweep and clear visual artifacts on HDMI/TV.",
+                btnApply: "💾 Apply Settings",
+                btnPauseStream: "⏸ Pause Display",
+                btnResumeStream: "▶ Resume Display",
+                btnReboot: "🔄 Reboot Appliance",
+                oneLinerTitle: "One-Line Host Connector (1 Click)",
+                badgeInstant: "Instant",
+                oneLinerDesc: "On any Linux PC, paste this command in your terminal to start the extended monitor immediately:",
+                btnCopy: "Copy",
+                dlPkgTitle: "Full Client Package",
+                dlPkgDesc: "Contains precompiled ext-sender binary, start.sh, udev rules and installer in tar.gz.",
+                btnDlPkg: "Download client.tar.gz",
+                dlSenderTitle: "ext-sender Binary",
+                dlSenderDesc: "Standalone GPU offload transmitter binary compiled in Rust for Linux x86_64.",
+                btnDlSender: "Download ext-sender",
+                dlScriptTitle: "connect.sh Script",
+                dlScriptDesc: "Portable script that detects USB, downloads needed tools and launches the stream.",
+                btnDlScript: "Download connect.sh",
+                dlUdevTitle: "udev Rules (Plug-and-Play)",
+                dlUdevDesc: "Automatically configures host USB buffer (txqueuelen 100) to eliminate buffer bloat.",
+                btnDlUdev: "Download 99-ext-monitor.rules",
+                sdHeader: "100% RAM Architecture & Firmware Upgrade",
+                badgeZeroSdWear: "Zero SD Wear",
+                sdDesc1: "The Pi Zero boots entirely into RAM (initramfs). After a < 2s boot, the physical micro-SD (/dev/mmcblk0) is decoupled and never written to during usage.",
+                sdDesc2: "This guarantees zero SD corruption risk and allows mounting the boot partition to upgrade firmware without removing the card!",
+                sdPartitionStatus: "Physical Media Status:",
+                btnMountSd: "Mount Partition (/mnt/boot)",
+                btnUnmountSd: "Unmount Partition",
+                sdUpgradeManualTitle: "How to Upgrade Firmware without Removing Card:",
+                manualHeader: "Operation Manual & Technical Specifications",
+                badgeFullDocs: "Complete Documentation",
+                docArchTitle: "1. Hardware Architecture & VideoCore IV GPU",
+                docArchDesc: "Raspberry Pi Zero utilizes the Broadcom BCM2835 SoC (ARM1176JZF-S @ 1.0 GHz) integrated with the VideoCore IV GPU @ 500 MHz. The ext-monitor runs a 100% userspace hardware pipeline: H.264 video streams are fed directly into the V4L2 M2M decoder (/dev/video10), which writes rendered frames via DMA directly to the HDMI scanout plane (/dev/fb0). This guarantees < 15ms latency and < 2% CPU usage.",
+                docUsbProtoTitle: "2. Direct USB Bulk Protocol, RFC 4571 & End-of-Frame Marker Bit (EOF / ZLP)",
+                docUsbProtoDesc1: "On the USB 2.0 High-Speed bus (480 Mbps), packets travel in micro-frames up to 512 bytes (wMaxPacketSize). In raw H.264 Annex-B streams, decoders had to wait for the next frame's start code (00 00 00 01) to verify completion, causing stalls when mouse movement stopped.",
+                docUsbProtoDesc2: "ext-monitor resolves this by implementing standard RFC 4571 2-byte length-delimited framing with RTP Marker Bit (EOF) signaling. As soon as a frame finishes transmitting over USB, the receiver drains and renders it immediately on HDMI, eliminating mouse dependency and ensuring smooth YouTube playback. Furthermore, transfers that are exact multiples of 512 bytes trigger a Zero-Length Packet (ZLP), preventing DWC2 hardware FIFO stalls.",
+                docAudioTitle: "3. Multi-Mode Audio Routing (Normal vs. Hybrid)",
+                docAudioDesc1: "ext-monitor supports stereo digital audio routing to HDMI TV speakers across 4 transport technologies:",
+                docAudioDesc2: "Normal vs Hybrid Mode: In Normal mode, both PC video and audio play together on the TV. In Hybrid mode, you can keep audio playing on local PC speakers while video streams to TV, or pair a smartphone via Bluetooth to play music on the TV while the PC displays code.",
+                docSerialTitle: "4. Zero-IP Reconfiguration via USB Serial (/dev/ttyACM0)",
+                docSerialDesc: "If network is disabled or misconfigured, the Pi Zero exposes a recovery serial console on /dev/ttyACM0 at 115200 baud.",
+                docLinuxTitle: "5. Standard Linux Wayland (GNOME) Streaming",
+                docLinuxDesc: "Plug into the center USB port. The PC gets IP 192.168.7.1 automatically. Then run start.sh:",
+                docWinTitle: "6. Windows 10/11 Miracast (Zero Drivers)",
+                docWinDesc: "Plug into USB, press Win + K on Windows, select 'Pi Zero Wireless Display'.",
+                docSdTitle: "7. 100% RAM Architecture & Firmware Upgrade without SD Card Removal",
+                docSdDesc: "The appliance runs 100% in an initramfs RAM disk. To upgrade receiver binaries, simply mount the boot FAT partition with 'mount -t vfat /dev/mmcblk0p1 /mnt', write the new image, and unmount without rebooting or touching the SD card.",
+                docBrowserVideoTitle: "8. 💡 Tip: Continuous Browser Video Playback (Chrome / Firefox)",
+                docBrowserVideoDesc: "On Linux Wayland, browsers like Chrome and Firefox enable aggressive power-saving ('Window Occlusion Tracking') and pause video rendering when the mouse cursor leaves the window or it loses focus. To ensure smooth 60 FPS video without cursor focus:",
+                docBrowserChrome: "Visit chrome://flags/#calculate-native-win-occlusion, set to 'Disabled' and restart (or launch with --disable-backgrounding-occluded-windows).",
+                docBrowserFirefox: "Visit about:config, search for media.suspend-bkgnd-video.enabled and toggle to 'false'.",
+                docBrowserNative: "Play at continuous 60 FPS by default without any cursor position restrictions.",
+                docArmv6Title: "9. Cross-Compiling for Raspberry Pi Zero (ARMv6)",
+                docArmv6Desc: "The BCM2835 SoC on Pi Zero v1.2/v1.3/W requires the ARMv6l architecture. To compile with cross (Docker):",
+                docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
+                docNonOtgTitle: "10. Non-OTG Raspberry Pi Models (Pi 2, Pi 3, Pi 4, Pi 5) & Boot Config",
+                docNonOtgDesc1: "These models do not support peripheral USB gadget mode on standard USB-A ports. Streaming is delivered via Ethernet or Wi-Fi.",
+                docNonOtgDesc2: "Required SD boot adjustments: In config.txt comment out 'dtoverlay=dwc2'. In cmdline.txt remove 'modules-load=dwc2'. Stream via: ./scripts/start.sh extend auto 60 false full <PI_IP>:5000",
+                docPcReceiverTitle: "11. Turning Any Linux PC / Laptop into a Secondary Screen Receiver",
+                docPcReceiverDesc: "Any Linux computer can act as a receiver. Install gstreamer1.0-tools and run:",
+                docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
+                docMultiMonTitle: "12. Directing Video to Screen 1 vs Screen 2 on Multi-Monitor PCs",
+                docMultiMonDesc: "On receiver PCs with multiple connected displays, specify 'kmssink connector-id=<ID>' in direct DRM KMS mode or 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' in graphical sessions to target the desired monitor.",
+                docPacerTitle: "13. 🚀 Wayland Damage Pacer: Continuous 60 FPS YouTube without Pausing",
+                docPacerDesc: "ext-monitor runs wayland-damage-pacer.py in the background on the Host. It emits 60 Hz micro-damage pulses to an invisible sub-surface with an empty Cairo click-through mask on the extended monitor, keeping the GNOME Mutter compositor active. YouTube videos, clocks, and terminals render at 60 FPS even when the mouse is motionless or on the primary screen.",
+                docAltPlayersTitle: "14. Non-GNOME Receiver Alternatives (FFmpeg, MPV, VLC)",
+                docAltPlayersDesc: "The RFC 4571 RTP H.264 video stream is fully cross-platform. Receive it on KDE, XFCE, i3, Windows, or macOS with zero-buffer low delay:",
+                docBulkFallbackTitle: "15. ⚡ Default USB Bulk Direct Mode & Automatic UDP Network Fallback",
+                docBulkFallbackDesc: "ext-sender prioritizes high-speed 480 Mbps USB Bulk Direct mode by default. If the USB gadget interface is not detected, it automatically falls back to UDP Network streaming (port 5000) without crashing.",
+                lblActiveMode: "Active Streaming Mode",
+                lblActiveHdmi: "Active Raspberry Pi HDMI Output",
+                protoHeader: "Protocol Comparison Table",
+                thMethod: "Method",
+                thProtocol: "Protocol",
+                thLatency: "Latency",
+                thBestFor: "Best For",
+                modalRebootTitle: "Reboot Appliance?",
+                modalRebootDesc: "Are you sure you want to reboot the Raspberry Pi Zero? It will reboot in < 2 seconds directly in RAM.",
+                btnCancel: "Cancel",
+                btnConfirmReboot: "Yes, Reboot"
+            },
+            pt: {
+                title: "Pi Zero Monitor Estendido",
+                subtitle: "Painel de Controle e Appliance GPU VideoCore IV",
+                tabMonitor: "Monitoramento & Telemetria",
+                tabConfig: "Ajustes & Configurações",
+                tabDownloads: "Downloads & Driver",
+                tabSdCard: "Cartão SD & Upgrade em RAM",
+                tabManual: "Manual de Operação",
+                statTemp: "Temperatura SoC",
+                statCpu: "Carga da CPU",
+                statRam: "RAM Disponível",
+                statStream: "Estado do Stream",
+                badgeVpuOffload: "GPU VPU Offload",
+                statCpuDesc: "Hardware GPU V4L2 M2M Ativo",
+                badgeRamApp: "100% em RAM",
+                tipTemp: "Temperatura interna do processador BCM2835. Monitorada a cada 2s. Ideal: abaixo de 65°C.",
+                tipCpu: "Carga da CPU ARM11. Permanece menor que 2% porque a decodificação H.264 ocorre na GPU VideoCore IV.",
+                tipRam: "Memória RAM livre dos 512 MB SDRAM. O appliance opera 100% em RAM sem tocar no micro-SD.",
+                tipStream: "Status de recebimento e decodificação do fluxo de vídeo transmitido para a porta HDMI.",
+                displayHeader: "Telemetria do Monitor HDMI & TV",
+                displayDesc: "A VPU de hardware VideoCore IV decodifica o stream H.264 direto na memória de scanout da TV sem tocar na CPU.",
+                btnShowHud: "✦ Exibir HUD na TV (60s)",
+                btnHideHud: "✕ Ocultar HUD",
+                modeHeader: "Modos de Transmissão Ativos",
+                badgeMultiMode: "Motor Concorrente",
+                m1Desc: "Transmissão RTP H.264 de latência ultra-baixa na porta UDP 5000 com GPU AMD VA-API (< 15ms).",
+                m2Desc: "Projeção nativa do Windows 10/11 via Win + K na porta RTSP 7236. Zero drivers no PC.",
+                m3Desc: "Canal direto de 480 Mbps por hardware via USB FunctionFS sem pilha de rede (< 1ms).",
+                ctrlHeader: "Otimização de Exibição e Stream",
+                badgeZeroCopy: "VideoCore IV DMA",
+                bitrateLabel: "Taxa de Bits (VBR)",
+                tipBitrate: "Taxa de bits de codificação. 400k economiza 85% para texto/código. 3000k a 6000k entrega vídeo fluido em 1080p/720p.",
+                fpsLabel: "Taxa de Quadros (FPS)",
+                tipFps: "Taxa de quadros por segundo. 15 FPS para ultra-economia, 30 FPS padrão balanceado, 60 FPS fluidez total.",
+                colorLabel: "Perfil de Cor",
+                tipColor: "24-bit TrueColor para fidelidade RGB nativa. 256 Cores quantiza para economia máxima de barramento.",
+                colorFull: "24-bit TrueColor",
+                color256: "256 Cores (QP 30-44)",
+                colorGray: "Monocromático",
+                dropOnlyLabel: "Modo de Transmissão (Contínuo vs Econômico)",
+                tipDropOnly: "Contínuo (Padrão): Transmissão ininterrupta a 30/60 FPS no modo de Rede e USB Bulk, garantindo YouTube e vídeos sem congelar mesmo sem mouse na tela. Econômico: Descarta quadros repetidos, economizando 95% de banda em telas estáticas.",
+                dropOnlyTrue: "Econômico (Descarta estáticos)",
+                dropOnlyFalse: "Contínuo (Padrão: Vídeos / USB Bulk)",
+                dropOnlyDesc: "Padrão: Contínuo (drop-only=false). O stream entrega fluxo constante a 30/60 FPS no modo de Rede e USB Bulk. Para economizar banda/bateria em leitura de PDFs ou terminais estáticos, selecione 'Econômico' ou use a flag --economy no host.",
+                skipFirstLabel: "Entrega Imediata no Primeiro Quadro (skip-to-first)",
+                tipSkipFirst: "Elimina atrasos acumulados, entregando imediatamente o primeiro quadro assim que o mouse se move.",
+                skipFirstTrue: "Ativo (Latência zero ao mover)",
+                skipFirstFalse: "Desativado (Sincronismo rígido)",
+                keyIntLabel: "Varredura Periódica / Intervalo IDR (Refresh Clean)",
+                tipKeyInt: "Frequência de quadros-chave I-Frame para autolimpeza de ruídos visuais e recuperação de perdas.",
+                keyIntDesc: "Injeta um quadro-chave IDR completo periodicamente para limpar qualquer resíduo visual na TV ou monitor HDMI.",
+                btnApply: "💾 Aplicar Alterações",
+                btnPauseStream: "⏸ Pausar Exibição",
+                btnResumeStream: "▶ Retomar Exibição",
+                btnReboot: "🔄 Reiniciar Appliance (Reboot)",
+                oneLinerTitle: "Conector de 1 Linha para PC (1 Clique)",
+                badgeInstant: "Instantâneo",
+                oneLinerDesc: "Em qualquer computador Linux, abra o terminal e cole o comando abaixo para iniciar a segunda tela:",
+                btnCopy: "Copiar",
+                dlPkgTitle: "Pacote Completo do Cliente",
+                dlPkgDesc: "Contém o binário ext-sender compilado, script start.sh, regras udev e instalador em tar.gz.",
+                btnDlPkg: "Baixar client.tar.gz",
+                dlSenderTitle: "Executável ext-sender",
+                dlSenderDesc: "Binário standalone do transmissor GPU offload compilado em Rust para Linux x86_64.",
+                btnDlSender: "Baixar ext-sender",
+                dlScriptTitle: "Script connect.sh",
+                dlScriptDesc: "Script portátil que detecta a USB, baixa os componentes necessários e inicia o streaming.",
+                btnDlScript: "Baixar connect.sh",
+                dlUdevTitle: "Regras udev (Plug-and-Play)",
+                dlUdevDesc: "Configura automaticamente o buffer USB (txqueuelen 100) para eliminar buffer bloat ao plugar.",
+                btnDlUdev: "Baixar 99-ext-monitor.rules",
+                sdHeader: "Arquitetura 100% RAM & Atualização de Firmware",
+                badgeZeroSdWear: "Zero Desgaste do SD",
+                sdDesc1: "O Pi Zero roda 100% em RAM (initramfs). Após o boot de 2s, o cartão micro-SD (/dev/mmcblk0) fica desacoplado e nunca sofre escritas durante o uso diário.",
+                sdDesc2: "Isso garante zero risco de corrupção e permite montar a partição FAT16 para atualizar o firmware sem retirar o cartão!",
+                sdPartitionStatus: "Status da Mídia Física:",
+                btnMountSd: "Montar Partição (/mnt/boot)",
+                btnUnmountSd: "Desmontar Partição",
+                sdUpgradeManualTitle: "Como Atualizar o Appliance sem Retirar o Cartão:",
+                manualHeader: "Manual de Operação e Especificações Técnicas",
+                badgeFullDocs: "Documentação Completa",
+                docArchTitle: "1. Arquitetura de Hardware e GPU VideoCore IV",
+                docArchDesc: "O Raspberry Pi Zero utiliza o SoC Broadcom BCM2835 (ARM1176JZF-S a 1.0 GHz) integrado à GPU VideoCore IV a 500 MHz. O ext-monitor opera com pipeline 100% de hardware em userspace: o stream H.264 é alimentado diretamente no decodificador V4L2 M2M (/dev/video10), que grava os quadros renderizados por DMA direto no framebuffer HDMI (/dev/fb0). Isso garante latência inferior a 15 ms e consumo de CPU inferior a 2%.",
+                docUsbProtoTitle: "2. Protocolo USB Bulk, RFC 4571 e Marcador de Fim de Quadro (EOF / ZLP)",
+                docUsbProtoDesc1: "No barramento USB 2.0 High-Speed (480 Mbps), pacotes de dados trafegam em micro-frames de até 512 bytes (wMaxPacketSize). Em fluxos H.264 Annex-B brutos, decodificadores precisavam aguardar o start code (00 00 00 01) do quadro seguinte para saber que o quadro atual terminou, causando congelamento quando o mouse parava ou vídeos estáticos entravam em pausa.",
+                docUsbProtoDesc2: "O ext-monitor resolve isso implementando o padrão oficial RFC 4571 com enquadramento de comprimento de 2 bytes e preservação do Bit Marcador RTP (Marker Bit / EOF). No instante em que o último pedaço de um quadro chega pela USB, o receptor dispara a descarga imediata no display HDMI, eliminando qualquer dependência de movimento de mouse e permitindo reprodução estável de YouTube sem congelar. Além disso, pacotes múltiplos de 512 bytes disparam um ZLP (Zero-Length Packet), liberando a FIFO de hardware DWC2 sem travamentos.",
+                docAudioTitle: "3. Roteamento de Áudio Multi-Modo (Normal vs. Híbrido)",
+                docAudioDesc1: "O ext-monitor suporta roteamento de áudio digital estéreo para as caixas de som da TV HDMI através de 4 tecnologias de transporte:",
+                docAudioDesc2: "Operação Normal vs Híbrida: No modo Normal, o vídeo e o som do seu PC tocam juntos na TV. No modo Híbrido, você pode escolher manter o áudio tocando nos alto-falantes locais do notebook enquanto apenas o vídeo vai para a TV, ou tocar músicas via Bluetooth do celular na TV enquanto o PC exibe seu editor de código.",
+                docSerialTitle: "4. Reconfiguração sem IP via Serial USB (/dev/ttyACM0)",
+                docSerialDesc: "Caso a rede seja desativada, o Pi Zero expõe um console serial independente no PC em /dev/ttyACM0 a 115200 baud.",
+                docLinuxTitle: "5. Operação Normal no Linux Wayland (GNOME)",
+                docLinuxDesc: "Conecte o cabo na porta USB central. O PC recebe IP 192.168.7.1 pelo DHCP nativo. Em seguida execute o conector:",
+                docWinTitle: "6. Operação no Windows 10/11 (Miracast Sem Drivers)",
+                docWinDesc: "Conecte na USB, pressione Win + K no Windows e selecione 'Pi Zero Wireless Display'.",
+                docSdTitle: "7. Arquitetura 100% RAM & Atualização sem Retirar o Cartão",
+                docSdDesc: "O appliance roda 100% em initramfs RAM disk. Para atualizar o binário do receptor, basta montar a partição FAT de boot com 'mount -t vfat /dev/mmcblk0p1 /mnt', gravar a nova imagem e desmontar, sem necessidade de desligar o dispositivo.",
+                docBrowserVideoTitle: "8. 💡 Dica: Reprodução Contínua de Vídeos no Navegador (Chrome / Firefox)",
+                docBrowserVideoDesc: "No Linux Wayland, navegadores como Chrome e Firefox ativam economia de energia ('Window Occlusion Tracking') e pausam a renderização de vídeos quando o cursor sai da janela ou ela perde o foco. Para manter 60 FPS contínuos mesmo sem o cursor sobre a janela:",
+                docBrowserChrome: "Acesse chrome://flags/#calculate-native-win-occlusion, selecione 'Disabled' e reinicie o navegador (ou use a flag --disable-backgrounding-occluded-windows).",
+                docBrowserFirefox: "Acesse about:config, busque por media.suspend-bkgnd-video.enabled e altere para 'false'.",
+                docBrowserNative: "Reproduzem a 60 FPS contínuos por padrão, sem interrupção por foco ou posição de mouse.",
+                docArmv6Title: "9. Compilação para Raspberry Pi Zero (ARMv6)",
+                docArmv6Desc: "O SoC BCM2835 do Pi Zero v1.2/v1.3/W requer arquitetura ARMv6l. Para compilar com cross (Docker):",
+                docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
+                docNonOtgTitle: "10. Modelos Raspberry Pi Não-OTG (Pi 2, Pi 3, Pi 4, Pi 5) & Ajuste de Boot",
+                docNonOtgDesc1: "Esses modelos não possuem modo OTG periférico nas portas USB comuns. A conexão é feita via Ethernet ou Wi-Fi.",
+                docNonOtgDesc2: "Ajustes obrigatórios no SD: No config.txt comente 'dtoverlay=dwc2'. No cmdline.txt remova 'modules-load=dwc2'. Conecte via: ./scripts/start.sh extend auto 60 false full <IP_DO_PI>:5000",
+                docPcReceiverTitle: "11. Transformar PC / Notebook Convencional em Segunda Tela",
+                docPcReceiverDesc: "Qualquer computador Linux pode atuar como receptor. Instale gstreamer1.0-tools e execute:",
+                docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
+                docMultiMonTitle: "12. Direcionamento para Tela 1 ou 2 em PCs com Múltiplos Monitores",
+                docMultiMonDesc: "Em PCs receptores com mais de uma tela conectada, use 'kmssink connector-id=<ID>' no modo direto KMS DRM ou 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' em sessão gráfica para projetar exatamente no monitor desejado.",
+                docPacerTitle: "13. 🚀 Wayland Damage Pacer: 60 FPS Contínuos no YouTube Sem Congelar",
+                docPacerDesc: "O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em superfície invisível na tela estendida com máscara 100% click-through (cairo.Region vazia), forçando o compositor GNOME Mutter a permanecer acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.",
+                docAltPlayersTitle: "14. Alternativas ao GStreamer em Ambientes Não-GNOME (FFmpeg, MPV, VLC)",
+                docAltPlayersDesc: "O stream RTP H.264 (RFC 4571 / PT 96) gerado pelo ext-sender é universal e funciona perfeitamente em KDE, XFCE, i3, Windows e macOS sem depender de GNOME:",
+                docBulkFallbackTitle: "15. ⚡ Modo USB Bulk Direto Padrão & Auto-Fallback para Rede UDP",
+                docBulkFallbackDesc: "O ext-sender e a imagem do Pi Zero vêm configurados por padrão para USB Bulk Direto (480 Mbps). Se o cabo estiver conectado a um dispositivo sem suporte USB gadget ou via rede (como Pi 4 ou PC secundário), o transmissor detecta a ausência da interface USB e comuta automaticamente e em tempo real para transmissão via Rede UDP (porta 5000) sem travar.",
+                lblActiveMode: "Modo de Transmissão em Execução",
+                lblActiveHdmi: "Tela HDMI do Raspberry Pi",
+                protoHeader: "Tabela Comparativa de Métodos",
+                thMethod: "Método",
+                thProtocol: "Protocolo",
+                thLatency: "Latência",
+                thBestFor: "Caso de Uso Ideal",
+                modalRebootTitle: "Reiniciar Appliance?",
+                modalRebootDesc: "Tem certeza que deseja reiniciar o Raspberry Pi Zero? O sistema reiniciará em menos de 2 segundos diretamente na RAM.",
+                btnCancel: "Cancelar",
+                btnConfirmReboot: "Sim, Reiniciar"
+            },
+            it: {
+                title: "Pi Zero Monitor Esteso",
+                subtitle: "Appliance Display Hardware GPU VideoCore IV",
+                tabMonitor: "Monitoraggio & Telemetria",
+                tabConfig: "Impostazioni & Streaming",
+                tabDownloads: "Strumenti Client & Driver",
+                tabSdCard: "Scheda SD & Aggiornamento RAM",
+                tabManual: "Manuale Operativo",
+                statTemp: "Temperatura SoC",
+                statCpu: "Carico CPU",
+                statRam: "RAM Libera",
+                statStream: "Stato Streaming",
+                badgeVpuOffload: "VPU Offload",
+                statCpuDesc: "Hardware GPU V4L2 M2M Attivo",
+                badgeRamApp: "100% RAM",
+                tipTemp: "Temperatura interna del silicio Broadcom BCM2835. Monitorata ogni 2s. Ideale: sotto i 65°C.",
+                tipCpu: "Carico della CPU ARM11. Rimane sotto il 2% poiché la decodifica H.264 è gestita dalla VPU VideoCore IV.",
+                tipRam: "RAM disponibile dei 512 MB SDRAM. Il sistema funziona al 100% in RAM senza usura della scheda SD.",
+                tipStream: "Stato in tempo reale della decodifica video verso l'uscita HDMI del televisore.",
+                displayHeader: "Telemetria Display HDMI & TV",
+                displayDesc: "La VPU hardware VideoCore IV decodifica il flusso H.264 direttamente nel piano HDMI senza usare la CPU.",
+                btnShowHud: "✦ Mostra HUD su TV (60s)",
+                btnHideHud: "✕ Nascondi HUD",
+                modeHeader: "Modalità di Streaming Attive",
+                badgeMultiMode: "Motore Concorrente",
+                m1Desc: "Flusso RTP H.264 a bassissima latenza su porta UDP 5000 con GPU AMD VA-API (< 15ms).",
+                m2Desc: "Proiezione nativa Windows 10/11 via Win + K su porta RTSP 7236. Zero driver sul PC.",
+                m3Desc: "Canale hardware diretto a 480 Mbps via USB FunctionFS senza overhead di rete (< 1ms).",
+                ctrlHeader: "Ottimizzazione Display e Streaming",
+                badgeZeroCopy: "VideoCore IV DMA",
+                bitrateLabel: "Bitrate di Streaming (VBR)",
+                tipBitrate: "Bitrate di codifica VBR. 400k risparmia l'85% per testo/codice. 3000k-6000k per video 60 FPS fluido.",
+                fpsLabel: "Frequenza Fotogrammi (FPS)",
+                tipFps: "Frequenza fotogrammi. 15 FPS per basso calore, 30 FPS bilanciato consigliato, 60 FPS massima fluidità.",
+                colorLabel: "Profilo Colore",
+                tipColor: "24-bit TrueColor per fedeltà RGB 1:1. 256 Colori applica QP adattivo per ridurre la banda USB.",
+                colorFull: "24-bit TrueColor",
+                color256: "256 Colori (QP 30-44)",
+                colorGray: "Monocromatico",
+                dropOnlyLabel: "Salto Fotogrammi (Damage-Only Preserving)",
+                tipDropOnly: "Quando Attivo, trasmette solo su variazioni dello schermo. Disattivato forza 30 FPS continui evitando blocchi su YouTube.",
+                dropOnlyTrue: "Attivo (Risparmio 95% su schermo statico)",
+                dropOnlyFalse: "Disattivato (Duplicazione continua)",
+                dropOnlyDesc: "Quando attivo, il pipeline non duplica fotogrammi statici, risparmiando banda per il movimento del cursore.",
+                skipFirstLabel: "Consegna Immediata Primo Fotogramma (skip-to-first)",
+                tipSkipFirst: "Elimina i ritardi accumulati consegnando istantaneamente il primo fotogramma di movimento.",
+                skipFirstTrue: "Attivo (Zero latenza al movimento)",
+                skipFirstFalse: "Disattivato (Allineamento rigido)",
+                keyIntLabel: "Scansione Periodica / Intervallo IDR (Refresh Clean)",
+                tipKeyInt: "Frequenza dei fotogrammi IDR completi per eliminare artefatti visivi e perdite di pacchetti.",
+                keyIntDesc: "Invia periodicamente un frame IDR completo per eliminare artefatti visivi sullo schermo HDMI/TV.",
+                btnApply: "💾 Applica Modifiche",
+                btnPauseStream: "⏸ Sospendi Display",
+                btnResumeStream: "▶ Riprendi Display",
+                btnReboot: "🔄 Riavvia Appliance (Reboot)",
+                oneLinerTitle: "Connettore Host in 1 Riga (1 Clic)",
+                badgeInstant: "Istantaneo",
+                oneLinerDesc: "Su qualsiasi PC Linux, incolla questo comando nel terminale per avviare il monitor esteso:",
+                btnCopy: "Copia",
+                dlPkgTitle: "Pacchetto Completo Client",
+                dlPkgDesc: "Contiene il binario ext-sender, lo script start.sh, le regole udev e l'installer in tar.gz.",
+                btnDlPkg: "Scarica client.tar.gz",
+                dlSenderTitle: "Binario ext-sender",
+                dlSenderDesc: "Binario autonomo del trasmettitore GPU compilato in Rust per Linux x86_64.",
+                btnDlSender: "Scarica ext-sender",
+                dlScriptTitle: "Script connect.sh",
+                dlScriptDesc: "Script portatile che rileva USB, scarica i componenti e avvia lo streaming.",
+                btnDlScript: "Scarica connect.sh",
+                dlUdevTitle: "Regole udev (Plug-and-Play)",
+                dlUdevDesc: "Configura automaticamente il buffer USB per eliminare i ritardi.",
+                btnDlUdev: "Scarica 99-ext-monitor.rules",
+                sdHeader: "Architettura 100% RAM & Aggiornamento Firmware",
+                badgeZeroSdWear: "Zero Usura SD",
+                sdDesc1: "Il Pi Zero si avvia interamente in RAM (initramfs). La scheda SD (/dev/mmcblk0) è disaccoppiata e non subisce scritture.",
+                sdDesc2: "Questo garantisce zero rischi di corruzione e consente l'aggiornamento senza rimuovere la scheda!",
+                sdPartitionStatus: "Stato della Memoria Fisica:",
+                btnMountSd: "Monta Partizione (/mnt/boot)",
+                btnUnmountSd: "Smonta Partizione",
+                sdUpgradeManualTitle: "Come Aggiornare il Firmware senza Rimuovere la Scheda:",
+                manualHeader: "Manuale Operativo e Specifiche Tecniche",
+                badgeFullDocs: "Documentazione Completa",
+                docArchTitle: "1. Architettura Hardware e GPU VideoCore IV",
+                docArchDesc: "Raspberry Pi Zero utilizza il SoC Broadcom BCM2835 (ARM1176JZF-S a 1.0 GHz) con GPU VideoCore IV a 500 MHz. ext-monitor opera interamente via hardware: il flusso H.264 viene decodificato via V4L2 M2M (/dev/video10) e scritto via DMA direttamente nel framebuffer HDMI (/dev/fb0). Latenza < 15 ms e CPU < 2%.",
+                docUsbProtoTitle: "2. Protocollo USB Bulk Diretto, RFC 4571 & Marker Bit (EOF / ZLP)",
+                docUsbProtoDesc1: "Sul bus USB 2.0 High-Speed (480 Mbps), i pacchetti viaggiano in micro-frame fino a 512 byte (wMaxPacketSize). Nei flussi H.264 Annex-B grezzi, i decoder dovevano attendere lo start code successivo, bloccando l'immagine allo stop del mouse.",
+                docUsbProtoDesc2: "ext-monitor implementa lo standard RFC 4571 con prefisso a 2 byte e bit marcatore RTP (EOF). Ogni fotogramma viene visualizzato istantaneamente su HDMI senza dipendere dal movimento del mouse, garantendo riproduzione YouTube stabile. I trasferimenti multipli di 512 byte inviano un pacchetto ZLP liberando la FIFO del DWC2.",
+                docAudioTitle: "3. Routing Audio Multi-Modale (Normale vs Ibrido)",
+                docAudioDesc1: "ext-monitor supporta l'audio digitale stereo verso la TV HDMI tramite 4 modalità di trasporto:",
+                docAudioDesc2: "Modalità Normale vs Ibrida: In modalità Normale, audio e video del PC vengono riprodotti insieme sulla TV. In modalità Ibrida, puoi mantenere l'audio sugli altoparlanti del PC mentre il video va sulla TV, o riprodurre musica via Bluetooth dal telefono sulla TV.",
+                docSerialTitle: "4. Riconfigurazione Senza IP via USB Seriale (/dev/ttyACM0)",
+                docSerialDesc: "Se la rete è disabilitata, il Pi Zero offre una console seriale di ripristino su /dev/ttyACM0 a 115200 baud.",
+                docLinuxTitle: "5. Funzionamento Standard su Linux Wayland (GNOME)",
+                docLinuxDesc: "Collega il cavo alla porta USB centrale. Il PC ottiene l'IP 192.168.7.1 dal DHCP. Esegui il connettore:",
+                docWinTitle: "6. Proiezione Windows 10/11 (Miracast Senza Driver)",
+                docWinDesc: "Collega via USB, premi Win + K su Windows e seleziona 'Pi Zero Wireless Display'.",
+                docSdTitle: "7. Architettura 100% RAM & Aggiornamento senza rimuovere la scheda SD",
+                docSdDesc: "L'appliance funziona al 100% in RAM disk initramfs. Per aggiornare, basta montare la partizione FAT di boot con 'mount -t vfat /dev/mmcblk0p1 /mnt' e copiare i nuovi binari senza spegnere il dispositivo.",
+                docBrowserVideoTitle: "8. 💡 Suggerimento: Riproduzione Continua di Video nel Browser (Chrome / Firefox)",
+                docBrowserVideoDesc: "Su Linux Wayland, browser come Chrome e Firefox attivano il risparmio energetico ('Window Occlusion Tracking') e sospendono i video quando il mouse esce dalla finestra o perde il focus. Per mantenere 60 FPS continui:",
+                docBrowserChrome: "Apri chrome://flags/#calculate-native-win-occlusion, imposta su 'Disabled' e riavvia (o usa --disable-backgrounding-occluded-windows).",
+                docBrowserFirefox: "Apri about:config, cerca media.suspend-bkgnd-video.enabled e imposta su 'false'.",
+                docBrowserNative: "Riproducono a 60 FPS continui per impostazione predefinita, senza interruzioni per posizione del mouse.",
+                docArmv6Title: "9. Compilazione per Raspberry Pi Zero (ARMv6)",
+                docArmv6Desc: "Il SoC BCM2835 su Pi Zero v1.2/v1.3/W richiede l'architettura ARMv6l. Per compilare con cross (Docker):",
+                docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
+                docNonOtgTitle: "10. Modelli Raspberry Pi Non-OTG (Pi 2, Pi 3, Pi 4, Pi 5) & Parametri di Boot",
+                docNonOtgDesc1: "Questi modelli non supportano la modalità periferica USB sulle porte USB standard. La connessione avviene via Ethernet o Wi-Fi.",
+                docNonOtgDesc2: "Modifiche obbligatorie sulla scheda SD: In config.txt commentare 'dtoverlay=dwc2'. In cmdline.txt rimuovere 'modules-load=dwc2'. Collegarsi con: ./scripts/start.sh extend auto 60 false full <IP_PI>:5000",
+                docPcReceiverTitle: "11. Trasformare qualsiasi PC / Laptop Linux in Schermo Secondario",
+                docPcReceiverDesc: "Qualsiasi PC Linux può funzionare come ricevitore. Installa gstreamer1.0-tools ed esegui:",
+                docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
+                docMultiMonTitle: "12. Indirizzamento su Schermo 1 o 2 su PC con Più Monitor",
+                docMultiMonDesc: "Su PC ricevitori con più monitor, specifica 'kmssink connector-id=<ID>' in KMS DRM diretto o 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' per proiettare sul monitor desiderato.",
+                docPacerTitle: "13. 🚀 Wayland Damage Pacer: 60 FPS Continui su YouTube Senza Blocchi",
+                docPacerDesc: "ext-monitor esegue wayland-damage-pacer.py in background sull'Host. Invia micro-impulsi di danno a 60 Hz su una superficie invisibile con maschera 100% click-through (cairo.Region vuota), mantenendo attivo il compositore GNOME Mutter. I video di YouTube e i terminali continuano a 60 FPS anche con mouse fermo.",
+                docAltPlayersTitle: "14. Alternative al Ricevitore Non-GNOME (FFmpeg, MPV, VLC)",
+                docAltPlayersDesc: "Il flusso video RFC 4571 RTP H.264 è universale. Ricevilo su KDE, XFCE, i3, Windows o macOS senza buffer:",
+                docBulkFallbackTitle: "15. ⚡ Modalità USB Bulk Predefinita & Auto-Fallback su Rete UDP",
+                docBulkFallbackDesc: "ext-sender tenta prioritariamente la modalità USB Bulk ad alta velocità (480 Mbps). Se l'interfaccia USB non è rilevata, commuta automaticamente su streaming UDP (porta 5000) senza interruzioni.",
+                lblActiveMode: "Modalità di Streaming Attiva",
+                lblActiveHdmi: "Uscita HDMI Raspberry Pi Attiva",
+                protoHeader: "Tabella Comparativa Protocolli",
+                thMethod: "Metodo",
+                thProtocol: "Protocollo",
+                thLatency: "Latenza",
+                thBestFor: "Uso Ideale",
+                modalRebootTitle: "Riavviare Appliance?",
+                modalRebootDesc: "Sei sicuro di voler riavviare il Raspberry Pi Zero? Si riavvierà in meno di 2 secondi direttamente in RAM.",
+                btnCancel: "Annulla",
+                btnConfirmReboot: "Sì, Riavvia"
+            },
+            zh: {
+                title: "Pi Zero 扩展显示器",
+                subtitle: "硬件 GPU VideoCore IV 显示设备",
+                tabMonitor: "监控与实时遥测",
+                tabConfig: "调节与系统设置",
+                tabDownloads: "客户端工具与驱动",
+                tabSdCard: "SD 卡与内存升级",
+                tabManual: "操作与技术指南",
+                statTemp: "SoC 核心温度",
+                statCpu: "CPU 负载率",
+                statRam: "可用内存 RAM",
+                statStream: "推流状态",
+                badgeVpuOffload: "硬件 VPU 卸载",
+                statCpuDesc: "硬件 GPU V4L2 M2M 解码中",
+                badgeRamApp: "100% 内存运行",
+                tipTemp: "博通 BCM2835 核心硅片内部温度。每2秒轮询一次。建议保持在 65°C 以下。",
+                tipCpu: "ARM11 CPU 负载。得益于 VideoCore IV VPU 硬件全卸载，CPU 占用率低于 2%。",
+                tipRam: "512 MB SDRAM 中的可用内存。系统 100% 运行于 RAM 中，彻底杜绝 SD 卡读写磨损。",
+                tipStream: "向 HDMI 电视输出 H.264 视频流的实时解码引擎状态。",
+                displayHeader: "HDMI 电视与显示遥测",
+                displayDesc: "VideoCore IV 硬件 VPU 直接将 H.264 解码输出至 HDMI 屏幕，完全不消耗 CPU 资源。",
+                btnShowHud: "✦ 在电视上显示 HUD (60秒)",
+                btnHideHud: "✕ 关闭 HUD",
+                modeHeader: "多模式并行支持",
+                badgeMultiMode: "并发引擎",
+                m1Desc: "UDP 5000 端口超低延迟 RTP H.264 流，AMD VA-API 零拷贝 GPU 加速 (< 15ms)。",
+                m2Desc: "Windows 10/11 原生 Win + K 无线投屏（RTSP 7236 端口），电脑无需安装任何驱动。",
+                m3Desc: "USB FunctionFS 480 Mbps 裸硬件通道，无网络协议栈开销 (< 1ms)。",
+                ctrlHeader: "显示与推流优化",
+                badgeZeroCopy: "VideoCore IV DMA",
+                bitrateLabel: "推流码率 (VBR)",
+                tipBitrate: "实时 VBR 编码码率。400k 为代码与文本节省 85% 带宽；3000k 至 6000k 提供流畅 60 FPS 动态画面。",
+                fpsLabel: "帧率 (FPS)",
+                tipFps: "目标帧率。15 FPS 超低发热，30 FPS 推荐平衡模式，60 FPS 游戏与鼠标极致流畅。",
+                colorLabel: "颜色配置",
+                tipColor: "24位真彩色提供 1:1 RGB 原画质；256 色采用自适应量化 (QP 30-44) 最大限度节省 USB 带宽。",
+                colorFull: "24位真彩色",
+                color256: "256 色低功耗",
+                colorGray: "单色灰度",
+                dropOnlyLabel: "跳帧保护与损伤更新 (Damage-Only)",
+                tipDropOnly: "启用时仅在检测到画面变动时传输。禁用时强制以 30 FPS 连续发送，确保 YouTube 视频在鼠标移开时永不卡顿。",
+                dropOnlyTrue: "启用 (静态屏幕节省 95% 带宽)",
+                dropOnlyFalse: "禁用 (强制连续重复帧)",
+                dropOnlyDesc: "启用后，屏幕静止时不重复发送帧，仅在鼠标移动或打字时全力传输画面更新。",
+                skipFirstLabel: "即时首帧传输 (skip-to-first)",
+                tipSkipFirst: "消除累积缓冲延迟，在鼠标动作瞬间零延迟送达首帧画面。",
+                skipFirstTrue: "启用 (动作发生时零延迟送达)",
+                skipFirstFalse: "禁用 (严格时间戳对齐)",
+                keyIntLabel: "定期全屏刷新 / IDR 关键帧间隔 (Refresh Clean)",
+                tipKeyInt: "定期注入完整 IDR 关键帧的频率，用于彻底清除屏幕残影并从传输丢包中快速恢复。",
+                keyIntDesc: "定期注入完整的 IDR 关键帧，彻底清除 HDMI/TV 显示器上的任何视觉残影。",
+                btnApply: "💾 应用配置",
+                btnPauseStream: "⏸ 暂停显示",
+                btnResumeStream: "▶ 恢复显示",
+                btnReboot: "🔄 重启设备 (Reboot)",
+                oneLinerTitle: "主机一键连接脚本 (1 键执行)",
+                badgeInstant: "即时生效",
+                oneLinerDesc: "在任何 Linux 电脑上，只需在终端中运行以下命令即可立即扩展屏幕：",
+                btnCopy: "复制",
+                dlPkgTitle: "客户端完整安装包",
+                dlPkgDesc: "包含预编译 ext-sender 二进制文件、start.sh 脚本、udev 规则和安装器的 tar.gz 压缩包。",
+                btnDlPkg: "下载 client.tar.gz",
+                dlSenderTitle: "ext-sender 二进制文件",
+                dlSenderDesc: "为 Linux x86_64 编译的独立 Rust GPU 硬件推流程序。",
+                btnDlSender: "下载 ext-sender",
+                dlScriptTitle: "connect.sh 连接脚本",
+                dlScriptDesc: "自动检测 USB 连接、下载必要工具并启动推流的便携式脚本。",
+                btnDlScript: "下载 connect.sh",
+                dlUdevTitle: "udev 即插即用规则",
+                dlUdevDesc: "插入 USB 线缆时自动优化网络队列 (txqueuelen 100)，杜绝网络延迟积累。",
+                btnDlUdev: "下载 99-ext-monitor.rules",
+                sdHeader: "100% 内存运行架构与固件升级",
+                badgeZeroSdWear: "零 SD 卡磨损",
+                sdDesc1: "树莓派系统 100% 运行在内存中 (initramfs)。开机仅需不到2秒，物理 SD 卡 (/dev/mmcblk0) 处于解挂状态，避免读写老化。",
+                sdDesc2: "彻底杜绝断电损坏 SD 卡的风险，并允许在线挂载 FAT16 引导分区，无需取出卡即可升级固件！",
+                sdPartitionStatus: "物理存储状态：",
+                btnMountSd: "挂载引导分区 (/mnt/boot)",
+                btnUnmountSd: "卸载引导分区",
+                sdUpgradeManualTitle: "无需取出 SD 卡在线更新固件方法：",
+                manualHeader: "完整操作手册与技术规范指南",
+                badgeFullDocs: "完整技术文档",
+                docArchTitle: "1. 硬件架构与 VideoCore IV GPU 解码",
+                docArchDesc: "树莓派 Pi Zero 搭载博通 BCM2835 SoC (ARM1176JZF-S @ 1.0 GHz) 与 500 MHz VideoCore IV GPU。ext-monitor 采用 100% 用户空间纯硬件管线：H.264 流直接喂入 V4L2 M2M 解码器 (/dev/video10)，解码后的帧通过 DMA 直接投射到 HDMI 扫描平面 (/dev/fb0)，延迟低于 15ms，CPU 占用低于 2%。",
+                docUsbProtoTitle: "2. USB Bulk 裸通道、RFC 4571 协议与帧结束标记位 (EOF / ZLP)",
+                docUsbProtoDesc1: "在 USB 2.0 高速总线 (480 Mbps) 上，数据包以最大 512 字节 (wMaxPacketSize) 传输。在传统的 H.264 Annex-B 裸流中，解码器必须等待下一帧的起始码 (00 00 00 01) 才能确认当前帧结束，导致鼠标静止或视频暂停时画面卡死。",
+                docUsbProtoDesc2: "ext-monitor 引入官方标准 RFC 4571 双字节长度封包，并完整保留 RTP Marker Bit (EOF) 信号。USB 收到数据帧最后一个切片的瞬间立即触发 HDMI 显示，彻底摆脱对鼠标移动的依赖，YouTube 播放丝滑流畅。传输长度恰为 512 整数倍时自动发送 ZLP 零长度包，彻底释放 DWC2 硬件 FIFO 避免死锁。",
+                docAudioTitle: "3. 多模式音频路由架构 (标准模式 vs 混合模式)",
+                docAudioDesc1: "ext-monitor 支持通过 4 种传输通道将电脑立体声音频输出至 HDMI 电视音响：",
+                docAudioDesc2: "标准模式 vs 混合模式：标准模式下电脑视频与音频同步输出至电视；混合模式下电脑画面投射至电视，声音由笔记本扬声器播放，或在电视显示电脑屏幕的同时，通过蓝牙播放手机音乐。",
+                docSerialTitle: "4. 通过 USB 虚拟串口 (/dev/ttyACM0) 零 IP 维护",
+                docSerialDesc: "若网络禁用或配置错误，树莓派会在电脑上提供 115200 波特率的 /dev/ttyACM0 救援控制台。",
+                docLinuxTitle: "5. Linux Wayland (GNOME) 正常连接",
+                docLinuxDesc: "将 USB 线插入中间的数据端口。电脑将通过内置 DHCP 自动获取 192.168.7.1，然后运行启动脚本：",
+                docWinTitle: "6. Windows 10/11 投屏 (Win + K 无需驱动)",
+                docWinDesc: "插入 USB 后在 Windows 上按 Win + K，选择 'Pi Zero Wireless Display' 即可。",
+                docSdTitle: "7. 100% 内存运行架构与免拔卡在线固件升级",
+                docSdDesc: "系统 100% 运行于 initramfs 内存盘中。升级接收端时只需通过 'mount -t vfat /dev/mmcblk0p1 /mnt' 挂载 FAT 引导分区写入新镜像并卸载，无需断电或拔出 SD 卡。",
+                docBrowserVideoTitle: "8. 💡 技巧：防止外部显示器上的浏览器视频在鼠标移出时暂停 (Chrome / Firefox)",
+                docBrowserVideoDesc: "在 Linux Wayland 下，Chrome 和 Firefox 默认启用激进的节能策略 ('Window Occlusion Tracking')，当鼠标移出窗口或失去焦点时会自动挂起视频渲染。如需保持 60 FPS 持续平滑播放：",
+                docBrowserChrome: "在地址栏打开 chrome://flags/#calculate-native-win-occlusion，设为 'Disabled' 并重启浏览器（或启动时添加参数 --disable-backgrounding-occluded-windows）。",
+                docBrowserFirefox: "在地址栏打开 about:config，搜索 media.suspend-bkgnd-video.enabled 并修改为 'false'。",
+                docBrowserNative: "原生播放器默认以 60 FPS 持续渲染，完全不受鼠标焦点或窗口层叠限制。",
+                docArmv6Title: "9. 树莓派 Pi Zero (ARMv6) 交叉编译指南",
+                docArmv6Desc: "Pi Zero v1.2/v1.3/W 搭载的 BCM2835 SoC 需使用 ARMv6l 架构。使用 cross (Docker) 编译：",
+                docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
+                docNonOtgTitle: "10. 非 OTG 树莓派型号 (Pi 2, Pi 3, Pi 4, Pi 5) 与启动参数调整",
+                docNonOtgDesc1: "上述型号的标准 USB-A 接口不支持 USB Gadget 外设模式。视频流通过以太网或 Wi-Fi 进行传输。",
+                docNonOtgDesc2: "SD 引导必需调整：在 config.txt 中注释 'dtoverlay=dwc2'。在 cmdline.txt 中移除 'modules-load=dwc2'。连接命令：./scripts/start.sh extend auto 60 false full <树莓派IP>:5000",
+                docPcReceiverTitle: "11. 将普通 Linux 电脑 / 笔记本改造为副屏接收器",
+                docPcReceiverDesc: "任何 Linux 计算机均可充当接收端。安装 gstreamer1.0-tools 并运行：",
+                docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
+                docMultiMonTitle: "12. 多显示器电脑接收端定向投影至屏幕 1 或屏幕 2",
+                docMultiMonDesc: "在连接多个显示器的电脑接收端上，在 DRM KMS 裸机模式下指定 'kmssink connector-id=<ID>'，或在桌面图形会话中使用 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' 定位全屏播放。",
+                docPacerTitle: "13. 🚀 Wayland 帧率起搏器：YouTube 视频 60 FPS 持续播放永不冻结",
+                docPacerDesc: "ext-monitor 在主机后台自动运行 wayland-damage-pacer.py。它在副屏边缘触发 60 Hz 微小重绘脉冲并应用空 Cairo 点击穿透掩码，强制 GNOME Mutter 合成器保持活跃。即使鼠标静止或停留在主屏，YouTube 视频与外部终端仍保持 60 FPS 极速刷新。",
+                docAltPlayersTitle: "14. 非 GNOME 接收端通用替代方案 (FFmpeg, MPV, VLC)",
+                docAltPlayersDesc: "RFC 4571 RTP H.264 视频流完全跨平台。在 KDE、XFCE、i3、Windows 或 macOS 上无需缓冲区极低延迟接收：",
+                docBulkFallbackTitle: "15. ⚡ 默认 USB Bulk 裸通道模式与 UDP 网络自动平滑降级",
+                docBulkFallbackDesc: "ext-sender 默认优先连接 480 Mbps 高速 USB Bulk 裸通道。若未检测到 USB Gadget 硬件外设，将自动透明降级为 UDP 网络推流 (5000 端口)，绝不崩溃。",
+                lblActiveMode: "当前运行推流模式",
+                lblActiveHdmi: "树莓派当前活跃 HDMI 输出",
+                protoHeader: "传输协议特性对比表",
+                thMethod: "传输方式",
+                thProtocol: "通信协议",
+                thLatency: "传输延迟",
+                thBestFor: "适用场景",
+                modalRebootTitle: "确定要重启设备？",
+                modalRebootDesc: "确定要重启树莓派 Pi Zero 吗？系统将在不到2秒内直接在内存中快速重启。",
+                btnCancel: "取消",
+                btnConfirmReboot: "确认重启"
+            }
+        };
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            const btn = document.getElementById('tabBtn_' + tabId);
+            const content = document.getElementById('tab-' + tabId);
+            if (btn && content) {
+                btn.classList.add('active');
+                content.classList.add('active');
+            }
+        }
+
+        // Language Switcher
+        function setLanguage(lang) {
+            if (!I18N[lang]) lang = 'en';
+            localStorage.setItem('ext_monitor_lang', lang);
+
+            document.querySelectorAll('.flag-btn').forEach(btn => btn.classList.remove('active'));
+            const activeFlag = document.getElementById('btnLang_' + lang);
+            if (activeFlag) activeFlag.classList.add('active');
+
+            const dict = I18N[lang];
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[key]) {
+                    if (el.tagName === 'INPUT' && el.type === 'button') {
+                        el.value = dict[key];
+                    } else {
+                        el.textContent = dict[key];
+                    }
+                }
+            });
+        }
+
+        // Bitrate & FPS Controls
+        function updateBitrateValue(val) {
+            currentBitrate = parseInt(val, 10);
+            localStorage.setItem('ext_bitrate', currentBitrate);
+            document.getElementById('valBitrate').textContent = currentBitrate + ' kbps';
+            document.querySelectorAll('[data-bitrate]').forEach(b => {
+                b.classList.toggle('active', parseInt(b.getAttribute('data-bitrate'), 10) === currentBitrate);
+            });
+        }
+
+        function setBitrate(kbps) {
+            currentBitrate = parseInt(kbps, 10);
+            localStorage.setItem('ext_bitrate', currentBitrate);
+            const slider = document.getElementById('bitrateSlider');
+            if (slider) slider.value = kbps;
+            updateBitrateValue(kbps);
+        }
+
+        function setFps(fps) {
+            currentFps = fps;
+            localStorage.setItem('ext_fps', fps);
+            document.getElementById('valFps').textContent = fps + ' FPS';
+            document.querySelectorAll('#fpsGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', parseInt(b.getAttribute('data-fps'), 10) === fps);
+            });
+        }
+
+        function setColor(profile) {
+            currentColor = profile;
+            localStorage.setItem('ext_color', profile);
+            const labels = { full: '24-bit TrueColor', '256': '256-Color (QP 30-44)', gray: 'Monochrome' };
+            const el = document.getElementById('valColor');
+            if (el) el.textContent = labels[profile] || profile;
+            document.querySelectorAll('#colorGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-color') === profile);
+            });
+        }
+
+        function setDropOnly(val) {
+            currentDropOnly = val;
+            localStorage.setItem('ext_drop_only', val);
+            const el = document.getElementById('valDropOnly');
+            if (el) el.textContent = val ? 'drop-only=true (Econômico)' : 'drop-only=false (Contínuo - Padrão)';
+            const btnT = document.getElementById('btnDropOnlyTrue');
+            const btnF = document.getElementById('btnDropOnlyFalse');
+            if (btnT) btnT.classList.toggle('active', val);
+            if (btnF) btnF.classList.toggle('active', !val);
+        }
+
+        function setSkipToFirst(val) {
+            currentSkipToFirst = val;
+            localStorage.setItem('ext_skip_to_first', val);
+            const el = document.getElementById('valSkipFirst');
+            if (el) el.textContent = val ? 'skip-to-first=true (Ativo)' : 'skip-to-first=false (Desativado)';
+            const btnT = document.getElementById('btnSkipFirstTrue');
+            const btnF = document.getElementById('btnSkipFirstFalse');
+            if (btnT) btnT.classList.toggle('active', val);
+            if (btnF) btnF.classList.toggle('active', !val);
+        }
+
+        function updateKeyIntValue(val) {
+            currentKeyIntMax = parseInt(val, 10);
+            localStorage.setItem('ext_key_int_max', currentKeyIntMax);
+            const sec = (currentKeyIntMax / (currentFps || 30)).toFixed(1);
+            const el = document.getElementById('valKeyInt');
+            if (el) el.textContent = `${currentKeyIntMax} quadros (~${sec}s)`;
+            document.querySelectorAll('#keyIntGrid [data-keyint]').forEach(b => {
+                b.classList.toggle('active', parseInt(b.getAttribute('data-keyint'), 10) === currentKeyIntMax);
+            });
+        }
+
+        function setKeyInt(val) {
+            const slider = document.getElementById('keyIntSlider');
+            if (slider) slider.value = val;
+            updateKeyIntValue(val);
+        }
+
+        // Operating Modes State & Toggle
+        const activeModes = {
+            mode1: true,
+            mode2: true,
+            mode3: true
+        };
+
+        function setModeToggleUI(modeKey, enabled) {
+            activeModes[modeKey] = enabled;
+            const toggle = document.getElementById('toggle' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
+            const card = document.getElementById('card' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
+            const badge = document.getElementById('badge' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
+
+            if (toggle) toggle.checked = enabled;
+            if (card) {
+                if (enabled) {
+                    card.classList.remove('disabled');
+                } else {
+                    card.classList.add('disabled');
+                }
+            }
+            if (badge) {
+                if (enabled) {
+                    badge.className = modeKey === 'mode1' ? 'stat-badge badge-cyan' : modeKey === 'mode2' ? 'stat-badge badge-green' : 'stat-badge badge-purple';
+                    badge.textContent = modeKey === 'mode1' ? 'Ligado (UDP 5000)' : modeKey === 'mode2' ? 'Ligado (TCP 7236)' : 'Ligado (USB Bulk)';
+                } else {
+                    badge.className = 'stat-badge badge-red';
+                    badge.textContent = 'Desligado (Inativo)';
+                }
+            }
+        }
+
+        function toggleMode(modeKey, enabled) {
+            setModeToggleUI(modeKey, enabled);
+            localStorage.setItem('ext_' + modeKey, enabled);
+            
+            showToast(enabled ? `✓ ${modeKey.toUpperCase()} ligado!` : `✕ ${modeKey.toUpperCase()} desligado.`);
+            
+            fetch('/api/modes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    [modeKey]: enabled,
+                    mode1: activeModes.mode1,
+                    mode2: activeModes.mode2,
+                    mode3: activeModes.mode3
+                })
+            }).catch(() => {});
+        }
+
+        function setCapture(cap) {
+            currentCapture = cap;
+            document.querySelectorAll('#captureGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', b.dataset.capture === cap);
+            });
+            document.getElementById('valCapture').textContent = cap === 'kms' ? 'KMS Direct (Hardware Scanout)' : 'GNOME Mutter (PipeWire)';
+            localStorage.setItem('ext_capture', cap);
+        }
+
+        function setMonitor(mon) {
+            currentMonitor = mon;
+            document.querySelectorAll('#monitorGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', b.dataset.monitor === mon);
+            });
+            document.getElementById('valMonitor').textContent = mon;
+            localStorage.setItem('ext_monitor', mon);
+        }
+
+        // Hot-Apply Configuration
+        function applyConfiguration() {
+            localStorage.setItem('ext_color', currentColor);
+            localStorage.setItem('ext_fps', currentFps);
+            localStorage.setItem('ext_bitrate', currentBitrate);
+            localStorage.setItem('ext_drop_only', currentDropOnly);
+            localStorage.setItem('ext_skip_to_first', currentSkipToFirst);
+            localStorage.setItem('ext_key_int_max', currentKeyIntMax);
+            localStorage.setItem('ext_capture', currentCapture);
+            localStorage.setItem('ext_monitor', currentMonitor);
+            showToast('Applying configuration via UDP 5001...');
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fps: currentFps,
+                    bitrate: currentBitrate,
+                    color: currentColor,
+                    drop_only: currentDropOnly,
+                    skip_to_first: currentSkipToFirst,
+                    key_int_max: currentKeyIntMax,
+                    capture: currentCapture,
+                    monitor: currentMonitor
+                })
+            })
+            .then(res => res.json())
+            .then(() => showToast('✓ Configuration applied successfully!'))
+            .catch(() => showToast('✓ Sent to host streamer'));
+        }
+
+        // HUD Trigger
+        function triggerHud(show) {
+            const action = show ? 'trigger_hud' : 'hide_hud';
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            })
+            .then(() => showToast(show ? '✓ HUD enabled on TV screen for 60s' : '✓ HUD hidden from TV screen'))
+            .catch(() => showToast('HUD command sent'));
+        }
+
+        // Stream Pause / Resume
+        function togglePauseStream() {
+            isPaused = !isPaused;
+            const endpoint = isPaused ? '/api/stream/stop' : '/api/stream/start';
+            fetch(endpoint, { method: 'POST' })
+                .then(r => r.json())
+                .then(() => {
+                    const btn = document.getElementById('btnPause');
+                    btn.textContent = isPaused ? '▶ Retomar Exibição' : '⏸ Pausar Exibição';
+                    document.getElementById('valState').textContent = isPaused ? 'PAUSADO' : 'ONLINE';
+                    document.getElementById('badgeStream').textContent = isPaused ? 'Pausado' : 'Ativo';
+                    document.getElementById('badgeStream').className = isPaused ? 'stat-badge badge-red' : 'stat-badge badge-green';
+                    showToast(isPaused ? 'Exibição pausada' : 'Exibição retomada');
+                });
+        }
+
+        // Reboot Modal
+        function confirmReboot() {
+            document.getElementById('rebootModal').classList.add('active');
+        }
+
+        function closeRebootModal() {
+            document.getElementById('rebootModal').classList.remove('active');
+        }
+
+        function executeReboot() {
+            closeRebootModal();
+            showToast('Rebooting Raspberry Pi Zero...');
+            fetch('/api/system/reboot', { method: 'POST' })
+                .then(() => {
+                    document.getElementById('valState').textContent = 'REBOOTING';
+                    document.getElementById('badgeStream').className = 'stat-badge badge-red';
+                    setTimeout(() => location.reload(), 4000);
+                });
+        }
+
+        // SD Card Mount / Unmount
+        function mountSdCard(mount) {
+            const endpoint = mount ? '/api/sdcard/mount' : '/api/sdcard/unmount';
+            fetch(endpoint, { method: 'POST' })
+                .then(r => r.json())
+                .then(res => {
+                    const statusEl = document.getElementById('sdMountStatus');
+                    if (mount && res.status === 'mounted') {
+                        statusEl.textContent = 'Montado em /mnt/boot (Pronto para Upgrade)';
+                        statusEl.style.color = '#00e5ff';
+                        showToast('✓ Cartão montado em /mnt/boot');
+                    } else {
+                        statusEl.textContent = 'Desmontado (Seguro / Desacoplado)';
+                        statusEl.style.color = '#7ee787';
+                        showToast('✓ Cartão desmontado com segurança');
+                    }
+                });
+        }
+
+        // Copy Helper
+        function copyCommand(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+                    const btn = el.parentElement.querySelector('.copy-btn');
+                    if (btn) {
+                        const oldText = btn.textContent;
+                        btn.textContent = '✓ Copiado!';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.textContent = oldText;
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    }
+                });
+            }
+        }
+
+        // Toast Helper
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2500);
+        }
+
+        let isAudioMuted = false;
+        function updateAudioVolume(val) {
+            document.getElementById('valAudioVolume').textContent = val + '%';
+            fetch('/api/audio/volume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ volume: parseInt(val, 10) })
+            }).then(r => r.json()).then(st => {
+                showToast('Volume HDMI: ' + st.volume + '%');
+            }).catch(() => {});
+        }
+
+        function toggleAudioMute() {
+            isAudioMuted = !isAudioMuted;
+            fetch('/api/audio/mute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ muted: isAudioMuted })
+            }).then(r => r.json()).then(st => {
+                const btn = document.getElementById('btnAudioMute');
+                if (btn) {
+                    btn.textContent = st.muted ? '🔇 Ativar Áudio' : '🔊 Silenciar Áudio';
+                    btn.className = st.muted ? 'btn-danger' : 'btn-primary';
+                }
+                showToast(st.muted ? 'Áudio HDMI Silenciado' : 'Áudio HDMI Ativado');
+            }).catch(() => {});
+        }
+
+        // Highlight Active Streaming Card
+        function highlightActiveCard(activeId) {
+            ['cardMode1', 'cardMode2', 'cardMode3'].forEach(id => {
+                const card = document.getElementById(id);
+                if (!card) return;
+                const badge = card.querySelector('.stat-badge');
+                if (id === activeId) {
+                    card.style.transform = 'translateY(-2px)';
+                    card.style.boxShadow = '0 0 20px rgba(0, 229, 255, 0.4)';
+                    if (badge) {
+                        badge.textContent = '● TRANSMITINDO AGORA';
+                        badge.className = 'stat-badge badge-green';
+                    }
+                } else {
+                    card.style.transform = 'none';
+                    card.style.boxShadow = 'none';
+                    if (badge) {
+                        if (id === 'cardMode1') { badge.textContent = 'Ligado (UDP 5000)'; badge.className = 'stat-badge badge-cyan'; }
+                        if (id === 'cardMode2') { badge.textContent = 'Ligado (TCP 7236)'; badge.className = 'stat-badge badge-green'; }
+                        if (id === 'cardMode3') { badge.textContent = 'Ligado (USB Bulk)'; badge.className = 'stat-badge badge-purple'; }
+                    }
+                }
+            });
+        }
+
+        // Telemetry Poller
+        function pollTelemetry() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.temp) document.getElementById('valTemp').textContent = data.temp + '°C';
+                    if (data.cpu) document.getElementById('valCpu').textContent = data.cpu;
+                    if (data.ram) document.getElementById('valRam').textContent = data.ram + ' MB';
+                    if (data.audio) {
+                        const a = data.audio;
+                        const elVol = document.getElementById('valAudioVolume');
+                        const slider = document.getElementById('audioVolumeSlider');
+                        if (elVol && slider && !slider.matches(':active')) {
+                            elVol.textContent = a.volume + '%';
+                            slider.value = a.volume;
+                        }
+                        const btn = document.getElementById('btnAudioMute');
+                        if (btn) {
+                            btn.textContent = a.muted ? '🔇 Ativar Áudio' : '🔊 Silenciar Áudio';
+                            btn.className = a.muted ? 'btn-danger' : 'btn-primary';
+                        }
+                    }
+
+                    // 1. Active Mode Visual Feedback
+                    if (data.active_mode) {
+                        const am = data.active_mode;
+                        const elTitle = document.getElementById('activeModeTitle');
+                        const elDesc = document.getElementById('activeModeDesc');
+                        const elBadge = document.getElementById('activeModeBadge');
+                        const elIcon = document.getElementById('activeModeIcon');
+                        const banner = document.getElementById('activeStreamBanner');
+
+                        if (elTitle) elTitle.textContent = am.name;
+                        if (elDesc) elDesc.textContent = am.details;
+                        if (elIcon) elIcon.textContent = am.icon || '📺';
+
+                        if (am.id === 'mode1_udp') {
+                            if (elBadge) { elBadge.textContent = '● MODO 1: REDE UDP ATIVO (60 FPS)'; elBadge.className = 'stat-badge badge-cyan'; }
+                            if (banner) { banner.style.borderColor = 'var(--accent-cyan)'; banner.style.boxShadow = '0 0 25px rgba(0, 229, 255, 0.25)'; }
+                            highlightActiveCard('cardMode1');
+                        } else if (am.id === 'mode2_miracast') {
+                            if (elBadge) { elBadge.textContent = '● MODO 2: MIRACAST WFD ATIVO (60 FPS)'; elBadge.className = 'stat-badge badge-green'; }
+                            if (banner) { banner.style.borderColor = 'var(--accent-emerald)'; banner.style.boxShadow = '0 0 25px rgba(0, 255, 102, 0.25)'; }
+                            highlightActiveCard('cardMode2');
+                        } else if (am.id === 'mode3_usb_bulk') {
+                            if (elBadge) { elBadge.textContent = '● MODO 3: USB BULK ATIVO (480 Mbps)'; elBadge.className = 'stat-badge badge-purple'; }
+                            if (banner) { banner.style.borderColor = 'var(--accent-purple)'; banner.style.boxShadow = '0 0 25px rgba(179, 136, 255, 0.25)'; }
+                            highlightActiveCard('cardMode3');
+                        } else {
+                            if (elBadge) { elBadge.textContent = '⏳ AGUARDANDO STREAM (SPLASH ATIVA)'; elBadge.className = 'stat-badge badge-amber'; }
+                            if (banner) { banner.style.borderColor = 'rgba(255, 179, 0, 0.4)'; banner.style.boxShadow = 'none'; }
+                            highlightActiveCard(null);
+                        }
+
+                        // Also update statStream card
+                        const valState = document.getElementById('valState');
+                        const badgeStream = document.getElementById('badgeStream');
+                        if (valState) {
+                            valState.textContent = am.id === 'mode1_udp' ? 'REDE UDP' : (am.id === 'mode2_miracast' ? 'MIRACAST' : (am.id === 'mode3_usb_bulk' ? 'USB BULK' : 'STANDBY'));
+                        }
+                        if (badgeStream) {
+                            badgeStream.textContent = am.id !== 'idle' ? 'Transmitindo' : 'Aguardando';
+                            badgeStream.className = am.id !== 'idle' ? 'stat-badge badge-green' : 'stat-badge badge-amber';
+                        }
+                    }
+
+                    // 2. Active HDMI Display Visual Feedback
+                    const h = data.hdmi || data.monitor;
+                    if (h) {
+                        const elPort = document.getElementById('activeHdmiPortBadge');
+                        const elHdmiTitle = document.getElementById('activeHdmiTitle');
+                        const elHdmiDetails = document.getElementById('activeHdmiDetails');
+
+                        if (elPort) elPort.textContent = h.connector || 'HDMI-A-1';
+                        if (elHdmiTitle) elHdmiTitle.textContent = h.connector_friendly || ('Porta HDMI (' + (h.connector || 'HDMI-A-1') + ')');
+                        if (elHdmiDetails) {
+                            const hw = h.hardware_model || 'Raspberry Pi';
+                            const mon = h.name || 'Monitor HDMI';
+                            const mode = h.active_mode || '1280x720 @ 60 Hz';
+                            elHdmiDetails.textContent = mon + ' • ' + mode + ' • ' + hw;
+                        }
+
+                        const elName = document.getElementById('monitorName');
+                        if (elName && h.name) elName.textContent = '🖥️ ' + h.name;
+                        const elBadge = document.getElementById('monitorBadge');
+                        if (elBadge) elBadge.textContent = (h.connector || 'HDMI-A-1') + ' • ' + (h.active_mode || h.preferred_mode || '1280x720');
+                        const elVpu = document.getElementById('monitorVpu');
+                        if (elVpu && h.vpu) elVpu.textContent = h.vpu;
+                        const elStatus = document.getElementById('monitorStatus');
+                        if (elStatus) {
+                            if (h.connected) {
+                                elStatus.textContent = '● LIVE ZERO-COPY 60 FPS (' + (h.connector || 'HDMI-A-1') + ')';
+                                elStatus.style.color = '#7ee787';
+                            } else {
+                                elStatus.textContent = '● DESCONECTADO (HEADLESS GUARD ATIVO)';
+                                elStatus.style.color = '#f85149';
+                            }
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+
+        // Init: Restore from localStorage first (for instant snappy UI on F5), then sync with server
+        const savedLang = localStorage.getItem('ext_monitor_lang') || navigator.language.slice(0, 2);
+        setLanguage(savedLang);
+
+        const savedColor = localStorage.getItem('ext_color');
+        if (savedColor) setColor(savedColor);
+
+        const savedFps = localStorage.getItem('ext_fps');
+        if (savedFps) setFps(parseInt(savedFps, 10));
+
+        const savedBitrate = localStorage.getItem('ext_bitrate');
+        if (savedBitrate) setBitrate(parseInt(savedBitrate, 10));
+
+        const savedDropOnly = localStorage.getItem('ext_drop_only');
+        if (savedDropOnly !== null) setDropOnly(savedDropOnly === 'true');
+
+        const savedSkipToFirst = localStorage.getItem('ext_skip_to_first');
+        if (savedSkipToFirst !== null) setSkipToFirst(savedSkipToFirst === 'true');
+
+        const savedKeyInt = localStorage.getItem('ext_key_int_max');
+        if (savedKeyInt) setKeyInt(parseInt(savedKeyInt, 10));
+
+        const savedM1 = localStorage.getItem('ext_mode1');
+        if (savedM1 !== null) setModeToggleUI('mode1', savedM1 === 'true');
+
+        const savedM2 = localStorage.getItem('ext_mode2');
+        if (savedM2 !== null) setModeToggleUI('mode2', savedM2 === 'true');
+
+        const savedM3 = localStorage.getItem('ext_mode3');
+        if (savedM3 !== null) setModeToggleUI('mode3', savedM3 === 'true');
+
+        // Fetch server state to sync if not set locally
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(cfg => {
+                if (cfg.color && !savedColor) setColor(cfg.color);
+                if (cfg.fps && !savedFps) setFps(cfg.fps);
+                if (cfg.bitrate && !savedBitrate) setBitrate(cfg.bitrate);
+                if (cfg.drop_only !== undefined && savedDropOnly === null) setDropOnly(cfg.drop_only);
+                if (cfg.skip_to_first !== undefined && savedSkipToFirst === null) setSkipToFirst(cfg.skip_to_first);
+                if (cfg.key_int_max !== undefined && !savedKeyInt) setKeyInt(cfg.key_int_max);
+                if (cfg.mode1 !== undefined && savedM1 === null) setModeToggleUI('mode1', cfg.mode1);
+                if (cfg.mode2 !== undefined && savedM2 === null) setModeToggleUI('mode2', cfg.mode2);
+                if (cfg.mode3 !== undefined && savedM3 === null) setModeToggleUI('mode3', cfg.mode3);
+            })
+            .catch(() => {});
+
+        setInterval(pollTelemetry, 2000);
+    </script>
+</body>
+</html>
+"#;

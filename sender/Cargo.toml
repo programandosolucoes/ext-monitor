@@ -1,0 +1,17 @@
+[package]
+name = "ext-sender"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Carlos Alberto <psncarlosalberto4ti@gmail.com>"]
+description = "GPU Hardware-Accelerated Virtual Display Sender for Linux Wayland"
+
+[dependencies]
+drm = "0.15.0"
+libc = "0.2"
+libva = "0.1.4"
+moq-nvenc = "0.1.0"
+openh264 = "0.9.8"
+rusb = { version = "0.9", features = ["vendored"] }
+serde_json = "1.0.151"
+zbus = "5.19.0"
