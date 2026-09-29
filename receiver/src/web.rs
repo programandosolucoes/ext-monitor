@@ -156,9 +156,9 @@ fn handle_http_client(
         }
         ("GET", "/api/status") => {
             let is_paused = pipeline_mgr.is_paused();
-            let is_active = pipeline_mgr.current_kind().is_some();
+            let cur_kind = pipeline_mgr.current_kind();
             let audio_st = pipeline_mgr.audio_status();
-            let status_json = get_system_telemetry_json(is_paused, is_active, &audio_st);
+            let status_json = get_system_telemetry_json(is_paused, cur_kind, &audio_st);
             send_response(&mut stream, "200 OK", "application/json", status_json.as_bytes());
         }
         ("GET", "/api/audio/status") => {
@@ -469,8 +469,12 @@ fn send_response(stream: &mut TcpStream, status: &str, content_type: &str, body:
     let _ = stream.flush();
 }
 
-/// Query real-time SoC telemetry (temperature, CPU load, RAM)
-fn get_system_telemetry_json(is_paused: bool, is_active: bool, audio_st: &crate::audio::AudioStatus) -> String {
+/// Query real-time SoC telemetry (temperature, CPU load, RAM, active streaming mode, and HDMI screen)
+fn get_system_telemetry_json(
+    is_paused: bool,
+    cur_kind: Option<crate::pipeline::PipelineKind>,
+    audio_st: &crate::audio::AudioStatus,
+) -> String {
     // 1. Temperature
     let temp_str = fs::read_to_string("/sys/class/thermal/thermal_zone0/temp")
         .unwrap_or_else(|_| "45000".to_string());
@@ -496,6 +500,7 @@ fn get_system_telemetry_json(is_paused: bool, is_active: bool, audio_st: &crate:
         }
     }
 
+    let is_active = cur_kind.is_some();
     let pipeline_state = if is_paused {
         "paused"
     } else if is_active {
@@ -504,11 +509,72 @@ fn get_system_telemetry_json(is_paused: bool, is_active: bool, audio_st: &crate:
         "idle"
     };
 
+    let (mode_id, mode_name, mode_icon, mode_proto, mode_port, mode_details) = match cur_kind {
+        Some(crate::pipeline::PipelineKind::RawH264Rtp { port }) => (
+            "mode1_udp",
+            "Modo 1: Rede UDP (Linux Wayland / X11)",
+            "🐧",
+            "RTP H.264 / RFC 4571",
+            port,
+            format!("Porta UDP {} • Latência < 15ms • Pipeline VA-API/M2M", port),
+        ),
+        Some(crate::pipeline::PipelineKind::MiracastMp2t { port }) => (
+            "mode2_miracast",
+            "Modo 2: Windows Miracast (Wi-Fi Display)",
+            "🪟",
+            "MPEG-TS / RTSP WFD",
+            port,
+            format!("Porta RTSP {} • Windows Win+K • Decodificação V4L2 M2M", port),
+        ),
+        Some(crate::pipeline::PipelineKind::UsbBulkPipe { fd: _ }) => (
+            "mode3_usb_bulk",
+            "Modo 3: USB Bulk Direct (480 Mbps)",
+            "⚡",
+            "USB FunctionFS Bulk Raw H.264",
+            0,
+            "Barramento USB 2.0 High-Speed • Zero-Network • Latência < 1ms".to_string(),
+        ),
+        None => (
+            "idle",
+            "Aguardando Transmissão (Standby / Splash)",
+            "⏳",
+            "Nenhum Fluxo Ativo",
+            0,
+            "Receptor em prontidão exibindo tela de splash com IP e QR Code".to_string(),
+        ),
+    };
+
     let mon = crate::display::MonitorInfo::read_realtime();
 
     format!(
-        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\"}},\"audio\":{}}}",
-        temp_val, cpu_load, mem_free_mb, pipeline_state, mon.connected, mon.name, mon.preferred_mode, mon.active_mode, mon.vpu, audio_st.to_json()
+        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{}}}",
+        temp_val,
+        cpu_load,
+        mem_free_mb,
+        pipeline_state,
+        mode_id,
+        mode_name,
+        mode_icon,
+        mode_proto,
+        mode_port,
+        mode_details,
+        mon.connector,
+        mon.connector_friendly,
+        mon.hardware_model,
+        mon.connected,
+        mon.name,
+        mon.active_mode,
+        mon.preferred_mode,
+        mon.vpu,
+        mon.connected,
+        mon.name,
+        mon.preferred_mode,
+        mon.active_mode,
+        mon.vpu,
+        mon.connector,
+        mon.connector_friendly,
+        mon.hardware_model,
+        audio_st.to_json()
     )
 }
 

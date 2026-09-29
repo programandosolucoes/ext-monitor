@@ -7,7 +7,6 @@
 //! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
 
 use std::fs;
-use std::path::Path;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -19,28 +18,105 @@ pub struct MonitorInfo {
     pub preferred_mode: String,
     pub active_mode: String,
     pub vpu: String,
+    pub connector: String,
+    pub connector_friendly: String,
+    pub hardware_model: String,
 }
 
 impl MonitorInfo {
     /// Reads real-time HDMI monitor telemetry from the system
     pub fn read_realtime() -> Self {
-        let status_paths = [
-            "/sys/class/drm/card0-HDMI-A-1",
-            "/sys/class/drm/card1-HDMI-A-1",
-        ];
+        // 1. Detect hardware model
+        let mut hardware_model = "Raspberry Pi".to_string();
+        if let Ok(m) = fs::read("/proc/device-tree/model") {
+            let clean = String::from_utf8_lossy(&m).trim_matches('\0').trim().to_string();
+            if !clean.is_empty() {
+                hardware_model = clean;
+            }
+        } else if let Ok(prod) = fs::read_to_string("/sys/devices/virtual/dmi/id/product_name") {
+            let clean = prod.trim().to_string();
+            if !clean.is_empty() {
+                hardware_model = clean;
+            }
+        }
 
-        let base_path = status_paths
-            .iter()
-            .find(|p| Path::new(p).exists())
-            .unwrap_or(&status_paths[0]);
+        // 2. Discover all DRM HDMI connectors dynamically
+        let mut chosen_path = "/sys/class/drm/card0-HDMI-A-1".to_string();
+        let mut chosen_connector = "HDMI-A-1".to_string();
+        let mut connected = false;
 
-        let status_file = format!("{}/status", base_path);
-        let edid_file = format!("{}/edid", base_path);
-        let modes_file = format!("{}/modes", base_path);
+        if let Ok(entries) = fs::read_dir("/sys/class/drm") {
+            let mut hdmi_dirs: Vec<(String, String, bool)> = Vec::new();
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.contains("HDMI") {
+                    let path_str = entry.path().to_string_lossy().to_string();
+                    let st_file = format!("{}/status", path_str);
+                    let is_conn = fs::read_to_string(&st_file)
+                        .map(|s| s.trim() == "connected")
+                        .unwrap_or(false);
+                    let conn_name = if let Some(idx) = name.find("HDMI") {
+                        name[idx..].to_string()
+                    } else {
+                        name.clone()
+                    };
+                    hdmi_dirs.push((path_str, conn_name, is_conn));
+                }
+            }
+            // Prefer connected connector, fallback to first available
+            if let Some((p, c, _)) = hdmi_dirs.iter().find(|(_, _, conn)| *conn) {
+                chosen_path = p.clone();
+                chosen_connector = c.clone();
+                connected = true;
+            } else if let Some((p, c, _)) = hdmi_dirs.first() {
+                chosen_path = p.clone();
+                chosen_connector = c.clone();
+                connected = false;
+            }
+        } else {
+            // Fallback for standard Pi Zero path
+            let st_file = format!("{}/status", chosen_path);
+            if let Ok(s) = fs::read_to_string(&st_file) {
+                connected = s.trim() == "connected";
+            }
+        }
 
-        let status_raw = fs::read_to_string(&status_file)
-            .unwrap_or_else(|_| "disconnected".to_string());
-        let connected = status_raw.trim() == "connected";
+        // 3. Compute friendly physical socket name
+        let connector_friendly = if hardware_model.contains("Zero") {
+            format!("Porta Mini-HDMI ({})", chosen_connector)
+        } else if hardware_model.contains("Raspberry Pi 4")
+            || hardware_model.contains("Raspberry Pi 5")
+            || hardware_model.contains("Pi 4")
+            || hardware_model.contains("Pi 5")
+        {
+            if chosen_connector.contains("-2") {
+                format!("Porta Micro-HDMI 1 / Secundária ({})", chosen_connector)
+            } else {
+                format!("Porta Micro-HDMI 0 / Principal ({}) - Próxima ao USB-C", chosen_connector)
+            }
+        } else if hardware_model.contains("Raspberry Pi") {
+            format!("Porta HDMI Principal ({})", chosen_connector)
+        } else {
+            format!("Saída de Vídeo Digital ({})", chosen_connector)
+        };
+
+        // 4. Compute VPU name based on hardware
+        let vpu = if hardware_model.contains("Zero")
+            || hardware_model.contains("Raspberry Pi 1")
+            || hardware_model.contains("Raspberry Pi 2")
+            || hardware_model.contains("Raspberry Pi 3")
+        {
+            "VideoCore IV Hardware VPU".to_string()
+        } else if hardware_model.contains("Pi 4") {
+            "VideoCore VI Hardware VPU (4K DRM/KMS)".to_string()
+        } else if hardware_model.contains("Pi 5") {
+            "VideoCore VII Hardware VPU (4K DRM/KMS)".to_string()
+        } else {
+            "GPU Hardware Acceleration (DRM/KMS)".to_string()
+        };
+
+        let edid_file = format!("{}/edid", chosen_path);
+        let modes_file = format!("{}/modes", chosen_path);
 
         let mut modes = Vec::new();
         if let Ok(modes_str) = fs::read_to_string(&modes_file) {
@@ -54,6 +130,18 @@ impl MonitorInfo {
 
         let preferred_mode = modes.first().cloned().unwrap_or_else(|| "1280x720".to_string());
 
+        // 5. Active scanout mode from fb0 virtual_size
+        let active_scanout = if let Ok(fb_size) = fs::read_to_string("/sys/class/graphics/fb0/virtual_size") {
+            let parts: Vec<&str> = fb_size.trim().split(',').collect();
+            if parts.len() == 2 {
+                format!("{}x{} @ 60 Hz", parts[0], parts[1])
+            } else {
+                "1280x720 @ 60 Hz".to_string()
+            }
+        } else {
+            "1280x720 @ 60 Hz".to_string()
+        };
+
         if !connected {
             return Self {
                 connected: false,
@@ -61,8 +149,11 @@ impl MonitorInfo {
                 manufacturer: "None".to_string(),
                 product_code: 0,
                 preferred_mode: "1280x720".to_string(),
-                active_mode: "1280x720 @ 60 Hz (Virtual)".to_string(),
-                vpu: "VideoCore IV Hardware VPU".to_string(),
+                active_mode: format!("{} (Virtual)", active_scanout),
+                vpu,
+                connector: chosen_connector,
+                connector_friendly,
+                hardware_model,
             };
         }
 
@@ -89,8 +180,11 @@ impl MonitorInfo {
             manufacturer: mfg,
             product_code: prod_code,
             preferred_mode,
-            active_mode: "1280x720 @ 60 Hz".to_string(),
-            vpu: "VideoCore IV Hardware VPU".to_string(),
+            active_mode: active_scanout,
+            vpu,
+            connector: chosen_connector,
+            connector_friendly,
+            hardware_model,
         }
     }
 }

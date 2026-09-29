@@ -188,6 +188,7 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         .badge-green { background: rgba(0, 255, 102, 0.15); color: var(--accent-emerald); border: 1px solid rgba(0, 255, 102, 0.3); }
         .badge-purple { background: rgba(179, 136, 255, 0.15); color: var(--accent-purple); border: 1px solid rgba(179, 136, 255, 0.3); }
         .badge-red { background: rgba(255, 82, 82, 0.15); color: var(--accent-red); border: 1px solid rgba(255, 82, 82, 0.3); }
+        .badge-amber { background: rgba(255, 179, 0, 0.15); color: var(--accent-amber); border: 1px solid rgba(255, 179, 0, 0.3); }
         .stat-value { font-size: 1.6rem; font-weight: 700; color: #fff; }
         .stat-footer { font-size: 0.76rem; color: var(--text-muted); margin-top: 0.3rem; }
 
@@ -607,6 +608,36 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         <!-- TAB 1: MONITORAMENTO & TELEMETRIA                                 -->
         <!-- ================================================================= -->
         <section id="tab-monitor" class="tab-content active">
+            <!-- Live Streaming Mode & Active HDMI Output Banner -->
+            <div class="glass-card" id="activeStreamBanner" style="border: 1px solid var(--accent-cyan); background: linear-gradient(135deg, rgba(0, 229, 255, 0.08) 0%, rgba(16, 23, 38, 0.95) 100%); margin-bottom: 1.5rem; padding: 1.25rem 1.6rem; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4); transition: var(--transition);">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; align-items: center;">
+                    <!-- Left: Active Mode Feedback -->
+                    <div style="display: flex; align-items: center; gap: 1.1rem;">
+                        <div id="activeModeIcon" style="font-size: 2.2rem; width: 56px; height: 56px; min-width: 56px; display: flex; align-items: center; justify-content: center; background: rgba(0, 229, 255, 0.12); border-radius: var(--radius-md); border: 1px solid var(--accent-cyan); box-shadow: 0 0 16px rgba(0, 229, 255, 0.25);">🐧</div>
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.2rem;">
+                                <span style="font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); font-weight: 700;" data-i18n="lblActiveMode">Modo de Transmissão em Execução</span>
+                                <span id="activeModeBadge" class="stat-badge badge-green" style="animation: pulse 2s infinite;">● TRANSMITINDO</span>
+                            </div>
+                            <div id="activeModeTitle" style="font-size: 1.25rem; font-weight: 800; color: #fff; line-height: 1.25;">Modo 1: Rede UDP (Linux Wayland / X11)</div>
+                            <div id="activeModeDesc" style="font-size: 0.84rem; color: var(--accent-cyan); font-family: monospace; margin-top: 0.25rem;">Porta UDP 5000 • Latência &lt; 15ms • Pipeline VA-API/M2M</div>
+                        </div>
+                    </div>
+                    <!-- Right: Active HDMI Output Feedback -->
+                    <div style="display: flex; align-items: center; gap: 1.1rem; border-left: 1px solid rgba(255, 255, 255, 0.08); padding-left: 1rem;">
+                        <div style="font-size: 2.2rem; width: 56px; height: 56px; min-width: 56px; display: flex; align-items: center; justify-content: center; background: rgba(179, 136, 255, 0.12); border-radius: var(--radius-md); border: 1px solid var(--accent-purple); box-shadow: 0 0 16px rgba(179, 136, 255, 0.25);">📺</div>
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.2rem;">
+                                <span style="font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); font-weight: 700;" data-i18n="lblActiveHdmi">Tela HDMI do Raspberry Pi</span>
+                                <span id="activeHdmiPortBadge" class="stat-badge badge-purple">HDMI-A-1</span>
+                            </div>
+                            <div id="activeHdmiTitle" style="font-size: 1.2rem; font-weight: 800; color: #fff; line-height: 1.25;">Porta Mini-HDMI (HDMI-A-1)</div>
+                            <div id="activeHdmiDetails" style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 0.25rem;">Detectando Monitor e Resolução...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Stat Cards Row -->
             <div class="stats-grid">
                 <div class="stat-card">
@@ -1144,8 +1175,46 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                         </p>
                     </div>
 
+                    <!-- Section 9: ARMv6 Compilation -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docArmv6Title">9. Compilação para Raspberry Pi Zero (ARMv6)</h3>
+                    <p data-i18n="docArmv6Desc">
+                        O SoC BCM2835 do Pi Zero v1.2/v1.3/W requer arquitetura ARMv6l. Para compilar com cross (Docker):
+                    </p>
+                    <pre style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 6px; font-family: monospace; color: var(--accent-cyan); overflow-x: auto;"><code data-i18n="docArmv6Cmd">cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release</code></pre>
+
+                    <!-- Section 10: Non-OTG Models -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docNonOtgTitle">10. Modelos Raspberry Pi Não-OTG (Pi 2, Pi 3, Pi 4, Pi 5) & Ajuste de Boot</h3>
+                    <p data-i18n="docNonOtgDesc1">
+                        Esses modelos não possuem modo OTG periférico nas portas USB comuns. A conexão é feita via Ethernet ou Wi-Fi.
+                    </p>
+                    <p data-i18n="docNonOtgDesc2" style="color: #8b949e;">
+                        Ajustes obrigatórios no SD: No config.txt comente 'dtoverlay=dwc2'. No cmdline.txt remova 'modules-load=dwc2'. Conecte via: ./scripts/start.sh extend auto 60 false full &lt;IP_DO_PI&gt;:5000
+                    </p>
+
+                    <!-- Section 11: Conventional PC Receiver -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docPcReceiverTitle">11. Transformar PC / Notebook Convencional em Segunda Tela</h3>
+                    <p data-i18n="docPcReceiverDesc">
+                        Qualquer computador Linux pode atuar como receptor. Instale gstreamer1.0-tools e execute:
+                    </p>
+                    <pre style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 6px; font-family: monospace; color: var(--accent-cyan); overflow-x: auto;"><code data-i18n="docPcReceiverCmd">gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false</code></pre>
+
+                    <!-- Section 12: Multi-Monitor Targeting -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docMultiMonTitle">12. Direcionamento para Tela 1 ou 2 em PCs com Múltiplos Monitores</h3>
+                    <p data-i18n="docMultiMonDesc">
+                        Em PCs receptores com mais de uma tela conectada, use 'kmssink connector-id=&lt;ID&gt;' no modo direto KMS DRM ou 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' em sessão gráfica para projetar exatamente no monitor desejado.
+                    </p>
+
+                    <!-- Section 13: Wayland Damage Pacer -->
+                    <div style="background: rgba(46, 160, 67, 0.08); border-left: 4px solid #2ea043; border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: #2ea043; margin: 0 0 0.5rem 0;" data-i18n="docPacerTitle">13. 🚀 Wayland Damage Pacer: 60 FPS Contínuos no YouTube Sem Congelar</h3>
+                        <p data-i18n="docPacerDesc" style="margin: 0; color: #fff;">
+                            O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em 1x1 pixel invisível na tela estendida, forçando o GNOME Mutter a manter o compositor acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.
+                        </p>
+                    </div>
+
                     <!-- Comparison Table -->
                     <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="protoHeader">Tabela Comparativa de Métodos</h3>
+
                     <table class="proto-table">
                         <thead>
                             <tr>
@@ -1316,6 +1385,21 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docBrowserChrome: "Visit chrome://flags/#calculate-native-win-occlusion, set to 'Disabled' and restart (or launch with --disable-backgrounding-occluded-windows).",
                 docBrowserFirefox: "Visit about:config, search for media.suspend-bkgnd-video.enabled and toggle to 'false'.",
                 docBrowserNative: "Play at continuous 60 FPS by default without any cursor position restrictions.",
+                docArmv6Title: "9. Cross-Compiling for Raspberry Pi Zero (ARMv6)",
+                docArmv6Desc: "The BCM2835 SoC on Pi Zero v1.2/v1.3/W requires the ARMv6l architecture. To compile with cross (Docker):",
+                docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
+                docNonOtgTitle: "10. Non-OTG Raspberry Pi Models (Pi 2, Pi 3, Pi 4, Pi 5) & Boot Config",
+                docNonOtgDesc1: "These models do not support peripheral USB gadget mode on standard USB-A ports. Streaming is delivered via Ethernet or Wi-Fi.",
+                docNonOtgDesc2: "Required SD boot adjustments: In config.txt comment out 'dtoverlay=dwc2'. In cmdline.txt remove 'modules-load=dwc2'. Stream via: ./scripts/start.sh extend auto 60 false full <PI_IP>:5000",
+                docPcReceiverTitle: "11. Turning Any Linux PC / Laptop into a Secondary Screen Receiver",
+                docPcReceiverDesc: "Any Linux computer can act as a receiver. Install gstreamer1.0-tools and run:",
+                docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
+                docMultiMonTitle: "12. Directing Video to Screen 1 vs Screen 2 on Multi-Monitor PCs",
+                docMultiMonDesc: "On receiver PCs with multiple connected displays, specify 'kmssink connector-id=<ID>' in direct DRM KMS mode or 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' in graphical sessions to target the desired monitor.",
+                docPacerTitle: "13. 🚀 Wayland Damage Pacer: Continuous 60 FPS YouTube without Pausing",
+                docPacerDesc: "ext-monitor runs wayland-damage-pacer.py in the background on the Host. It emits 60 Hz micro-damage pulses to an invisible sub-surface on the extended monitor, keeping the GNOME Mutter compositor active. YouTube videos, clocks, and terminals render at 60 FPS even when the mouse is motionless or on the primary screen.",
+                lblActiveMode: "Active Streaming Mode",
+                lblActiveHdmi: "Active Raspberry Pi HDMI Output",
                 protoHeader: "Protocol Comparison Table",
                 thMethod: "Method",
                 thProtocol: "Protocol",
@@ -1428,6 +1512,21 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docBrowserChrome: "Acesse chrome://flags/#calculate-native-win-occlusion, selecione 'Disabled' e reinicie o navegador (ou use a flag --disable-backgrounding-occluded-windows).",
                 docBrowserFirefox: "Acesse about:config, busque por media.suspend-bkgnd-video.enabled e altere para 'false'.",
                 docBrowserNative: "Reproduzem a 60 FPS contínuos por padrão, sem interrupção por foco ou posição de mouse.",
+                docArmv6Title: "9. Compilação para Raspberry Pi Zero (ARMv6)",
+                docArmv6Desc: "O SoC BCM2835 do Pi Zero v1.2/v1.3/W requer arquitetura ARMv6l. Para compilar com cross (Docker):",
+                docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
+                docNonOtgTitle: "10. Modelos Raspberry Pi Não-OTG (Pi 2, Pi 3, Pi 4, Pi 5) & Ajuste de Boot",
+                docNonOtgDesc1: "Esses modelos não possuem modo OTG periférico nas portas USB comuns. A conexão é feita via Ethernet ou Wi-Fi.",
+                docNonOtgDesc2: "Ajustes obrigatórios no SD: No config.txt comente 'dtoverlay=dwc2'. No cmdline.txt remova 'modules-load=dwc2'. Conecte via: ./scripts/start.sh extend auto 60 false full <IP_DO_PI>:5000",
+                docPcReceiverTitle: "11. Transformar PC / Notebook Convencional em Segunda Tela",
+                docPcReceiverDesc: "Qualquer computador Linux pode atuar como receptor. Instale gstreamer1.0-tools e execute:",
+                docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
+                docMultiMonTitle: "12. Direcionamento para Tela 1 ou 2 em PCs com Múltiplos Monitores",
+                docMultiMonDesc: "Em PCs receptores com mais de uma tela conectada, use 'kmssink connector-id=<ID>' no modo direto KMS DRM ou 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' em sessão gráfica para projetar exatamente no monitor desejado.",
+                docPacerTitle: "13. 🚀 Wayland Damage Pacer: 60 FPS Contínuos no YouTube Sem Congelar",
+                docPacerDesc: "O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em superfície invisível na tela estendida, forçando o compositor GNOME Mutter a permanecer acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.",
+                lblActiveMode: "Modo de Transmissão em Execução",
+                lblActiveHdmi: "Tela HDMI do Raspberry Pi",
                 protoHeader: "Tabela Comparativa de Métodos",
                 thMethod: "Método",
                 thProtocol: "Protocolo",
@@ -1540,6 +1639,21 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docBrowserChrome: "Apri chrome://flags/#calculate-native-win-occlusion, imposta su 'Disabled' e riavvia (o usa --disable-backgrounding-occluded-windows).",
                 docBrowserFirefox: "Apri about:config, cerca media.suspend-bkgnd-video.enabled e imposta su 'false'.",
                 docBrowserNative: "Riproducono a 60 FPS continui per impostazione predefinita, senza interruzioni per posizione del mouse.",
+                docArmv6Title: "9. Compilazione per Raspberry Pi Zero (ARMv6)",
+                docArmv6Desc: "Il SoC BCM2835 su Pi Zero v1.2/v1.3/W richiede l'architettura ARMv6l. Per compilare con cross (Docker):",
+                docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
+                docNonOtgTitle: "10. Modelli Raspberry Pi Non-OTG (Pi 2, Pi 3, Pi 4, Pi 5) & Parametri di Boot",
+                docNonOtgDesc1: "Questi modelli non supportano la modalità periferica USB sulle porte USB standard. La connessione avviene via Ethernet o Wi-Fi.",
+                docNonOtgDesc2: "Modifiche obbligatorie sulla scheda SD: In config.txt commentare 'dtoverlay=dwc2'. In cmdline.txt rimuovere 'modules-load=dwc2'. Collegarsi con: ./scripts/start.sh extend auto 60 false full <IP_PI>:5000",
+                docPcReceiverTitle: "11. Trasformare qualsiasi PC / Laptop Linux in Schermo Secondario",
+                docPcReceiverDesc: "Qualsiasi PC Linux può funzionare come ricevitore. Installa gstreamer1.0-tools ed esegui:",
+                docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
+                docMultiMonTitle: "12. Indirizzamento su Schermo 1 o 2 su PC con Più Monitor",
+                docMultiMonDesc: "Su PC ricevitori con più monitor, specifica 'kmssink connector-id=<ID>' in KMS DRM diretto o 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' per proiettare sul monitor desiderato.",
+                docPacerTitle: "13. 🚀 Wayland Damage Pacer: 60 FPS Continui su YouTube Senza Blocchi",
+                docPacerDesc: "ext-monitor esegue wayland-damage-pacer.py in background sull'Host. Invia micro-impulsi di danno a 60 Hz su una superficie invisibile, mantenendo attivo il compositore GNOME Mutter. I video di YouTube e i terminali continuano a 60 FPS anche con mouse fermo.",
+                lblActiveMode: "Modalità di Streaming Attiva",
+                lblActiveHdmi: "Uscita HDMI Raspberry Pi Attiva",
                 protoHeader: "Tabella Comparativa Protocolli",
                 thMethod: "Metodo",
                 thProtocol: "Protocollo",
@@ -1652,6 +1766,21 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docBrowserChrome: "在地址栏打开 chrome://flags/#calculate-native-win-occlusion，设为 'Disabled' 并重启浏览器（或启动时添加参数 --disable-backgrounding-occluded-windows）。",
                 docBrowserFirefox: "在地址栏打开 about:config，搜索 media.suspend-bkgnd-video.enabled 并修改为 'false'。",
                 docBrowserNative: "原生播放器默认以 60 FPS 持续渲染，完全不受鼠标焦点或窗口层叠限制。",
+                docArmv6Title: "9. 树莓派 Pi Zero (ARMv6) 交叉编译指南",
+                docArmv6Desc: "Pi Zero v1.2/v1.3/W 搭载的 BCM2835 SoC 需使用 ARMv6l 架构。使用 cross (Docker) 编译：",
+                docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
+                docNonOtgTitle: "10. 非 OTG 树莓派型号 (Pi 2, Pi 3, Pi 4, Pi 5) 与启动参数调整",
+                docNonOtgDesc1: "上述型号的标准 USB-A 接口不支持 USB Gadget 外设模式。视频流通过以太网或 Wi-Fi 进行传输。",
+                docNonOtgDesc2: "SD 引导必需调整：在 config.txt 中注释 'dtoverlay=dwc2'。在 cmdline.txt 中移除 'modules-load=dwc2'。连接命令：./scripts/start.sh extend auto 60 false full <树莓派IP>:5000",
+                docPcReceiverTitle: "11. 将普通 Linux 电脑 / 笔记本改造为副屏接收器",
+                docPcReceiverDesc: "任何 Linux 计算机均可充当接收端。安装 gstreamer1.0-tools 并运行：",
+                docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
+                docMultiMonTitle: "12. 多显示器电脑接收端定向投影至屏幕 1 或屏幕 2",
+                docMultiMonDesc: "在连接多个显示器的电脑接收端上，在 DRM KMS 裸机模式下指定 'kmssink connector-id=<ID>'，或在桌面图形会话中使用 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' 定位全屏播放。",
+                docPacerTitle: "13. 🚀 Wayland 帧率起搏器：YouTube 视频 60 FPS 持续播放永不冻结",
+                docPacerDesc: "ext-monitor 在主机后台自动运行 wayland-damage-pacer.py。它在副屏边缘触发 60 Hz 微小重绘脉冲，强制 GNOME Mutter 合成器保持活跃。即使鼠标静止或停留在主屏，YouTube 视频与外部终端仍保持 60 FPS 极速刷新。",
+                lblActiveMode: "当前运行推流模式",
+                lblActiveHdmi: "树莓派当前活跃 HDMI 输出",
                 protoHeader: "传输协议特性对比表",
                 thMethod: "传输方式",
                 thProtocol: "通信协议",
@@ -1996,6 +2125,31 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             }).catch(() => {});
         }
 
+        // Highlight Active Streaming Card
+        function highlightActiveCard(activeId) {
+            ['cardMode1', 'cardMode2', 'cardMode3'].forEach(id => {
+                const card = document.getElementById(id);
+                if (!card) return;
+                const badge = card.querySelector('.stat-badge');
+                if (id === activeId) {
+                    card.style.transform = 'translateY(-2px)';
+                    card.style.boxShadow = '0 0 20px rgba(0, 229, 255, 0.4)';
+                    if (badge) {
+                        badge.textContent = '● TRANSMITINDO AGORA';
+                        badge.className = 'stat-badge badge-green';
+                    }
+                } else {
+                    card.style.transform = 'none';
+                    card.style.boxShadow = 'none';
+                    if (badge) {
+                        if (id === 'cardMode1') { badge.textContent = 'Ligado (UDP 5000)'; badge.className = 'stat-badge badge-cyan'; }
+                        if (id === 'cardMode2') { badge.textContent = 'Ligado (TCP 7236)'; badge.className = 'stat-badge badge-green'; }
+                        if (id === 'cardMode3') { badge.textContent = 'Ligado (USB Bulk)'; badge.className = 'stat-badge badge-purple'; }
+                    }
+                }
+            });
+        }
+
         // Telemetry Poller
         function pollTelemetry() {
             fetch('/api/status')
@@ -2018,21 +2172,79 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                             btn.className = a.muted ? 'btn-danger' : 'btn-primary';
                         }
                     }
-                    if (data.monitor) {
-                        const m = data.monitor;
+
+                    // 1. Active Mode Visual Feedback
+                    if (data.active_mode) {
+                        const am = data.active_mode;
+                        const elTitle = document.getElementById('activeModeTitle');
+                        const elDesc = document.getElementById('activeModeDesc');
+                        const elBadge = document.getElementById('activeModeBadge');
+                        const elIcon = document.getElementById('activeModeIcon');
+                        const banner = document.getElementById('activeStreamBanner');
+
+                        if (elTitle) elTitle.textContent = am.name;
+                        if (elDesc) elDesc.textContent = am.details;
+                        if (elIcon) elIcon.textContent = am.icon || '📺';
+
+                        if (am.id === 'mode1_udp') {
+                            if (elBadge) { elBadge.textContent = '● MODO 1: REDE UDP ATIVO (60 FPS)'; elBadge.className = 'stat-badge badge-cyan'; }
+                            if (banner) { banner.style.borderColor = 'var(--accent-cyan)'; banner.style.boxShadow = '0 0 25px rgba(0, 229, 255, 0.25)'; }
+                            highlightActiveCard('cardMode1');
+                        } else if (am.id === 'mode2_miracast') {
+                            if (elBadge) { elBadge.textContent = '● MODO 2: MIRACAST WFD ATIVO (60 FPS)'; elBadge.className = 'stat-badge badge-green'; }
+                            if (banner) { banner.style.borderColor = 'var(--accent-emerald)'; banner.style.boxShadow = '0 0 25px rgba(0, 255, 102, 0.25)'; }
+                            highlightActiveCard('cardMode2');
+                        } else if (am.id === 'mode3_usb_bulk') {
+                            if (elBadge) { elBadge.textContent = '● MODO 3: USB BULK ATIVO (480 Mbps)'; elBadge.className = 'stat-badge badge-purple'; }
+                            if (banner) { banner.style.borderColor = 'var(--accent-purple)'; banner.style.boxShadow = '0 0 25px rgba(179, 136, 255, 0.25)'; }
+                            highlightActiveCard('cardMode3');
+                        } else {
+                            if (elBadge) { elBadge.textContent = '⏳ AGUARDANDO STREAM (SPLASH ATIVA)'; elBadge.className = 'stat-badge badge-amber'; }
+                            if (banner) { banner.style.borderColor = 'rgba(255, 179, 0, 0.4)'; banner.style.boxShadow = 'none'; }
+                            highlightActiveCard(null);
+                        }
+
+                        // Also update statStream card
+                        const valState = document.getElementById('valState');
+                        const badgeStream = document.getElementById('badgeStream');
+                        if (valState) {
+                            valState.textContent = am.id === 'mode1_udp' ? 'REDE UDP' : (am.id === 'mode2_miracast' ? 'MIRACAST' : (am.id === 'mode3_usb_bulk' ? 'USB BULK' : 'STANDBY'));
+                        }
+                        if (badgeStream) {
+                            badgeStream.textContent = am.id !== 'idle' ? 'Transmitindo' : 'Aguardando';
+                            badgeStream.className = am.id !== 'idle' ? 'stat-badge badge-green' : 'stat-badge badge-amber';
+                        }
+                    }
+
+                    // 2. Active HDMI Display Visual Feedback
+                    const h = data.hdmi || data.monitor;
+                    if (h) {
+                        const elPort = document.getElementById('activeHdmiPortBadge');
+                        const elHdmiTitle = document.getElementById('activeHdmiTitle');
+                        const elHdmiDetails = document.getElementById('activeHdmiDetails');
+
+                        if (elPort) elPort.textContent = h.connector || 'HDMI-A-1';
+                        if (elHdmiTitle) elHdmiTitle.textContent = h.connector_friendly || ('Porta HDMI (' + (h.connector || 'HDMI-A-1') + ')');
+                        if (elHdmiDetails) {
+                            const hw = h.hardware_model || 'Raspberry Pi';
+                            const mon = h.name || 'Monitor HDMI';
+                            const mode = h.active_mode || '1280x720 @ 60 Hz';
+                            elHdmiDetails.textContent = mon + ' • ' + mode + ' • ' + hw;
+                        }
+
                         const elName = document.getElementById('monitorName');
-                        if (elName && m.name) elName.textContent = '🖥️ ' + m.name;
+                        if (elName && h.name) elName.textContent = '🖥️ ' + h.name;
                         const elBadge = document.getElementById('monitorBadge');
-                        if (elBadge && m.preferred_mode) elBadge.textContent = 'HDMI-A-1 • ' + m.preferred_mode;
+                        if (elBadge) elBadge.textContent = (h.connector || 'HDMI-A-1') + ' • ' + (h.active_mode || h.preferred_mode || '1280x720');
                         const elVpu = document.getElementById('monitorVpu');
-                        if (elVpu && m.vpu) elVpu.textContent = m.vpu;
+                        if (elVpu && h.vpu) elVpu.textContent = h.vpu;
                         const elStatus = document.getElementById('monitorStatus');
                         if (elStatus) {
-                            if (m.connected) {
-                                elStatus.textContent = '● LIVE ZERO-COPY 60 FPS';
+                            if (h.connected) {
+                                elStatus.textContent = '● LIVE ZERO-COPY 60 FPS (' + (h.connector || 'HDMI-A-1') + ')';
                                 elStatus.style.color = '#7ee787';
                             } else {
-                                elStatus.textContent = '● DESCONECTADO (HEADLESS)';
+                                elStatus.textContent = '● DESCONECTADO (HEADLESS GUARD ATIVO)';
                                 elStatus.style.color = '#f85149';
                             }
                         }
