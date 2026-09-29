@@ -1208,7 +1208,26 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     <div style="background: rgba(46, 160, 67, 0.08); border-left: 4px solid #2ea043; border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
                         <h3 style="color: #2ea043; margin: 0 0 0.5rem 0;" data-i18n="docPacerTitle">13. 🚀 Wayland Damage Pacer: 60 FPS Contínuos no YouTube Sem Congelar</h3>
                         <p data-i18n="docPacerDesc" style="margin: 0; color: #fff;">
-                            O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em 1x1 pixel invisível na tela estendida, forçando o GNOME Mutter a manter o compositor acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.
+                            O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em 1x1 pixel invisível na tela estendida com máscara vazia 100% click-through (cairo.Region), forçando o GNOME Mutter a manter o compositor acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.
+                        </p>
+                    </div>
+
+                    <!-- Section 14: Non-GNOME Alternatives -->
+                    <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docAltPlayersTitle">14. Alternativas ao GStreamer em Ambientes Não-GNOME (FFmpeg, MPV, VLC)</h3>
+                    <p data-i18n="docAltPlayersDesc">
+                        O stream RTP H.264 (RFC 4571 / PT 96) gerado pelo ext-sender é universal e funciona perfeitamente em KDE, XFCE, i3, Windows e macOS sem depender de GNOME:
+                    </p>
+                    <pre style="background: rgba(0,0,0,0.5); padding: 0.75rem; border-radius: 6px; font-family: monospace; color: var(--accent-cyan); overflow-x: auto;"><code data-i18n="docAltPlayersCmd"># FFmpeg / ffplay (Baixa Latência):
+ffplay -fflags nobuffer -flags low_delay -framedrop -an -sn -sync ext -protocol_whitelist file,udp,rtp rtp://0.0.0.0:5000
+
+# MPV Player (Aceleração Gráfica Vulkan/OpenGL):
+mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec=auto rtp://0.0.0.0:5000</code></pre>
+
+                    <!-- Section 15: USB Bulk Default & Auto-Fallback -->
+                    <div style="background: rgba(187, 134, 252, 0.08); border-left: 4px solid var(--accent-purple); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
+                        <h3 style="color: var(--accent-purple); margin: 0 0 0.5rem 0;" data-i18n="docBulkFallbackTitle">15. ⚡ Modo USB Bulk Direto Padrão & Auto-Fallback para Rede UDP</h3>
+                        <p data-i18n="docBulkFallbackDesc" style="margin: 0; color: #fff;">
+                            O ext-sender e a imagem do Pi Zero vêm configurados por padrão para USB Bulk Direto (480 Mbps). Se o cabo estiver conectado a um dispositivo sem suporte USB gadget ou através de rede (como Pi 4 ou PC secundário), o transmissor detecta a ausência da interface USB e comuta automaticamente e em tempo real para transmissão via Rede UDP (porta 5000) sem travar.
                         </p>
                     </div>
 
@@ -1397,7 +1416,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docMultiMonTitle: "12. Directing Video to Screen 1 vs Screen 2 on Multi-Monitor PCs",
                 docMultiMonDesc: "On receiver PCs with multiple connected displays, specify 'kmssink connector-id=<ID>' in direct DRM KMS mode or 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' in graphical sessions to target the desired monitor.",
                 docPacerTitle: "13. 🚀 Wayland Damage Pacer: Continuous 60 FPS YouTube without Pausing",
-                docPacerDesc: "ext-monitor runs wayland-damage-pacer.py in the background on the Host. It emits 60 Hz micro-damage pulses to an invisible sub-surface on the extended monitor, keeping the GNOME Mutter compositor active. YouTube videos, clocks, and terminals render at 60 FPS even when the mouse is motionless or on the primary screen.",
+                docPacerDesc: "ext-monitor runs wayland-damage-pacer.py in the background on the Host. It emits 60 Hz micro-damage pulses to an invisible sub-surface with an empty Cairo click-through mask on the extended monitor, keeping the GNOME Mutter compositor active. YouTube videos, clocks, and terminals render at 60 FPS even when the mouse is motionless or on the primary screen.",
+                docAltPlayersTitle: "14. Non-GNOME Receiver Alternatives (FFmpeg, MPV, VLC)",
+                docAltPlayersDesc: "The RFC 4571 RTP H.264 video stream is fully cross-platform. Receive it on KDE, XFCE, i3, Windows, or macOS with zero-buffer low delay:",
+                docBulkFallbackTitle: "15. ⚡ Default USB Bulk Direct Mode & Automatic UDP Network Fallback",
+                docBulkFallbackDesc: "ext-sender prioritizes high-speed 480 Mbps USB Bulk Direct mode by default. If the USB gadget interface is not detected, it automatically falls back to UDP Network streaming (port 5000) without crashing.",
                 lblActiveMode: "Active Streaming Mode",
                 lblActiveHdmi: "Active Raspberry Pi HDMI Output",
                 protoHeader: "Protocol Comparison Table",
@@ -1524,7 +1547,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docMultiMonTitle: "12. Direcionamento para Tela 1 ou 2 em PCs com Múltiplos Monitores",
                 docMultiMonDesc: "Em PCs receptores com mais de uma tela conectada, use 'kmssink connector-id=<ID>' no modo direto KMS DRM ou 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' em sessão gráfica para projetar exatamente no monitor desejado.",
                 docPacerTitle: "13. 🚀 Wayland Damage Pacer: 60 FPS Contínuos no YouTube Sem Congelar",
-                docPacerDesc: "O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em superfície invisível na tela estendida, forçando o compositor GNOME Mutter a permanecer acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.",
+                docPacerDesc: "O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em superfície invisível na tela estendida com máscara 100% click-through (cairo.Region vazia), forçando o compositor GNOME Mutter a permanecer acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.",
+                docAltPlayersTitle: "14. Alternativas ao GStreamer em Ambientes Não-GNOME (FFmpeg, MPV, VLC)",
+                docAltPlayersDesc: "O stream RTP H.264 (RFC 4571 / PT 96) gerado pelo ext-sender é universal e funciona perfeitamente em KDE, XFCE, i3, Windows e macOS sem depender de GNOME:",
+                docBulkFallbackTitle: "15. ⚡ Modo USB Bulk Direto Padrão & Auto-Fallback para Rede UDP",
+                docBulkFallbackDesc: "O ext-sender e a imagem do Pi Zero vêm configurados por padrão para USB Bulk Direto (480 Mbps). Se o cabo estiver conectado a um dispositivo sem suporte USB gadget ou via rede (como Pi 4 ou PC secundário), o transmissor detecta a ausência da interface USB e comuta automaticamente e em tempo real para transmissão via Rede UDP (porta 5000) sem travar.",
                 lblActiveMode: "Modo de Transmissão em Execução",
                 lblActiveHdmi: "Tela HDMI do Raspberry Pi",
                 protoHeader: "Tabela Comparativa de Métodos",
@@ -1651,7 +1678,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docMultiMonTitle: "12. Indirizzamento su Schermo 1 o 2 su PC con Più Monitor",
                 docMultiMonDesc: "Su PC ricevitori con più monitor, specifica 'kmssink connector-id=<ID>' in KMS DRM diretto o 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' per proiettare sul monitor desiderato.",
                 docPacerTitle: "13. 🚀 Wayland Damage Pacer: 60 FPS Continui su YouTube Senza Blocchi",
-                docPacerDesc: "ext-monitor esegue wayland-damage-pacer.py in background sull'Host. Invia micro-impulsi di danno a 60 Hz su una superficie invisibile, mantenendo attivo il compositore GNOME Mutter. I video di YouTube e i terminali continuano a 60 FPS anche con mouse fermo.",
+                docPacerDesc: "ext-monitor esegue wayland-damage-pacer.py in background sull'Host. Invia micro-impulsi di danno a 60 Hz su una superficie invisibile con maschera 100% click-through (cairo.Region vuota), mantenendo attivo il compositore GNOME Mutter. I video di YouTube e i terminali continuano a 60 FPS anche con mouse fermo.",
+                docAltPlayersTitle: "14. Alternative al Ricevitore Non-GNOME (FFmpeg, MPV, VLC)",
+                docAltPlayersDesc: "Il flusso video RFC 4571 RTP H.264 è universale. Ricevilo su KDE, XFCE, i3, Windows o macOS senza buffer:",
+                docBulkFallbackTitle: "15. ⚡ Modalità USB Bulk Predefinita & Auto-Fallback su Rete UDP",
+                docBulkFallbackDesc: "ext-sender tenta prioritariamente la modalità USB Bulk ad alta velocità (480 Mbps). Se l'interfaccia USB non è rilevata, commuta automaticamente su streaming UDP (porta 5000) senza interruzioni.",
                 lblActiveMode: "Modalità di Streaming Attiva",
                 lblActiveHdmi: "Uscita HDMI Raspberry Pi Attiva",
                 protoHeader: "Tabella Comparativa Protocolli",
@@ -1778,7 +1809,11 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                 docMultiMonTitle: "12. 多显示器电脑接收端定向投影至屏幕 1 或屏幕 2",
                 docMultiMonDesc: "在连接多个显示器的电脑接收端上，在 DRM KMS 裸机模式下指定 'kmssink connector-id=<ID>'，或在桌面图形会话中使用 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' 定位全屏播放。",
                 docPacerTitle: "13. 🚀 Wayland 帧率起搏器：YouTube 视频 60 FPS 持续播放永不冻结",
-                docPacerDesc: "ext-monitor 在主机后台自动运行 wayland-damage-pacer.py。它在副屏边缘触发 60 Hz 微小重绘脉冲，强制 GNOME Mutter 合成器保持活跃。即使鼠标静止或停留在主屏，YouTube 视频与外部终端仍保持 60 FPS 极速刷新。",
+                docPacerDesc: "ext-monitor 在主机后台自动运行 wayland-damage-pacer.py。它在副屏边缘触发 60 Hz 微小重绘脉冲并应用空 Cairo 点击穿透掩码，强制 GNOME Mutter 合成器保持活跃。即使鼠标静止或停留在主屏，YouTube 视频与外部终端仍保持 60 FPS 极速刷新。",
+                docAltPlayersTitle: "14. 非 GNOME 接收端通用替代方案 (FFmpeg, MPV, VLC)",
+                docAltPlayersDesc: "RFC 4571 RTP H.264 视频流完全跨平台。在 KDE、XFCE、i3、Windows 或 macOS 上无需缓冲区极低延迟接收：",
+                docBulkFallbackTitle: "15. ⚡ 默认 USB Bulk 裸通道模式与 UDP 网络自动平滑降级",
+                docBulkFallbackDesc: "ext-sender 默认优先连接 480 Mbps 高速 USB Bulk 裸通道。若未检测到 USB Gadget 硬件外设，将自动透明降级为 UDP 网络推流 (5000 端口)，绝不崩溃。",
                 lblActiveMode: "当前运行推流模式",
                 lblActiveHdmi: "树莓派当前活跃 HDMI 输出",
                 protoHeader: "传输协议特性对比表",
