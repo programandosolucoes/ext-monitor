@@ -96,6 +96,12 @@ fn main() {
     // 3. Start native pure-Rust Zero-Gateway DHCP server for usb0
     dhcp::start_dhcp_server(running.clone());
 
+    if let Ok(mut cfg) = web::CONFIG.lock() {
+        cfg.mode3 = is_usb_bulk_mode;
+        cfg.mode1 = !is_usb_bulk_mode;
+        cfg.mode2 = !is_usb_bulk_mode;
+    }
+
     if is_usb_bulk_mode {
         println!("\x1b[1;33m[ext-receiver]\x1b[0m Active Mode: MODE 3 (Direct USB Bulk via FunctionFS)");
         if let Err(e) = usb_bulk::activate_usb_bulk(running.clone(), pipeline_mgr.clone()) {

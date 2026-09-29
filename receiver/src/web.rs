@@ -51,7 +51,7 @@ pub static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
     monitor: String::new(),
     mode1: true,
     mode2: true,
-    mode3: true,
+    mode3: false,
 });
 
 /// Start the embedded HTTP dashboard server in a background thread
