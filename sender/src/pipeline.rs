@@ -73,6 +73,7 @@ impl StreamerHandle {
 }
 
 pub struct PipelineBuilder {
+    #[allow(dead_code)]
     pub node_id: u32,
     pub target_ip: String,
     pub target_port: u16,
@@ -86,6 +87,7 @@ pub struct PipelineBuilder {
     pub key_int_max: u32,
     pub usb_pipe_fd: Option<RawFd>,
     pub engine: StreamEngine,
+    #[allow(dead_code)]
     pub capture: CaptureEngine,
     #[allow(dead_code)]
     pub kms_info: Option<KmsOutputInfo>,

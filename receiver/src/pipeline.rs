@@ -371,6 +371,7 @@ impl PipelineManager {
         self.audio.lock().unwrap().set_muted(muted);
     }
 
+    #[allow(dead_code)]
     pub fn set_audio_enabled(&self, enabled: bool) {
         self.audio.lock().unwrap().set_enabled(enabled);
     }

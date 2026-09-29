@@ -611,8 +611,64 @@ O **GNOME Mutter no Wayland** utiliza uma arquitetura estritamente orientada a d
 ### A Solução Definitiva do ext-monitor:
 O script [`scripts/wayland-damage-pacer.py`](file:///home/carlos/ide/ext-monitor/scripts/wayland-damage-pacer.py):
 1. Cria uma janela invisível de 1x1 pixel com transparência total (`RGBA 0,0,0,0`), sem foco e sem barra de tarefas.
-2. Posiciona essa janela exatamente nas coordenadas globais da tela estendida (detectadas automaticamente, ex: `x=1920, y=0`).
-3. Dispara um pulso de redesenho a cada 16.6 ms (60 Hz).
-4. O Mutter é forçado a manter o `ClutterFrameClock` ativo e transmitir a 60 FPS contínuos.
-5. **Resultado:** Vídeos em navegadores (YouTube, streaming), dashboards, terminais e relógios rodam com fluidez absoluta e contínua, sem pausar quando o mouse está parado ou sobre a tela do notebook.
+2. Posiciona essa janela no canto inferior direito da tela estendida (ex: `x=3518, y=898`).
+3. **Máscara 100% Click-Through (`cairo.Region()` vazia):** A janela aplica `gdk_win.input_shape_combine_region(cairo.Region(), 0, 0)`. Isso garante que cliques em logotipos, barras de endereço, abas ou botões (como o ícone inicial do YouTube no Firefox) nunca sejam interceptados.
+4. Dispara um pulso de redesenho a cada 16.6 ms (60 Hz).
+5. O Mutter é forçado a manter o `ClutterFrameClock` ativo e transmitir a 60 FPS contínuos.
+6. **Resultado:** Vídeos em navegadores (YouTube, streaming), dashboards, terminais e relógios rodam com fluidez absoluta e contínua, sem pausar quando o mouse está parado ou sobre a tela do notebook.
+
+---
+
+## 16. Alternativas ao GStreamer em Ambientes Não-GNOME (KDE, XFCE, i3, Windows, macOS)
+
+O fluxo de vídeo transmitido pelo `ext-sender` é composto por pacotes **RTP H.264 padrão RFC 4571** com payload 96. Ele não tem dependência com o GNOME ou com o GStreamer na ponta receptora.
+
+### 16.1 FFmpeg / ffplay (Universal, Ultra-baixo atraso, Multiplataforma)
+O `ffplay` está disponível em qualquer distribuição Linux, Windows e macOS:
+
+#### Comando com Zero Buffer e Descarte de Quadros Atrasados:
+```bash
+ffplay -fflags nobuffer -flags low_delay -framedrop -strict experimental \
+       -an -sn -sync ext -protocol_whitelist file,udp,rtp \
+       -i rtp://0.0.0.0:5000
+```
+
+#### Com Aceleração de Hardware na GPU (Intel/AMD VA-API no Linux):
+```bash
+ffplay -vcodec h264_vaapi -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 \
+       -fflags nobuffer -flags low_delay -framedrop -an \
+       -protocol_whitelist file,udp,rtp -i rtp://0.0.0.0:5000
+```
+
+#### Direcionar para a Tela 1 ou Tela 2 no FFmpeg:
+```bash
+# Monitor 1 (Primário):
+ffplay -left 0 -top 0 -fs -fflags nobuffer -flags low_delay -protocol_whitelist file,udp,rtp rtp://0.0.0.0:5000
+
+# Monitor 2 (Secundário à direita do primário a 1920x0):
+ffplay -left 1920 -top 0 -fs -fflags nobuffer -flags low_delay -protocol_whitelist file,udp,rtp rtp://0.0.0.0:5000
+```
+
+### 16.2 MPV Player (Excelente sincronismo, OpenGL/Vulkan nativo)
+```bash
+# Execução com latência mínima:
+mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec=auto rtp://0.0.0.0:5000
+
+# Seleção direta de tela no MPV:
+mpv --fs --screen=1 --profile=low-latency rtp://0.0.0.0:5000
+```
+
+### 16.3 VLC Player
+```bash
+cvlc --network-caching=0 --clock-jitter=0 --no-audio rtp://@:5000
+```
+
+---
+
+## 17. Modo Padrão USB Bulk Direto com Fallback Automático para Rede
+
+A partir da versão v2.1.0, o `ext-monitor` prioriza o canal USB direto de mais alta velocidade:
+1. **Padrão (Default):** Conexão direta via **USB Bulk** (`1d50:614d`). A imagem do Pi Zero vem pré-configurada em `/boot/mode.txt` com `usb-bulk`.
+2. **Fallback Automático:** Caso o dispositivo USB Bulk não seja encontrado (ex: cabo conectado em porta sem dados, ou conectando a um receptor via Wi-Fi/Ethernet como Pi 4 ou PC secundário), o `ext-sender` detecta a ausência e comuta automaticamente e em tempo de execução para **Rede UDP** (`192.168.7.2:5000` ou IP especificado), sem interrupções.
+
 

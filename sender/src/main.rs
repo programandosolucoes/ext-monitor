@@ -51,23 +51,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running = Arc::new(AtomicBool::new(true));
     setup_signal_handler(running.clone());
 
-    // 3. Initialize Transport (USB Bulk or Network UDP)
+    // 3. Initialize Transport (USB Bulk as Default, with Automatic Fallback to Network UDP)
     let mut pipe_fds = [0 as libc::c_int; 2];
     let usb_pipe_fd: Option<RawFd> = match cfg.transport {
         TransportKind::UsbBulk => {
-            println!("\x1b[1;33m[*] Transport Mode: USB Bulk Direct (Zero Network Stack)\x1b[0m");
-            let (handle, iface_num, ep_out) = usb_transport::open_usb_display_device()
-                .map_err(|e| format!("Failed to open USB Display device: {}", e))?;
-
-            unsafe {
-                libc::pipe(pipe_fds.as_mut_ptr());
-                const F_SETPIPE_SZ: libc::c_int = 1031;
-                libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 65536);
+            println!("\x1b[1;33m[*] Transport Mode: USB Bulk Direct (Default - Zero Network Stack)\x1b[0m");
+            match usb_transport::open_usb_display_device() {
+                Ok((handle, iface_num, ep_out)) => {
+                    println!("\x1b[1;32m[*] USB Bulk Direct connected successfully! (480 Mbps FunctionFS Endpoint)\x1b[0m");
+                    unsafe {
+                        libc::pipe(pipe_fds.as_mut_ptr());
+                        const F_SETPIPE_SZ: libc::c_int = 1031;
+                        libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 65536);
+                    }
+                    let read_fd = pipe_fds[0];
+                    let write_fd = pipe_fds[1];
+                    let _ = usb_transport::spawn_usb_bulk_writer(handle, read_fd, running.clone(), iface_num, ep_out);
+                    Some(write_fd)
+                }
+                Err(err) => {
+                    println!("\x1b[1;33m[!] USB Bulk device/interface not available on USB bus: {}\x1b[0m", err);
+                    println!(
+                        "\x1b[1;36m[i] Automatically falling back to Network transport (UDP RTP {}:{})...\x1b[0m",
+                        cfg.target_ip, cfg.target_port
+                    );
+                    None
+                }
             }
-            let read_fd = pipe_fds[0];
-            let write_fd = pipe_fds[1];
-            let _ = usb_transport::spawn_usb_bulk_writer(handle, read_fd, running.clone(), iface_num, ep_out);
-            Some(write_fd)
         }
         TransportKind::Network { ref ip, port } => {
             println!("\x1b[1;34m[*] Transport Mode: Network IP (UDP RTP {}:{})\x1b[0m", ip, port);
