@@ -272,6 +272,23 @@ fn handle_http_client(
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
         }
+        ("POST", "/api/host/control") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = req_str[idx + 4..].trim();
+                println!("\x1b[1;36m[web-server]\x1b[0m Encaminhando comando ao Host (192.168.7.1:5001): {}", body);
+                if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
+                    let _ = sock.send_to(body.as_bytes(), "192.168.7.1:5001");
+                }
+            }
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"forwarded_to_host\"}");
+        }
+        ("POST", "/api/bluetooth/discoverable") => {
+            println!("\x1b[1;34m[web-server]\x1b[0m Ativando Bluetooth A2DP Sink (pareável por 60s)...");
+            let _ = std::process::Command::new("/bin/sh")
+                .args(["-c", "bluetoothctl discoverable on && bluetoothctl pairable on 2>/dev/null || true"])
+                .output();
+            send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"discoverable_on\",\"timeout\":60}");
+        }
         ("POST", "/api/system/reboot") => {
             println!("\x1b[1;31m[web-server]\x1b[0m System REBOOT requested via Web UI.");
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"rebooting\"}");

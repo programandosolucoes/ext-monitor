@@ -12,11 +12,11 @@
 
 Esta pasta reúne a documentação de engenharia reversa, decisões de arquitetura e especificações de baixo nível que tornaram possível transformar um dispositivo de computação de US$ 10 (Raspberry Pi Zero de núcleo único a 1.0 GHz) em um monitor secundário profissional de 60 FPS com latência inferior a 15 milissegundos.
 
-Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até o scanout zero-copy DRM/KMS no VideoCore IV, a recuperação autônoma de suspensão de energia no Linux Wayland, o motor visual quadrilíngue de splash, a telemetria EDID de monitores reais e a captura direta de hardware DRM/KMS scanout — estão formalizados nos 14 blueprints técnicos a seguir:
+Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até o scanout zero-copy DRM/KMS no VideoCore IV, a recuperação autônoma de suspensão de energia no Linux Wayland, o motor visual quadrilíngue de splash, a telemetria EDID de monitores reais, a captura direta de hardware DRM/KMS scanout, o controle web bidirecional em Rust, o áudio híbrido IP/Bluetooth e o ecossistema IoT Media Renderer (Google Cast / UPnP) — estão formalizados nos 19 blueprints técnicos a seguir:
 
 ---
 
-## 2. Mapa dos 14 Blueprints de Engenharia
+## 2. Mapa dos 19 Blueprints de Engenharia
 
 | # | Blueprint Técnico | Arquivo | Foco de Engenharia |
 | :---: | :--- | :--- | :--- |
@@ -34,6 +34,11 @@ Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silí
 | **12** | **Splash Quadrilíngue, Telemetria EDID Realtime e Ciclo de Vida de Desconexão** | [`12-splash-quadrilingue-telemetria-edid-realtime-e-ciclo-vida-desconexao.md`](12-splash-quadrilingue-telemetria-edid-realtime-e-ciclo-vida-desconexao.md) | Prevenção de imagem congelada na desconexão, telas de splash embutidas em Rust (PT/EN/ES/FR) via `miniz_oxide` e decodificação do hardware VESA EDID no painel web. |
 | **13** | **Captura Direta no Kernel Linux DRM/KMS e Dual-Engine Universal** | [`13-captura-direta-drm-kms-e-dual-engine-universal.md`](13-captura-direta-drm-kms-e-dual-engine-universal.md) | Bypassa GNOME Mutter/Wayland, extração atômica PRIME DMA-BUF do scanout da GPU AMD/Intel/NVIDIA via ioctl `GETFB2`, eliminação de congelamentos por oclusão de janelas e suporte multi-monitor genérico. |
 | **14** | **Subsistema de Áudio HDMI Digital, Codec Opus e ALSA** | [`14-subsistema-audio-hdmi-digital-opus-alsa-e-sincronismo-av.md`](14-subsistema-audio-hdmi-digital-opus-alsa-e-sincronismo-av.md) | Transmissão de áudio digital de ultra-baixa latência (< 25ms) via PipeWire e Opus 48kHz estéreo na porta UDP 5004, decodificação ALSA `vc4-hdmi`, sincronia A/V e controle Web de volume. |
+| **15** | **Pipeline Zero-Copy, Quiescência Wayland e Ciclo de Vida do Display** | [`15-pipeline-zero-copy-quiescencia-wayland-e-ciclo-vida-display.md`](15-pipeline-zero-copy-quiescencia-wayland-e-ciclo-vida-display.md) | Resolução do congelamento de quadros por inatividade do cursor, sincronismo vblank e reativação dinâmica do pipeline. |
+| **16** | **Pacer Wayland de Quiescência, Cross-ARMv6 e Receptores Universais** | [`16-pacer-wayland-quiescencia-e-guia-universal-receptores.md`](16-pacer-wayland-quiescencia-e-guia-universal-receptores.md) | Agente heartbeat 60 FPS sintético para YouTube contínuo, compilação estática musl/cross e guia para Pi 2/3/4/5 e PCs secundários. |
+| **17** | **Agente Host Rust e Controle Web Bidirecional** | [`17-agente-host-rust-controle-web-bidirecional.md`](17-agente-host-rust-controle-web-bidirecional.md) | Arquitetura RPC UDP 5001, controle completo do host pelo painel web, proteção contra Mutter stride assert crash (`SIGABRT 6`) e quirks AMD DCN 3.1. |
+| **18** | **Áudio Híbrido: Rede IP Opus e Bluetooth A2DP Sink** | [`18-audio-hibrido-rede-opus-e-bluetooth-a2dp.md`](18-audio-hibrido-rede-opus-e-bluetooth-a2dp.md) | Isolamento de áudio local (headset USB Yealink UH34) vs TV HDMI, pareamento Bluetooth 4.1 no Pi Zero W e roteamento ALSA `hw:0,0`. |
+| **19** | **Appliance IoT Media Renderer: Google Cast, UPnP/DLNA e Visualizador HDMI** | [`19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md`](19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md) | Transformação em dongle multimídia inteligente: Google Cast (CastV2), DIAL (YouTube), UPnP/DLNA e tela visual com capa/espectro sonoro em áudio IoT. |
 
 ---
 

@@ -11,6 +11,10 @@ use std::net::UdpSocket;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ControlAction {
+    StartStreaming,
+    StopStreaming,
+    SetMode(String),
+    SetAudio(bool),
     SetBitrate(u32),
     SetFps(u32),
     SetColorProfile(ColorProfile),
@@ -61,10 +65,20 @@ impl ControlListener {
             if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&buf[..n]) {
                 if let Some(action) = v.get("action").and_then(|x| x.as_str()) {
                     match action {
+                        "start" | "start_streaming" => actions.push(ControlAction::StartStreaming),
+                        "stop" | "stop_streaming" => actions.push(ControlAction::StopStreaming),
                         "trigger_hud" => actions.push(ControlAction::TriggerHud),
                         "hide_hud" | "kill_hud" => actions.push(ControlAction::HideHud),
                         _ => {}
                     }
+                }
+
+                if let Some(mode_str) = v.get("mode").and_then(|x| x.as_str()) {
+                    actions.push(ControlAction::SetMode(mode_str.to_lowercase()));
+                }
+
+                if let Some(audio_val) = v.get("audio").and_then(|x| x.as_bool()) {
+                    actions.push(ControlAction::SetAudio(audio_val));
                 }
 
                 if let Some(bitrate) = v.get("bitrate").and_then(|x| x.as_u64()).map(|x| x as u32) {

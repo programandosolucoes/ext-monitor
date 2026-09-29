@@ -222,6 +222,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Poll UDP control actions
             for action in ctrl_listener.poll_actions() {
                 match action {
+                    ControlAction::StartStreaming => {
+                        println!("\x1b[1;32m[+] Web Command: Iniciar / Reiniciar Transmissão recebido!\x1b[0m");
+                        restart_pipeline = true;
+                    }
+                    ControlAction::StopStreaming => {
+                        println!("\x1b[1;33m[*] Web Command: Parar Transmissão recebido!\x1b[0m");
+                        let _ = child.kill();
+                    }
+                    ControlAction::SetMode(m) => {
+                        let target_mon = if m == "clone" { "eDP-1".to_string() } else { "HDMI-1".to_string() };
+                        if target_mon != monitor_to_record || m != cfg.mode {
+                            println!("\x1b[1;35m[*] Web Command: Troca de Modo '{}' -> '{}' (Monitor: {})\x1b[0m", cfg.mode, m, target_mon);
+                            cfg.mode = m;
+                            monitor_to_record = target_mon;
+                            switch_engine_or_monitor = true;
+                        }
+                    }
+                    ControlAction::SetAudio(a) => {
+                        if a != cfg.audio {
+                            println!("\x1b[1;35m[*] Web Command: Áudio {} -> {}\x1b[0m", cfg.audio, a);
+                            cfg.audio = a;
+                            pipeline_builder.audio = a;
+                            restart_pipeline = true;
+                        }
+                    }
                     ControlAction::TriggerHud => {
                         println!("\x1b[1;32m[+] Web Command: Re-triggering HUD on screen for 60 seconds!\x1b[0m");
                         cfg.hud = true;
