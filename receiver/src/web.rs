@@ -224,11 +224,14 @@ fn handle_http_client(
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
         }
-        ("POST", "/api/modes") => {
+        ("POST", "/api/modes") | ("POST", "/api/transport/active") => {
             if let Some(idx) = req_str.find("\r\n\r\n") {
                 let body = &req_str[idx + 4..];
                 let mut m1_change = None;
                 let mut m3_change = None;
+                let active_transport = extract_json_str(body, "active_transport")
+                    .or_else(|| extract_json_str(body, "transport"));
+
                 if let Ok(mut cfg) = CONFIG.lock() {
                     if let Some(m1) = extract_json_bool(body, "mode1") {
                         cfg.mode1 = m1;
@@ -240,7 +243,40 @@ fn handle_http_client(
                         m3_change = Some(m3);
                     }
                 }
-                if let Some(true) = m3_change {
+
+                if let Some(transport) = active_transport {
+                    println!("\x1b[1;36m[web-server]\x1b[0m Direct Active Transport switch requested: {}", transport);
+                    match transport {
+                        "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
+                            forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
+                            let run = running.clone();
+                            let pipe = pipeline_mgr.clone();
+                            thread::spawn(move || {
+                                if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
+                                    eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
+                                }
+                            });
+                        }
+                        "mode1_udp" | "network" | "udp" | "mode1" => {
+                            forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
+                            let pipe = pipeline_mgr.clone();
+                            thread::spawn(move || {
+                                pipe.stop();
+                                let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                                let _ = pipe.start(default_kind);
+                            });
+                        }
+                        "mode2_miracast" | "miracast" | "mode2" => {
+                            let pipe = pipeline_mgr.clone();
+                            thread::spawn(move || {
+                                pipe.stop();
+                                let miracast_kind = PipelineKind::MiracastMp2t { port: 7236 };
+                                let _ = pipe.start(miracast_kind);
+                            });
+                        }
+                        _ => {}
+                    }
+                } else if let Some(true) = m3_change {
                     println!("\x1b[1;32m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) requested via Web UI!");
                     forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
                     let run = running.clone();
@@ -706,7 +742,21 @@ fn get_system_telemetry_json(
         ),
     };
 
-    let mon = crate::display::MonitorInfo::read_realtime();
+    let all_displays = crate::display::MonitorInfo::read_all_realtime();
+    let mon = all_displays
+        .iter()
+        .find(|m| m.connected)
+        .cloned()
+        .or_else(|| all_displays.first().cloned())
+        .unwrap_or_else(crate::display::MonitorInfo::read_realtime);
+
+    let displays_json: Vec<String> = all_displays.iter().map(|d| {
+        format!(
+            "{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}}",
+            d.connector, d.connector_friendly, d.hardware_model, d.connected, d.name, d.active_mode, d.preferred_mode, d.vpu
+        )
+    }).collect();
+    let displays_str = format!("[{}]", displays_json.join(","));
 
     // 4. Subhardware Clocks (SoC Broadcom BCM2835 / VideoCore IV)
     let read_clk_mhz = |path: &str, def_hz: u64| -> u64 {
@@ -733,7 +783,7 @@ fn get_system_telemetry_json(
     let est_ma = (est_watts / 5.0) * 1000.0;
 
     format!(
-        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
+        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"displays\":{},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
         temp_val,
         cpu_load,
         mem_free_mb,
@@ -744,6 +794,7 @@ fn get_system_telemetry_json(
         mode_proto,
         mode_port,
         mode_details,
+        displays_str,
         mon.connector,
         mon.connector_friendly,
         mon.hardware_model,

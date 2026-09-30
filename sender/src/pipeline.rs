@@ -233,6 +233,10 @@ impl PipelineBuilder {
             .arg("max-buffers=4")
             .arg(format!("keepalive-time={}", keepalive_ms))
             .arg("always-copy=false")
+            .arg("!")
+            // Shield against GNOME Mutter stride bug (meta-screen-cast-stream-src.c:767):
+            // Force strict BGRx raw format caps so Mutter never attempts unhandled stride calculations
+            .arg("video/x-raw,format=BGRx")
             .arg("!");
 
         // 2. Hardware Framerate Shaping: zero-copy passthrough

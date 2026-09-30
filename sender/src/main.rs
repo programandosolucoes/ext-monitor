@@ -455,7 +455,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match c.try_wait() {
                     Ok(Some(status)) => {
                         if !is_paused {
-                            println!("\x1b[1;33m[*] Streamer exited with status: {}. Restarting...\x1b[0m", status);
+                            println!("\x1b[1;33m[*] Streamer exited with status: {}. Waiting 1s before reconnecting...\x1b[0m", status);
+                            thread::sleep(Duration::from_secs(1));
                             break;
                         }
                     }

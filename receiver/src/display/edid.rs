@@ -24,8 +24,8 @@ pub struct MonitorInfo {
 }
 
 impl MonitorInfo {
-    /// Reads real-time HDMI monitor telemetry from the system
-    pub fn read_realtime() -> Self {
+    /// Reads real-time HDMI monitor telemetry for ALL available DRM video outputs
+    pub fn read_all_realtime() -> Vec<Self> {
         // 1. Detect hardware model
         let mut hardware_model = "Raspberry Pi".to_string();
         if let Ok(m) = fs::read("/proc/device-tree/model") {
@@ -40,67 +40,7 @@ impl MonitorInfo {
             }
         }
 
-        // 2. Discover all DRM HDMI connectors dynamically
-        let mut chosen_path = "/sys/class/drm/card0-HDMI-A-1".to_string();
-        let mut chosen_connector = "HDMI-A-1".to_string();
-        let mut connected = false;
-
-        if let Ok(entries) = fs::read_dir("/sys/class/drm") {
-            let mut hdmi_dirs: Vec<(String, String, bool)> = Vec::new();
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.contains("HDMI") {
-                    let path_str = entry.path().to_string_lossy().to_string();
-                    let st_file = format!("{}/status", path_str);
-                    let is_conn = fs::read_to_string(&st_file)
-                        .map(|s| s.trim() == "connected")
-                        .unwrap_or(false);
-                    let conn_name = if let Some(idx) = name.find("HDMI") {
-                        name[idx..].to_string()
-                    } else {
-                        name.clone()
-                    };
-                    hdmi_dirs.push((path_str, conn_name, is_conn));
-                }
-            }
-            // Prefer connected connector, fallback to first available
-            if let Some((p, c, _)) = hdmi_dirs.iter().find(|(_, _, conn)| *conn) {
-                chosen_path = p.clone();
-                chosen_connector = c.clone();
-                connected = true;
-            } else if let Some((p, c, _)) = hdmi_dirs.first() {
-                chosen_path = p.clone();
-                chosen_connector = c.clone();
-                connected = false;
-            }
-        } else {
-            // Fallback for standard Pi Zero path
-            let st_file = format!("{}/status", chosen_path);
-            if let Ok(s) = fs::read_to_string(&st_file) {
-                connected = s.trim() == "connected";
-            }
-        }
-
-        // 3. Compute friendly physical socket name
-        let connector_friendly = if hardware_model.contains("Zero") {
-            format!("Mini-HDMI Port ({})", chosen_connector)
-        } else if hardware_model.contains("Raspberry Pi 4")
-            || hardware_model.contains("Raspberry Pi 5")
-            || hardware_model.contains("Pi 4")
-            || hardware_model.contains("Pi 5")
-        {
-            if chosen_connector.contains("-2") {
-                format!("Micro-HDMI Port 1 / Secondary ({})", chosen_connector)
-            } else {
-                format!("Micro-HDMI Port 0 / Primary ({}) - Next to USB-C", chosen_connector)
-            }
-        } else if hardware_model.contains("Raspberry Pi") {
-            format!("Primary HDMI Port ({})", chosen_connector)
-        } else {
-            format!("Digital Video Output ({})", chosen_connector)
-        };
-
-        // 4. Compute VPU name based on hardware
+        // 2. Compute VPU name based on hardware
         let vpu = if hardware_model.contains("Zero")
             || hardware_model.contains("Raspberry Pi 1")
             || hardware_model.contains("Raspberry Pi 2")
@@ -115,22 +55,7 @@ impl MonitorInfo {
             "GPU Hardware Acceleration (DRM/KMS)".to_string()
         };
 
-        let edid_file = format!("{}/edid", chosen_path);
-        let modes_file = format!("{}/modes", chosen_path);
-
-        let mut modes = Vec::new();
-        if let Ok(modes_str) = fs::read_to_string(&modes_file) {
-            for line in modes_str.lines() {
-                let m = line.trim();
-                if !m.is_empty() && !modes.contains(&m.to_string()) {
-                    modes.push(m.to_string());
-                }
-            }
-        }
-
-        let preferred_mode = modes.first().cloned().unwrap_or_else(|| "1280x720".to_string());
-
-        // 5. Active scanout mode from fb0 virtual_size
+        // 3. Active scanout mode from fb0 virtual_size
         let active_scanout = if let Ok(fb_size) = fs::read_to_string("/sys/class/graphics/fb0/virtual_size") {
             let parts: Vec<&str> = fb_size.trim().split(',').collect();
             if parts.len() == 2 {
@@ -142,50 +67,150 @@ impl MonitorInfo {
             "1280x720 @ 60 Hz".to_string()
         };
 
-        if !connected {
-            return Self {
+        // 4. Discover all DRM HDMI and display connectors
+        let mut hdmi_dirs: Vec<(String, String, bool)> = Vec::new();
+        if let Ok(entries) = fs::read_dir("/sys/class/drm") {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.contains("HDMI") || name.contains("DP-") || name.contains("DVI") {
+                    let path_str = entry.path().to_string_lossy().to_string();
+                    let st_file = format!("{}/status", path_str);
+                    let is_conn = fs::read_to_string(&st_file)
+                        .map(|s| s.trim() == "connected")
+                        .unwrap_or(false);
+                    let conn_name = if let Some(idx) = name.find("HDMI") {
+                        name[idx..].to_string()
+                    } else if let Some(idx) = name.find("card") {
+                        if let Some(sub) = name[idx..].split('-').nth(1) {
+                            sub.to_string()
+                        } else {
+                            name.clone()
+                        }
+                    } else {
+                        name.clone()
+                    };
+                    hdmi_dirs.push((path_str, conn_name, is_conn));
+                }
+            }
+        }
+
+        // Sort connectors logically (e.g. HDMI-A-1 before HDMI-A-2)
+        hdmi_dirs.sort_by(|a, b| a.1.cmp(&b.1));
+
+        // If none found in sysfs, fallback to default Pi Zero HDMI-A-1
+        if hdmi_dirs.is_empty() {
+            let def_path = "/sys/class/drm/card0-HDMI-A-1".to_string();
+            let st_file = format!("{}/status", def_path);
+            let is_conn = fs::read_to_string(&st_file)
+                .map(|s| s.trim() == "connected")
+                .unwrap_or(false);
+            hdmi_dirs.push((def_path, "HDMI-A-1".to_string(), is_conn));
+        }
+
+        let mut results = Vec::new();
+        for (path_str, conn_name, is_conn) in hdmi_dirs {
+            let connector_friendly = if hardware_model.contains("Zero") {
+                format!("Mini-HDMI Port ({})", conn_name)
+            } else if hardware_model.contains("Raspberry Pi 4")
+                || hardware_model.contains("Raspberry Pi 5")
+                || hardware_model.contains("Pi 4")
+                || hardware_model.contains("Pi 5")
+            {
+                if conn_name.contains("-2") || conn_name.ends_with('2') {
+                    format!("Micro-HDMI Port 1 / Secondary ({})", conn_name)
+                } else {
+                    format!("Micro-HDMI Port 0 / Primary ({}) - Next to USB-C", conn_name)
+                }
+            } else if hardware_model.contains("Raspberry Pi") {
+                format!("Primary HDMI Port ({})", conn_name)
+            } else {
+                format!("Digital Video Output ({})", conn_name)
+            };
+
+            let edid_file = format!("{}/edid", path_str);
+            let modes_file = format!("{}/modes", path_str);
+
+            let mut modes = Vec::new();
+            if let Ok(modes_str) = fs::read_to_string(&modes_file) {
+                for line in modes_str.lines() {
+                    let m = line.trim();
+                    if !m.is_empty() && !modes.contains(&m.to_string()) {
+                        modes.push(m.to_string());
+                    }
+                }
+            }
+
+            let preferred_mode = modes.first().cloned().unwrap_or_else(|| "1280x720".to_string());
+
+            if !is_conn {
+                results.push(Self {
+                    connected: false,
+                    name: format!("Standby / Disconnected ({})", conn_name),
+                    manufacturer: "None".to_string(),
+                    product_code: 0,
+                    preferred_mode: "1280x720".to_string(),
+                    active_mode: format!("{} (Virtual)", active_scanout),
+                    vpu: vpu.clone(),
+                    connector: conn_name,
+                    connector_friendly,
+                    hardware_model: hardware_model.clone(),
+                });
+                continue;
+            }
+
+            let edid_bytes = fs::read(&edid_file).unwrap_or_default();
+            let (mfg, prod_code, desc_name) = if edid_bytes.len() >= 128 {
+                parse_edid(&edid_bytes)
+            } else {
+                ("Generic".to_string(), 0, None)
+            };
+
+            let display_name = if let Some(name) = desc_name {
+                if !name.trim().is_empty() {
+                    format!("{} ({})", name.trim(), preferred_mode)
+                } else {
+                    format!("{} Monitor ({})", mfg, preferred_mode)
+                }
+            } else {
+                format!("{} Monitor ({})", mfg, preferred_mode)
+            };
+
+            results.push(Self {
+                connected: true,
+                name: display_name,
+                manufacturer: mfg,
+                product_code: prod_code,
+                preferred_mode,
+                active_mode: active_scanout.clone(),
+                vpu: vpu.clone(),
+                connector: conn_name,
+                connector_friendly,
+                hardware_model: hardware_model.clone(),
+            });
+        }
+
+        results
+    }
+
+    /// Reads real-time HDMI monitor telemetry from the system (primary/first connected)
+    pub fn read_realtime() -> Self {
+        let all = Self::read_all_realtime();
+        all.iter()
+            .find(|m| m.connected)
+            .cloned()
+            .or_else(|| all.first().cloned())
+            .unwrap_or_else(|| Self {
                 connected: false,
                 name: "Nenhum Monitor Conectado (Headless Guard Ativo)".to_string(),
                 manufacturer: "None".to_string(),
                 product_code: 0,
                 preferred_mode: "1280x720".to_string(),
-                active_mode: format!("{} (Virtual)", active_scanout),
-                vpu,
-                connector: chosen_connector,
-                connector_friendly,
-                hardware_model,
-            };
-        }
-
-        let edid_bytes = fs::read(&edid_file).unwrap_or_default();
-        let (mfg, prod_code, desc_name) = if edid_bytes.len() >= 128 {
-            parse_edid(&edid_bytes)
-        } else {
-            ("Generic".to_string(), 0, None)
-        };
-
-        let display_name = if let Some(name) = desc_name {
-            if !name.trim().is_empty() {
-                format!("{} ({})", name.trim(), preferred_mode)
-            } else {
-                format!("{} Monitor ({})", mfg, preferred_mode)
-            }
-        } else {
-            format!("{} Monitor ({})", mfg, preferred_mode)
-        };
-
-        Self {
-            connected: true,
-            name: display_name,
-            manufacturer: mfg,
-            product_code: prod_code,
-            preferred_mode,
-            active_mode: active_scanout,
-            vpu,
-            connector: chosen_connector,
-            connector_friendly,
-            hardware_model,
-        }
+                active_mode: "1280x720 @ 60 Hz (Virtual)".to_string(),
+                vpu: "VideoCore IV Hardware VPU".to_string(),
+                connector: "HDMI-A-1".to_string(),
+                connector_friendly: "Mini-HDMI Port (HDMI-A-1)".to_string(),
+                hardware_model: "Raspberry Pi Zero W".to_string(),
+            })
     }
 }
 

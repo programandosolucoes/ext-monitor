@@ -690,44 +690,74 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- Display Monitor & Quick Telemetry -->
-            <div class="glass-card">
-                <div class="card-header">
+            <!-- Active Extension Connection (Active Transport Selector) -->
+            <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(0, 229, 255, 0.4); background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(13, 20, 36, 0.98) 100%);">
+                <div class="card-header" style="margin-bottom: 0.8rem;">
                     <div class="card-title">
-                        <span>📺</span>
-                        <span data-i18n="displayHeader">HDMI Television & Display Telemetry</span>
+                        <span>🔀</span>
+                        <span data-i18n="connHeader">Active Extension Connection (Active Transport)</span>
                     </div>
-                    <span class="card-badge badge-cyan" id="monitorBadge">HDMI-A-1 • Detecting...</span>
+                    <span class="card-badge badge-cyan" id="badgeActiveTransport" data-i18n="connBadge">Hot-Switchable</span>
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; align-items: center;">
-                    <div class="monitor-frame">
-                        <div class="monitor-scanline"></div>
-                        <div class="monitor-text">
-                            <p id="monitorName" style="font-size: 1.4rem; font-weight: 700;">🖥️ Detecting Monitor...</p>
-                            <p id="monitorVpu" style="margin-top: 0.3rem;">VideoCore IV Hardware VPU</p>
-                            <p id="monitorStatus" style="color: #7ee787; margin-top: 0.2rem;">● LIVE ZERO-COPY 60 FPS</p>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1rem; line-height: 1.4;" data-i18n="connDesc">
+                    Select the active transmission pipeline between your PC and this screen. Switches immediately on the fly without rebooting.
+                </p>
+                <div class="btn-grid" id="activeTransportGrid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+                    <button class="btn-toggle" id="btnTransport_mode1" onclick="setActiveTransport('mode1_udp')">
+                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">🐧 Mode 1: Network UDP</div>
+                        <div style="font-size: 0.76rem; opacity: 0.8;">UDP Port 5000 • &lt; 15ms latency</div>
+                    </button>
+                    <button class="btn-toggle" id="btnTransport_mode2" onclick="setActiveTransport('mode2_miracast')">
+                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">🪟 Mode 2: Miracast</div>
+                        <div style="font-size: 0.76rem; opacity: 0.8;">Windows Win+K • TCP 7236</div>
+                    </button>
+                    <button class="btn-toggle active" id="btnTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
+                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">⚡ Mode 3: USB Bulk Direct</div>
+                        <div style="font-size: 0.76rem; opacity: 0.8;">480 Mbps FunctionFS • &lt; 1ms latency</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dynamic Displays Container (Renders a section per HDMI/DP video output) -->
+            <div id="displaysSectionContainer" style="margin-bottom: 1.5rem;">
+                <div class="glass-card" id="displayCard_default">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span>📺</span>
+                            <span data-i18n="displayHeader">HDMI Television & Display Telemetry</span>
                         </div>
+                        <span class="card-badge badge-cyan" id="monitorBadge">HDMI-A-1 • Detecting...</span>
                     </div>
-                    <div>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1rem;" data-i18n="displayDesc">
-                            The VideoCore IV hardware VPU decodes H.264 video streams directly to the HDMI scanout plane without touching the CPU.
-                        </p>
-                        <div class="action-row">
-                            <button id="btnTriggerHud" class="btn-primary" onclick="triggerHud(true)" data-i18n="btnShowHud">✦ Show HUD on TV (60s)</button>
-                            <button id="btnHideHud" class="btn-danger" onclick="triggerHud(false)" data-i18n="btnHideHud">✕ Turn Off HUD</button>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; align-items: center;">
+                        <div class="monitor-frame">
+                            <div class="monitor-scanline"></div>
+                            <div class="monitor-text">
+                                <p id="monitorName" style="font-size: 1.4rem; font-weight: 700;">🖥️ Detecting Monitor...</p>
+                                <p id="monitorVpu" style="margin-top: 0.3rem;">VideoCore IV Hardware VPU</p>
+                                <p id="monitorStatus" style="color: #7ee787; margin-top: 0.2rem;">● LIVE ZERO-COPY 60 FPS</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1rem;" data-i18n="displayDesc">
+                                The VideoCore IV hardware VPU decodes H.264 video streams directly to the HDMI scanout plane without touching the CPU.
+                            </p>
+                            <div class="action-row">
+                                <button id="btnTriggerHud" class="btn-primary" onclick="triggerHud(true)" data-i18n="btnShowHud">✦ Show HUD on TV (60s)</button>
+                                <button id="btnHideHud" class="btn-danger" onclick="triggerHud(false)" data-i18n="btnHideHud">✕ Turn Off HUD</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Streaming Mode Selector -->
+            <!-- Appliance Listener Daemons & Service Publishing -->
             <div class="glass-card">
                 <div class="card-header">
                     <div class="card-title">
-                        <span>🔀</span>
-                        <span data-i18n="modeHeader">Active Streaming Modes</span>
+                        <span>📡</span>
+                        <span data-i18n="servicesHeader">Appliance Listener Daemons & Services</span>
                     </div>
-                    <span class="card-badge badge-purple" data-i18n="badgeMultiMode">Concurrent Engine</span>
+                    <span class="card-badge badge-purple" data-i18n="servicesBadge">Hardware Listeners</span>
                 </div>
                 <div class="btn-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
                     <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan);">
@@ -1831,7 +1861,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 m3Details: "USB 2.0 High-Speed • Zero-Network • Sub-1ms Latency",
                 waitingStreamDesc: "Receiver in readiness displaying splash screen with IP & QR Code.",
                 capKmsTitle: "KMS Direct (Anti-Freeze / GPU Scanout)",
-                capMutterTitle: "GNOME Mutter (PipeWire Screencast)"
+                capMutterTitle: "GNOME Mutter (PipeWire Screencast)",
+                connHeader: "Active Extension Connection (Active Transport)",
+                connBadge: "Hot-Switchable",
+                connDesc: "Select the active transmission pipeline between your PC and this screen. Switches immediately on the fly without rebooting.",
+                servicesHeader: "Appliance Listener Daemons & Services",
+                servicesBadge: "Hardware Listeners"
             },
             pt: {
                 title: "Pi Zero Monitor Estendido",
@@ -2077,7 +2112,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 m3Details: "Barramento USB 2.0 High-Speed • Zero-Rede • Latência < 1ms",
                 waitingStreamDesc: "Receptor em prontidão exibindo tela de splash com IP e QR Code.",
                 capKmsTitle: "KMS Direct (Anti-Congelamento / GPU Scanout)",
-                capMutterTitle: "GNOME Mutter (PipeWire Screencast)"
+                capMutterTitle: "GNOME Mutter (PipeWire Screencast)",
+                connHeader: "Conexão Ativa da Extensão (Transporte Ativo)",
+                connBadge: "Chaveamento a Quente",
+                connDesc: "Selecione a via ativa de transmissão para a tela estendida. Chaveia na hora sem necessidade de reiniciar o sistema.",
+                servicesHeader: "Daemons & Serviços de Escuta do Appliance",
+                servicesBadge: "Listeners no Hardware"
             },
             it: {
                 title: "Pi Zero Monitor Esteso",
@@ -2323,7 +2363,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 m3Details: "Bus USB 2.0 High-Speed • Zero-Network • Latenza < 1ms",
                 waitingStreamDesc: "Ricevitore in attesa che mostra schermata splash con IP e QR Code.",
                 capKmsTitle: "KMS Direct (Anti-Blocco / Scanout GPU)",
-                capMutterTitle: "GNOME Mutter (PipeWire Screencast)"
+                capMutterTitle: "GNOME Mutter (PipeWire Screencast)",
+                connHeader: "Connessione Schermo Attiva (Trasporto)",
+                connBadge: "Scambio a Caldo",
+                connDesc: "Seleziona il canale di trasmissione attivo tra il PC e lo schermo. Commuta istantaneamente senza riavviare.",
+                servicesHeader: "Servizi e Daemon di Ascolto dell'Appliance",
+                servicesBadge: "Listener Hardware"
             },
             zh: {
                 title: "Pi Zero 扩展显示器",
@@ -2569,7 +2614,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 m3Details: "USB 2.0 高速总线 • 无需网络协议栈 • 低于 1ms 延迟",
                 waitingStreamDesc: "接收端待机就绪，正在显示包含 IP 和二维码的启动屏。",
                 capKmsTitle: "KMS 直连 (防冻结 / GPU 扫描帧)",
-                capMutterTitle: "GNOME Mutter (PipeWire 屏幕录制)"
+                capMutterTitle: "GNOME Mutter (PipeWire 屏幕录制)",
+                connHeader: "活动屏幕连接 (活动传输通道)",
+                connBadge: "热切换",
+                connDesc: "选择 PC 与此屏幕之间的活动传输通道。无需重启即可即时切换。",
+                servicesHeader: "设备监听守护进程与服务",
+                servicesBadge: "硬件监听服务"
             }
         };
 
@@ -2709,6 +2759,26 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             updateKeyIntValue(val);
         }
 
+        // Active Extension Connection Transport
+        let currentTransport = 'mode3_usb_bulk';
+
+        function setActiveTransport(transport) {
+            currentTransport = transport;
+            const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
+            document.querySelectorAll('#activeTransportGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', b.id === 'btnTransport_' + shortKey);
+            });
+            showToast('Switching active screen connection to ' + shortKey.toUpperCase() + '...');
+            fetch('/api/transport/active', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active_transport: transport, transport: transport })
+            }).then(() => {
+                setTimeout(pollTelemetry, 250);
+                setTimeout(pollTelemetry, 800);
+            }).catch(() => {});
+        }
+
         // Operating Modes State & Toggle
         const activeModes = {
             mode1: true,
@@ -2721,6 +2791,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             const toggle = document.getElementById('toggle' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
             const card = document.getElementById('card' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
             const badge = document.getElementById('badge' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
+            const transBtn = document.getElementById('btnTransport_' + modeKey);
 
             if (toggle) toggle.checked = enabled;
             if (card) {
@@ -2729,6 +2800,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 } else {
                     card.classList.add('disabled');
                 }
+            }
+            if (transBtn) {
+                transBtn.style.opacity = enabled ? '1.0' : '0.45';
+                transBtn.style.pointerEvents = enabled ? 'auto' : 'none';
             }
             if (badge) {
                 if (enabled) {
@@ -2745,7 +2820,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             setModeToggleUI(modeKey, enabled);
             localStorage.setItem('ext_' + modeKey, enabled);
             
-            showToast(enabled ? `✓ ${modeKey.toUpperCase()} enabled!` : `✕ ${modeKey.toUpperCase()} disabled.`);
+            showToast(enabled ? `✓ ${modeKey.toUpperCase()} daemon enabled!` : `✕ ${modeKey.toUpperCase()} daemon disabled.`);
             
             fetch('/api/modes', {
                 method: 'POST',
@@ -2756,6 +2831,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                     mode2: activeModes.mode2,
                     mode3: activeModes.mode3
                 })
+            }).then(() => {
+                setTimeout(pollTelemetry, 300);
             }).catch(() => {});
         }
 
@@ -3237,6 +3314,15 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                             highlightActiveCard(null);
                         }
 
+                        // Update Active Transport Connection buttons
+                        const curId = am.id;
+                        document.querySelectorAll('#activeTransportGrid .btn-toggle').forEach(b => {
+                            const isCurrent = (curId === 'mode1_udp' && b.id === 'btnTransport_mode1') ||
+                                              (curId === 'mode2_miracast' && b.id === 'btnTransport_mode2') ||
+                                              (curId === 'mode3_usb_bulk' && b.id === 'btnTransport_mode3');
+                            b.classList.toggle('active', isCurrent);
+                        });
+
                         // Also update statStream card
                         const valState = document.getElementById('valState');
                         const badgeStream = document.getElementById('badgeStream');
@@ -3249,8 +3335,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                         }
                     }
 
-                    // 2. Active HDMI Display Visual Feedback
-                    const h = data.hdmi || data.monitor;
+                    // 2. Dynamic HDMI Displays Visual Feedback
+                    const displaysList = data.displays || (data.hdmi ? [data.hdmi] : []);
+                    renderDisplays(displaysList);
+
+                    const h = displaysList.find(d => d.connected) || displaysList[0];
                     if (h) {
                         const elPort = document.getElementById('activeHdmiPortBadge');
                         const elHdmiTitle = document.getElementById('activeHdmiTitle');
@@ -3264,28 +3353,65 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                             const mode = h.active_mode || '1280x720 @ 60 Hz';
                             elHdmiDetails.textContent = mon + ' • ' + mode + ' • ' + hw;
                         }
-
-                        const elName = document.getElementById('monitorName');
-                        if (elName && h.name) elName.textContent = '🖥️ ' + h.name;
-                        const elBadge = document.getElementById('monitorBadge');
-                        if (elBadge) elBadge.textContent = (h.connector || 'HDMI-A-1') + ' • ' + (h.active_mode || h.preferred_mode || '1280x720');
-                        const elVpu = document.getElementById('monitorVpu');
-                        if (elVpu && h.vpu) elVpu.textContent = h.vpu;
-                        const elStatus = document.getElementById('monitorStatus');
-                        if (elStatus) {
-                            if (h.connected) {
-                                elStatus.textContent = '● LIVE ZERO-COPY 60 FPS (' + (h.connector || 'HDMI-A-1') + ')';
-                                elStatus.style.color = '#7ee787';
-                            } else {
-                                elStatus.textContent = '● ' + t('netDisconnected').toUpperCase() + ' (HEADLESS GUARD)';
-                                elStatus.style.color = '#f85149';
-                            }
-                        }
                     }
                 })
                 .catch(() => {});
 
             pollMediaStatus();
+        }
+
+        function renderDisplays(displays) {
+            const container = document.getElementById('displaysSectionContainer');
+            if (!container || !displays || displays.length === 0) return;
+
+            // Only redraw if number of displays changed or data changed to avoid flicker
+            const cacheKey = JSON.stringify(displays.map(d => ({ c: d.connector, st: d.connected, m: d.active_mode, n: d.name })));
+            if (container.dataset.cacheKey === cacheKey) return;
+            container.dataset.cacheKey = cacheKey;
+
+            let html = '';
+            displays.forEach((h, idx) => {
+                const conn = h.connector || ('HDMI-' + (idx + 1));
+                const isConn = !!h.connected;
+                const title = h.connector_friendly || ('Digital Output (' + conn + ')');
+                const monName = isConn ? (h.name || 'HDMI Television / Monitor') : ('Standby / ' + t('netDisconnected') + ' (' + conn + ')');
+                const statusText = isConn ? ('● LIVE ZERO-COPY 60 FPS (' + conn + ')') : ('● ' + t('netDisconnected').toUpperCase() + ' (HEADLESS GUARD)');
+                const statusColor = isConn ? '#7ee787' : '#f85149';
+                const badgeText = conn + ' • ' + (h.active_mode || h.preferred_mode || '1280x720');
+                const badgeClass = isConn ? 'stat-badge badge-cyan' : 'stat-badge badge-amber';
+                const vpu = h.vpu || 'Hardware Accelerated VPU';
+
+                html += `
+                <div class="glass-card" id="displayCard_${conn}" style="margin-bottom: 1.25rem;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span>📺</span>
+                            <span>${title}</span>
+                        </div>
+                        <span class="${badgeClass}">${badgeText}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; align-items: center;">
+                        <div class="monitor-frame">
+                            <div class="monitor-scanline"></div>
+                            <div class="monitor-text">
+                                <p style="font-size: 1.3rem; font-weight: 700;">🖥️ ${monName}</p>
+                                <p style="margin-top: 0.3rem; font-size: 0.85rem; opacity: 0.85;">${vpu}</p>
+                                <p style="color: ${statusColor}; margin-top: 0.2rem; font-weight: 600; font-size: 0.85rem;">${statusText}</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.5; margin-bottom: 1rem;">
+                                ${isConn ? (h.hardware_model + ' • ' + (h.active_mode || '1280x720 @ 60 Hz') + ' • VideoCore IV scanout') : 'DRM connector active in headless guard mode with zero CPU overhead.'}
+                            </p>
+                            <div class="action-row">
+                                <button class="btn-primary" onclick="triggerHud(true)">✦ Show HUD on TV (60s)</button>
+                                <button class="btn-danger" onclick="triggerHud(false)">✕ Turn Off HUD</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
         }
 
         function pollMediaStatus() {
