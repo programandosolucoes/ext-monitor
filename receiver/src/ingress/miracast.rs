@@ -12,18 +12,63 @@ use crate::display::FramebufferSink;
 use crate::stream::TsDemuxer;
 use std::io;
 use std::net::UdpSocket;
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+
+fn bind_reusable_udp(port: u16) -> io::Result<UdpSocket> {
+    unsafe {
+        let fd = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let opt: libc::c_int = 1;
+        libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_REUSEADDR,
+            &opt as *const _ as *const libc::c_void,
+            std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+        );
+        libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_REUSEPORT,
+            &opt as *const _ as *const libc::c_void,
+            std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+        );
+        let mut addr: libc::sockaddr_in = std::mem::zeroed();
+        addr.sin_family = libc::AF_INET as libc::sa_family_t;
+        addr.sin_port = port.to_be();
+        addr.sin_addr.s_addr = libc::INADDR_ANY;
+
+        for attempt in 0..5 {
+            if libc::bind(
+                fd,
+                &addr as *const _ as *const libc::sockaddr,
+                std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+            ) == 0 {
+                return Ok(UdpSocket::from_raw_fd(fd));
+            }
+            if attempt < 4 {
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
+
+        let err = io::Error::last_os_error();
+        libc::close(fd);
+        Err(err)
+    }
+}
 
 pub struct MiracastIngress;
 
 impl MiracastIngress {
     /// Runs the Miracast MPEG-TS UDP ingress decode and display loop until `running` becomes false
     pub fn run(port: u16, running: Arc<AtomicBool>) {
-        let sock = match UdpSocket::bind(format!("0.0.0.0:{}", port)) {
+        let sock = match bind_reusable_udp(port) {
             Ok(s) => s,
             Err(e) => {
                 eprintln!(

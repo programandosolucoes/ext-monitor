@@ -299,6 +299,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let _ = c.kill();
                             let _ = c.wait();
                         }
+                        if let Some(fd) = current_usb_pipe_fd.take() {
+                            unsafe { libc::close(fd); }
+                        }
+                        pipeline_builder.usb_pipe_fd = None;
                         is_paused = true;
                     }
                     ControlAction::SetMode(m) => {
@@ -308,6 +312,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             cfg.mode = m;
                             monitor_to_record = target_mon;
                             switch_engine_or_monitor = true;
+                        } else if is_paused {
+                            is_paused = false;
+                            restart_pipeline = true;
                         }
                     }
                     ControlAction::SetAudio(a) => {
@@ -399,31 +406,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     ControlAction::SetTransport(new_trans) => {
                         println!("\x1b[1;35m[*] Web Command: Troca de Transporte {:?} -> {:?}\x1b[0m", cfg.transport, new_trans);
-                        let is_same = match (&cfg.transport, &new_trans) {
-                            (TransportKind::UsbBulk, TransportKind::UsbBulk) => current_usb_pipe_fd.is_some(),
-                            (TransportKind::Network { ip: i1, port: p1 }, TransportKind::Network { ip: i2, port: p2 }) => i1 == i2 && p1 == p2,
-                            _ => false,
-                        };
-                        if !is_same {
-                            cfg.transport = new_trans.clone();
-                            match new_trans {
-                                TransportKind::UsbBulk => {
-                                    if current_usb_pipe_fd.is_none() {
-                                        current_usb_pipe_fd = open_usb_pipe_transport(running.clone());
-                                    }
-                                    pipeline_builder.usb_pipe_fd = current_usb_pipe_fd;
+                        // Explicit transport request always unpauses the stream!
+                        is_paused = false;
+                        cfg.transport = new_trans.clone();
+                        match new_trans {
+                            TransportKind::UsbBulk => {
+                                if let Some(fd) = current_usb_pipe_fd.take() {
+                                    unsafe { libc::close(fd); }
                                 }
-                                TransportKind::Network { ip, port } => {
-                                    if let Some(fd) = current_usb_pipe_fd.take() {
-                                        unsafe { libc::close(fd); }
-                                    }
-                                    pipeline_builder.usb_pipe_fd = None;
-                                    pipeline_builder.target_ip = ip.clone();
-                                    pipeline_builder.target_port = port;
-                                }
+                                pipeline_builder.usb_pipe_fd = None;
                             }
-                            restart_pipeline = true;
+                            TransportKind::Network { ip, port } => {
+                                if let Some(fd) = current_usb_pipe_fd.take() {
+                                    unsafe { libc::close(fd); }
+                                }
+                                pipeline_builder.usb_pipe_fd = None;
+                                pipeline_builder.target_ip = ip.clone();
+                                pipeline_builder.target_port = port;
+                            }
                         }
+                        restart_pipeline = true;
                     }
                 }
             }
@@ -444,6 +446,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let _ = c.kill();
                         let _ = c.wait();
                     }
+                    if let Some(fd) = current_usb_pipe_fd.take() {
+                        unsafe { libc::close(fd); }
+                        thread::sleep(Duration::from_millis(50));
+                    }
+                    if cfg.transport == TransportKind::UsbBulk {
+                        current_usb_pipe_fd = open_usb_pipe_transport(running.clone());
+                        pipeline_builder.usb_pipe_fd = current_usb_pipe_fd;
+                    } else {
+                        pipeline_builder.usb_pipe_fd = None;
+                    }
+
                     child = match pipeline_builder.spawn() {
                         Ok(c) => Some(c),
                         Err(e) => {

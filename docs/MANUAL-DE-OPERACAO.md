@@ -23,7 +23,7 @@
    - [`scripts/stop.sh` (Parada Limpa)](#scriptsstopsh-parada-limpa)
    - [`scripts/status.sh` (Diagnóstico de 4 Pontos)](#scriptsstatussh-diagnóstico-de-4-pontos)
    - [`scripts/connect.sh` (Script One-Click para Clientes)](#scriptsconnectsh-script-one-click-para-clientes)
-   - [`scripts/switch-mode.sh` (Chaveador de Modos do Receptor)](#scriptsswitch-modesh-chaveador-de-modos-do-receptor)
+   - [`ext-sender` CLI em Rust Puro (Chaveador de Modos e Standby)](#ext-sender-cli-em-rust-puro-chaveador-de-modos-e-standby)
    - [`scripts/monitor-latency.py` (Telemetria e Medição de Latência)](#scriptsmonitor-latencypy-telemetria-e-medição-de-latência)
    - [`scripts/setup-autoconnect.sh` (Plug & Play Automático via udev)](#scriptssetup-autoconnectsh-plug--play-automático-via-udev)
    - [`scripts/serial-console.sh` (Terminal de Resgate Serial /dev/ttyACM0)](#scriptsserial-consolesh-terminal-de-resgate-serial-devttyacm0)
@@ -122,8 +122,8 @@ O receptor `ext-receiver` opera de forma híbrida e concorrente, oferecendo trê
 - **Protocolo:** Transferência direta de pacotes brutos USB Bulk via endpoints `0x02` (OUT) e `0x82` (IN) usando `libusb`.
 - **Como ativar no Pi Zero:**
   ```bash
-  # Pelo terminal do Pi ou pelo Dashboard Web:
-  ./scripts/switch-mode.sh usb-bulk
+  # Pelo terminal do Host (CLI Rust puro) ou pelo Dashboard Web (http://192.168.7.2:8080):
+  ext-sender usb-bulk
   ```
 - **Como transmitir do Host:**
   ```bash
@@ -253,20 +253,23 @@ O script baixa o binário pré-compilado de `ext-sender` diretamente da memória
 
 ---
 
-### `scripts/switch-mode.sh` (Chaveador de Modos do Receptor)
+### `ext-sender` CLI em Rust Puro (Chaveador de Modos e Standby)
 
-Permite alternar a prioridade de entrada de vídeo no Raspberry Pi Zero.
+Permite alternar a prioridade de entrada de vídeo e controlar o estado do receptor Raspberry Pi Zero diretamente pelo terminal do Host sem precisar de scripts ou SSH:
 
-#### Uso:
+#### Comandos Nativos:
 ```bash
-# Alterna para Modo 1 (Rede UDP + Miracast WFD + Dashboard):
-./scripts/switch-mode.sh network
+# Alterna instantaneamente para Modo 3 (USB Bulk Direct <1ms no barramento):
+ext-sender usb-bulk
 
-# Alterna para Modo 3 (USB Bulk Direct):
-./scripts/switch-mode.sh usb-bulk
+# Alterna para Modo 1 (Rede UDP 5000 + Dashboard 8080):
+ext-sender network
 
-# Exibe o status atual dos 3 subsistemas (Serial, Rede, Vídeo):
-./scripts/switch-mode.sh status
+# Alterna para Modo 2 (Miracast WFD RTSP 7236 / Windows Win + K):
+ext-sender miracast
+
+# Pausa a transmissão e coloca o receptor em Standby Imediato (0.76W na TV):
+ext-sender standby
 ```
 
 ---
@@ -470,7 +473,7 @@ O projeto dispõe de 33 scripts especializados para automação, deploy, telemet
 | **`setup-autoconnect.sh`** | Configura serviço udev e systemd para iniciar a transmissão automaticamente ao plugar o cabo Micro-USB. | `./scripts/setup-autoconnect.sh` |
 | **`autoconnect.sh`** | Script disparado pela regra udev na conexão do Pi Zero, iniciando o streaming após aguardar a subida da rede. | `./scripts/autoconnect.sh` |
 | **`usb-watcher.sh`** | Monitor de barramento USB em background que reinicia o pipeline caso a porta USB caia ou seja reconectada. | `./scripts/usb-watcher.sh` |
-| **`switch-mode.sh`** | Alterna o modo de operação do receptor entre Modo 1 (UDP), Modo 2 (Miracast) e Modo 3 (USB Bulk). | `./scripts/switch-mode.sh [udp\|miracast\|usb-bulk]` |
+| **`ext-sender <modo>`** | Chaveamento nativo em Rust puro entre Modo 1 (UDP), Modo 2 (Miracast), Modo 3 (USB Bulk) e Standby. | `ext-sender [usb-bulk\|network\|miracast\|standby]` |
 | **`flash-appliance.sh`** | Grava a imagem compacta `.img` do appliance no cartão Micro-SD via `dd` com checagem de integridade. | `sudo ./scripts/flash-appliance.sh /dev/sdX` |
 | **`build-fast-appliance.sh`** | Constrói a imagem do appliance `initramfs.cpio.gz` a partir da árvore do buildroot e overlays. | `./scripts/build-fast-appliance.sh` |
 | **`reconfigure-appliance.sh`** | Monta a partição FAT16 do cartão SD para alterar IPs, modo de boot ou Wi-Fi sem regravar todo o sistema. | `sudo ./scripts/reconfigure-appliance.sh [opções]` |

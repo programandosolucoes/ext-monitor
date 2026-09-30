@@ -148,9 +148,96 @@ impl SenderConfig {
             return Ok(None);
         }
 
+fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) {
+    if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
+        let _ = sock.send_to(payload.as_bytes(), "127.0.0.1:5001");
+    }
+    if let Some((path, body)) = pi_api_path {
+        let url = format!("http://192.168.7.2:8080{}", path);
+        let _ = std::process::Command::new("curl")
+            .args(["-s", "-m", "2", "-X", "POST", "-H", "Content-Type: application/json", "-d", body, &url])
+            .output();
+    }
+}
+
         // Subcomandos de controle de serviço e processo
         if let Some(cmd) = args.get(1) {
             match cmd.as_str() {
+                "standby" | "pause" => {
+                    notify_daemon_and_receiver(
+                        r#"{"action":"stop"}"#,
+                        Some(("/api/host/control", r#"{"action":"stop"}"#)),
+                    );
+                    println!("\x1b[1;33m[+] Modo Standby ativado: Transmissão pausada. TV exibindo Splash Screen.\x1b[0m");
+                    return Ok(None);
+                }
+                "usb-bulk" | "bulk" => {
+                    notify_daemon_and_receiver(
+                        r#"{"action":"start","transport":"usb_bulk"}"#,
+                        Some(("/api/transport/active", r#"{"active_transport":"mode3_usb_bulk","transport":"usb_bulk","action":"start","mode1":false,"mode2":false,"mode3":true}"#)),
+                    );
+                    println!("\x1b[1;32m[+] Modo 3 (USB Bulk Direto) ativado com sucesso!\x1b[0m");
+                    println!("    - Protocolo: USB FunctionFS Bulk 480 Mbps (< 1ms)");
+                    println!("    - Painel Web: http://192.168.7.2:8080");
+                    return Ok(None);
+                }
+                "network" | "udp" => {
+                    notify_daemon_and_receiver(
+                        r#"{"action":"start","transport":"network"}"#,
+                        Some(("/api/transport/active", r#"{"active_transport":"mode1_udp","transport":"network","action":"start","mode1":true,"mode2":false,"mode3":false}"#)),
+                    );
+                    println!("\x1b[1;32m[+] Modo 1 (Rede UDP) ativado com sucesso!\x1b[0m");
+                    println!("    - Protocolo: UDP H.264 / RFC 4571 (< 15ms)");
+                    println!("    - Painel Web: http://192.168.7.2:8080");
+                    return Ok(None);
+                }
+                "miracast" | "wfd" => {
+                    notify_daemon_and_receiver(
+                        r#"{"action":"stop"}"#,
+                        Some(("/api/transport/active", r#"{"active_transport":"mode2_miracast","transport":"miracast","action":"stop","mode1":false,"mode2":true,"mode3":false}"#)),
+                    );
+                    println!("\x1b[1;32m[+] Modo 2 (Windows Miracast) ativado com sucesso!\x1b[0m");
+                    println!("    - Windows Miracast: Porta RTSP 7236 (Win + K)");
+                    println!("    - Painel Web: http://192.168.7.2:8080");
+                    return Ok(None);
+                }
+                "mode" => {
+                    let sub = args.get(2).map(|s| s.as_str()).unwrap_or("status");
+                    match sub {
+                        "usb-bulk" | "bulk" | "3" => {
+                            notify_daemon_and_receiver(
+                                r#"{"action":"start","transport":"usb_bulk"}"#,
+                                Some(("/api/transport/active", r#"{"active_transport":"mode3_usb_bulk","transport":"usb_bulk","action":"start","mode1":false,"mode2":false,"mode3":true}"#)),
+                            );
+                            println!("\x1b[1;32m[+] Modo 3 (USB Bulk Direto) ativado com sucesso!\x1b[0m");
+                        }
+                        "network" | "udp" | "1" => {
+                            notify_daemon_and_receiver(
+                                r#"{"action":"start","transport":"network"}"#,
+                                Some(("/api/transport/active", r#"{"active_transport":"mode1_udp","transport":"network","action":"start","mode1":true,"mode2":false,"mode3":false}"#)),
+                            );
+                            println!("\x1b[1;32m[+] Modo 1 (Rede UDP) ativado com sucesso!\x1b[0m");
+                        }
+                        "miracast" | "wfd" | "2" => {
+                            notify_daemon_and_receiver(
+                                r#"{"action":"stop"}"#,
+                                Some(("/api/transport/active", r#"{"active_transport":"mode2_miracast","transport":"miracast","action":"stop","mode1":false,"mode2":true,"mode3":false}"#)),
+                            );
+                            println!("\x1b[1;32m[+] Modo 2 (Windows Miracast) ativado com sucesso!\x1b[0m");
+                        }
+                        "standby" | "stop" | "off" => {
+                            notify_daemon_and_receiver(
+                                r#"{"action":"stop"}"#,
+                                Some(("/api/host/control", r#"{"action":"stop"}"#)),
+                            );
+                            println!("\x1b[1;33m[+] Modo Standby ativado: TV repousando.\x1b[0m");
+                        }
+                        _ => {
+                            crate::service::show_status();
+                        }
+                    }
+                    return Ok(None);
+                }
                 "stop" | "--stop" => {
                     crate::service::stop_all().map_err(|e| e.to_string())?;
                     return Ok(None);
@@ -209,13 +296,40 @@ impl SenderConfig {
         let is_daemon = args.iter().any(|a| a == "--service-daemon");
 
         if !is_foreground && !is_daemon {
-            // Anti-duplicação: Se já está rodando, apenas relata o status e não duplica processo
+            // Anti-duplicação inteligente: Se já está rodando, encaminha o comando de start/modo/transporte para o daemon via UDP 5001!
             if let Some(pid) = crate::service::get_running_pid() {
                 println!("\x1b[1;32m[i] ext-sender já está ativo em segundo plano (PID: {})\x1b[0m", pid);
-                println!("\x1b[1;36m    Controle Web: http://192.168.7.2:8080\x1b[0m");
-                println!("\x1b[1;36m    Para ver logs:  ext-sender logs\x1b[0m");
-                println!("\x1b[1;36m    Para parar:     ext-sender stop\x1b[0m");
-                println!("\x1b[1;36m    Para status:    ext-sender status\x1b[0m");
+
+                // Analisa argumentos para direcionar o comando correto para o daemon
+                let mut action_json = serde_json::json!({
+                    "action": "start"
+                });
+
+                for arg in args.iter().skip(1) {
+                    let lower = arg.to_lowercase();
+                    if lower == "extend" || lower == "clone" {
+                        action_json["mode"] = serde_json::Value::String(lower);
+                    } else if let Some(m) = lower.strip_prefix("--mode=") {
+                        action_json["mode"] = serde_json::Value::String(m.to_string());
+                    } else if lower == "usb-bulk" || lower == "bulk" || lower == "usb" || lower == "mode3" || lower == "--usb" {
+                        action_json["transport"] = serde_json::Value::String("usb_bulk".to_string());
+                    } else if lower == "network" || lower == "net" || lower == "udp" || lower == "mode1" || lower == "--network" {
+                        action_json["transport"] = serde_json::Value::String("network".to_string());
+                    } else if let Some(fps_val) = lower.strip_prefix("--fps=").and_then(|f| f.parse::<u32>().ok()) {
+                        action_json["fps"] = serde_json::Value::Number(fps_val.into());
+                    } else if let Ok(fps_val) = lower.parse::<u32>() {
+                        if (10..=60).contains(&fps_val) {
+                            action_json["fps"] = serde_json::Value::Number(fps_val.into());
+                        }
+                    }
+                }
+
+                if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
+                    let payload = action_json.to_string();
+                    let _ = sock.send_to(payload.as_bytes(), "127.0.0.1:5001");
+                    println!("\x1b[1;32m[+] Comando de início/retomada enviado com sucesso ao daemon: {}\x1b[0m", payload);
+                    println!("\x1b[1;36m    Segunda tela ativa em http://192.168.7.2:8080\x1b[0m");
+                }
                 return Ok(None);
             }
 

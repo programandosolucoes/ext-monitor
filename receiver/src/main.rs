@@ -171,23 +171,32 @@ fn main() {
     // Supervisor loop: restores active decode pipeline if session ends or pipeline exits
     while running.load(Ordering::SeqCst) {
         if !pipeline_mgr.is_paused() {
-            let is_idle = pipeline_mgr.current_kind().is_none();
-            let has_crashed = pipeline_mgr.has_exited();
+            let active_trans = web::CONFIG.lock().map(|c| c.active_transport.clone()).unwrap_or_default();
+            // In Miracast mode (Mode 2), pipeline kind is None until a client connects via RTSP; do NOT auto-switch to UDP!
+            if active_trans != "mode2_miracast" {
+                let is_idle = pipeline_mgr.current_kind().is_none();
+                let has_crashed = pipeline_mgr.has_exited();
 
-            if is_idle || has_crashed {
-                let want_bulk = web::CONFIG.lock().map(|c| c.mode3).unwrap_or(is_usb_bulk_mode);
-                if want_bulk {
-                    println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring USB Bulk pipeline...");
-                    if let Err(e) = usb_bulk::activate_usb_bulk(running.clone(), pipeline_mgr.clone()) {
-                        eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to restore USB Bulk: {} (retrying in 2s)", e);
-                        thread::sleep(Duration::from_secs(2));
-                    }
-                } else {
-                    let default_kind = PipelineKind::RawH264Rtp { port: udp_port };
-                    println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring default Linux UDP pipeline (port {})...", udp_port);
-                    if let Err(e) = pipeline_mgr.start(default_kind) {
-                        eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Pipeline start failed: {} (retrying in 3s)", e);
-                        thread::sleep(Duration::from_secs(3));
+                if is_idle || has_crashed {
+                    let want_bulk = if !active_trans.is_empty() {
+                        active_trans == "mode3_usb_bulk"
+                    } else {
+                        web::CONFIG.lock().map(|c| c.mode3).unwrap_or(is_usb_bulk_mode)
+                    };
+
+                    if want_bulk {
+                        println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring USB Bulk pipeline...");
+                        if let Err(e) = usb_bulk::activate_usb_bulk(running.clone(), pipeline_mgr.clone()) {
+                            eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Failed to restore USB Bulk: {} (retrying in 2s)", e);
+                            thread::sleep(Duration::from_secs(2));
+                        }
+                    } else {
+                        let default_kind = PipelineKind::RawH264Rtp { port: udp_port };
+                        println!("\x1b[1;33m[ext-receiver]\x1b[0m Restoring default Linux UDP pipeline (port {})...", udp_port);
+                        if let Err(e) = pipeline_mgr.start(default_kind) {
+                            eprintln!("\x1b[1;31m[ext-receiver]\x1b[0m Pipeline start failed: {} (retrying in 2s)", e);
+                            thread::sleep(Duration::from_secs(2));
+                        }
                     }
                 }
             }

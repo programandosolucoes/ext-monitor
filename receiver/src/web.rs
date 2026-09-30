@@ -246,14 +246,25 @@ fn handle_http_client(
                     }
                 }
 
-                if let Some(transport) = active_transport {
+                let inferred_transport = active_transport.map(|s| s.to_string())
+                    .or_else(|| {
+                        if let Some(true) = m3_change {
+                            Some("mode3_usb_bulk".to_string())
+                        } else if let Some(true) = m1_change {
+                            Some("mode1_udp".to_string())
+                        } else if let Some(true) = extract_json_bool(body, "mode2") {
+                            Some("mode2_miracast".to_string())
+                        } else {
+                            None
+                        }
+                    });
+
+                if let Some(transport) = inferred_transport.as_deref() {
                     println!("\x1b[1;36m[web-server]\x1b[0m Direct Active Transport switch requested: {}", transport);
-                    if let Ok(mut cfg) = CONFIG.lock() {
-                        cfg.active_transport = transport.to_string();
-                    }
                     match transport {
                         "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
                             if let Ok(mut cfg) = CONFIG.lock() {
+                                cfg.active_transport = "mode3_usb_bulk".to_string();
                                 cfg.mode3 = true;
                                 cfg.mode1 = false;
                                 cfg.mode2 = false;
@@ -269,6 +280,7 @@ fn handle_http_client(
                         }
                         "mode1_udp" | "network" | "udp" | "mode1" => {
                             if let Ok(mut cfg) = CONFIG.lock() {
+                                cfg.active_transport = "mode1_udp".to_string();
                                 cfg.mode1 = true;
                                 cfg.mode2 = false;
                                 cfg.mode3 = false;
@@ -276,13 +288,13 @@ fn handle_http_client(
                             forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
                             let pipe = pipeline_mgr.clone();
                             thread::spawn(move || {
-                                pipe.stop();
                                 let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
-                                let _ = pipe.start(default_kind);
+                                let _ = pipe.resume(default_kind);
                             });
                         }
                         "mode2_miracast" | "miracast" | "mode2" => {
                             if let Ok(mut cfg) = CONFIG.lock() {
+                                cfg.active_transport = "mode2_miracast".to_string();
                                 cfg.mode1 = false;
                                 cfg.mode2 = true;
                                 cfg.mode3 = false;
@@ -298,28 +310,13 @@ fn handle_http_client(
                         }
                         _ => {}
                     }
-                } else if let Some(true) = m3_change {
-                    println!("\x1b[1;32m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) listener enabled.");
-                    let run = running.clone();
-                    let pipe = pipeline_mgr.clone();
-                    thread::spawn(move || {
-                        if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
-                            eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk listener: {}", e);
-                        }
-                    });
                 } else if let Some(false) = m3_change {
                     println!("\x1b[1;33m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) listener disabled.");
-                } else if let Some(m1) = m1_change {
+                } else if let Some(false) = m1_change {
+                    println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) listener turned OFF.");
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
-                        if !m1 {
-                            println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) listener turned OFF.");
-                            pipe.pause();
-                        } else {
-                            println!("\x1b[1;32m[web-server]\x1b[0m Mode 1 (Linux UDP) listener turned ON.");
-                            let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
-                            let _ = pipe.resume(default_kind);
-                        }
+                        pipe.pause();
                     });
                 }
             }
@@ -331,6 +328,29 @@ fn handle_http_client(
                 println!("\x1b[1;36m[web-server]\x1b[0m Encaminhando comando ao Host (192.168.7.1:5001): {}", body);
                 if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
                     let _ = sock.send_to(body.as_bytes(), "192.168.7.1:5001");
+                }
+
+                if body.contains("\"action\":\"stop\"") {
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        pipe.pause();
+                        crate::display::SplashEngine::show_ready();
+                    });
+                } else if body.contains("\"action\":\"start\"") {
+                    let pipe = pipeline_mgr.clone();
+                    let run = running.clone();
+                    thread::spawn(move || {
+                        let trans = if let Ok(cfg) = CONFIG.lock() {
+                            if cfg.active_transport.is_empty() { "mode3_usb_bulk".to_string() } else { cfg.active_transport.clone() }
+                        } else { "mode3_usb_bulk".to_string() };
+
+                        if trans == "mode3_usb_bulk" {
+                            let _ = crate::usb_bulk::activate_usb_bulk(run, pipe);
+                        } else if trans == "mode1_udp" {
+                            let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                            let _ = pipe.resume(default_kind);
+                        }
+                    });
                 }
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"forwarded_to_host\"}");

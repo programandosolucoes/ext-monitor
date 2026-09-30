@@ -788,7 +788,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     <span class="card-badge badge-purple" data-i18n="servicesBadge">Hardware Listeners</span>
                 </div>
                 <div class="btn-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
-                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan);">
+                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan); cursor: pointer;" onclick="if(!event.target.closest('.switch')) setActiveTransport('mode1_udp')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">🐧 Mode 1: Linux Wayland</div>
                             <label class="switch" title="Toggle Mode 1">
@@ -799,7 +799,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <div class="dl-desc" data-i18n="m1Desc">Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (&lt; 15ms).</div>
                         <span id="badgeMode1" class="stat-badge badge-cyan" style="align-self: flex-start;" data-i18n="badgeMode1On">Enabled (UDP 5000)</span>
                     </div>
-                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald);">
+                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald); cursor: pointer;" onclick="if(!event.target.closest('.switch')) setActiveTransport('mode2_miracast')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">🪟 Mode 2: Windows Miracast</div>
                             <label class="switch" title="Toggle Mode 2">
@@ -810,7 +810,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <div class="dl-desc" data-i18n="m2Desc">Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.</div>
                         <span id="badgeMode2" class="stat-badge badge-green" style="align-self: flex-start;" data-i18n="badgeMode2On">Enabled (TCP 7236)</span>
                     </div>
-                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple);">
+                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple); cursor: pointer;" onclick="if(!event.target.closest('.switch')) setActiveTransport('mode3_usb_bulk')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">⚡ Mode 3: USB Bulk Direct</div>
                             <label class="switch" title="Toggle Mode 3">
@@ -2857,24 +2857,32 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 b.classList.toggle('active', b.id === 'btnTransport_' + shortKey);
             });
 
+            const btnExt = document.getElementById('btnActionExtend');
+            const btnCln = document.getElementById('btnActionClone');
+            const btnStop = document.getElementById('btnActionStop');
+            const badge = document.getElementById('badgeExtState');
+
             if (transport === 'mode2_miracast') {
                 showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • ' + (t('waitingStream') || 'Ready for Win + K'));
-                const btnExt = document.getElementById('btnActionExtend');
-                const btnCln = document.getElementById('btnActionClone');
-                const btnStop = document.getElementById('btnActionStop');
-                const badge = document.getElementById('badgeExtState');
                 if (btnExt) btnExt.classList.remove('active');
                 if (btnCln) btnCln.classList.remove('active');
                 if (btnStop) btnStop.classList.add('active');
                 if (badge) { badge.textContent = 'Miracast (Standby)'; badge.className = 'card-badge badge-cyan'; }
             } else {
                 showToast('Switching active screen connection to ' + shortKey.toUpperCase() + '...');
+                // Wake up and switch extension state if it was in standby!
+                if (btnStop) btnStop.classList.remove('active');
+                if (btnExt && (!btnCln || !btnCln.classList.contains('active'))) {
+                    btnExt.classList.add('active');
+                }
+                if (badge) { badge.textContent = t('extBadgeActive') || 'Extending (HDMI-1)'; badge.className = 'card-badge badge-green'; }
+                sendHostControl({ action: 'start', transport: transport.includes('usb') ? 'usb_bulk' : 'network' });
             }
 
             fetch('/api/transport/active', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ active_transport: transport, transport: transport })
+                body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start' })
             }).then(() => {
                 setTimeout(pollTelemetry, 250);
                 setTimeout(pollTelemetry, 800);
@@ -2953,18 +2961,23 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             
             showToast(enabled ? `✓ ${modeKey.toUpperCase()} daemon enabled!` : `✕ ${modeKey.toUpperCase()} daemon disabled.`);
             
-            fetch('/api/modes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    [modeKey]: enabled,
-                    mode1: activeModes.mode1,
-                    mode2: activeModes.mode2,
-                    mode3: activeModes.mode3
-                })
-            }).then(() => {
-                setTimeout(pollTelemetry, 300);
-            }).catch(() => {});
+            if (enabled) {
+                const targetTrans = modeKey === 'mode3' ? 'mode3_usb_bulk' : (modeKey === 'mode2' ? 'mode2_miracast' : 'mode1_udp');
+                setActiveTransport(targetTrans);
+            } else {
+                fetch('/api/modes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        [modeKey]: enabled,
+                        mode1: activeModes.mode1,
+                        mode2: activeModes.mode2,
+                        mode3: activeModes.mode3
+                    })
+                }).then(() => {
+                    setTimeout(pollTelemetry, 300);
+                }).catch(() => {});
+            }
         }
 
         function setCapture(cap) {

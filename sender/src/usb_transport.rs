@@ -88,15 +88,19 @@ pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), Stri
                     .map_err(|e| format!("Failed to open USB device: {}. Check udev permissions.", e))?;
 
                 // Detach active kernel driver if bound to interface
-                if let Ok(active) = handle.kernel_driver_active(iface_num) {
-                    if active {
-                        let _ = handle.detach_kernel_driver(iface_num);
-                    }
-                }
+                let _ = handle.detach_kernel_driver(iface_num);
 
-                handle
-                    .claim_interface(iface_num)
-                    .map_err(|e| format!("Failed to claim USB Interface {}: {}", iface_num, e))?;
+                // Retry claim_interface up to 5 times with 100ms backoff in case previous release is finalizing
+                let mut claim_res = handle.claim_interface(iface_num);
+                for _ in 0..5 {
+                    if claim_res.is_ok() {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                    let _ = handle.detach_kernel_driver(iface_num);
+                    claim_res = handle.claim_interface(iface_num);
+                }
+                claim_res.map_err(|e| format!("Failed to claim USB Interface {}: {}", iface_num, e))?;
 
                 println!(
                     "\x1b[1;32m[usb-transport]\x1b[0m USB Interface {} (Bulk OUT 0x{:02x}) claimed successfully.",
