@@ -3266,12 +3266,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         }
 
         // Live Real-Time Hardware Audio Visualizer Engine (30 FPS Canvas)
-        let liveAudioBars = new Array(24).fill(0.04);
-        let liveAudioPeaks = new Array(24).fill(0.04);
+        let liveAudioBars = new Array(24).fill(0.0);
+        let liveAudioPeaks = new Array(24).fill(0.0);
         let liveRmsDb = -60.0;
         let liveAudioActive = false;
         let liveVideoActive = false;
-        let smoothBars = new Array(24).fill(0.04);
+        let smoothBars = new Array(24).fill(0.0);
         let smoothRms = -60.0;
 
         function initAudioVisualizerCanvas() {
@@ -3308,37 +3308,41 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 // Draw 24 Realtime Spectrum Bars with smooth 60 FPS physics
                 for (let i = 0; i < numBars; i++) {
                     const x = startX + i * (barWidth + barSpacing);
-                    let targetVal = liveAudioBars[i] || 0.04;
-                    if (!liveAudioActive) {
-                        // Subtle ambient breathing idle wave
-                        targetVal = 0.03 + Math.sin(now * 0.003 + i * 0.35) * 0.015;
-                    }
-                    smoothBars[i] += (targetVal - smoothBars[i]) * 0.35;
-                    let val = Math.max(0.02, Math.min(1.0, smoothBars[i]));
-                    const barH = Math.max(3, Math.floor(val * (baselineY - 14)));
+                    let targetVal = liveAudioActive ? (liveAudioBars[i] || 0.0) : 0.0;
+                    smoothBars[i] += (targetVal - smoothBars[i]) * 0.45;
+                    let val = Math.max(0.0, Math.min(1.0, smoothBars[i]));
+                    if (val < 0.008) val = 0.0;
+                    const barH = Math.floor(val * (baselineY - 14));
                     const y = baselineY - barH;
 
-                    // Neon gradient: Purple -> Cyan -> Emerald
-                    const barGrad = ctx.createLinearGradient(0, baselineY, 0, 10);
-                    barGrad.addColorStop(0, '#7c4dff');
-                    barGrad.addColorStop(0.5, '#00e5ff');
-                    barGrad.addColorStop(1.0, '#7ee787');
+                    if (barH > 0) {
+                        // Neon gradient: Purple -> Cyan -> Emerald
+                        const barGrad = ctx.createLinearGradient(0, baselineY, 0, 10);
+                        barGrad.addColorStop(0, '#7c4dff');
+                        barGrad.addColorStop(0.5, '#00e5ff');
+                        barGrad.addColorStop(1.0, '#7ee787');
 
-                    ctx.fillStyle = barGrad;
-                    if (ctx.roundRect) {
-                        ctx.beginPath();
-                        ctx.roundRect(x, y, barWidth, barH, [3, 3, 0, 0]);
-                        ctx.fill();
+                        ctx.fillStyle = barGrad;
+                        if (ctx.roundRect) {
+                            ctx.beginPath();
+                            ctx.roundRect(x, y, barWidth, barH, [3, 3, 0, 0]);
+                            ctx.fill();
+                        } else {
+                            ctx.fillRect(x, y, barWidth, barH);
+                        }
+
+                        // Peak drop marker
+                        if (liveAudioActive) {
+                            let targetPeak = liveAudioPeaks[i] || targetVal;
+                            const peakY = Math.max(8, baselineY - Math.floor(targetPeak * (baselineY - 14)));
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(x, peakY - 2, barWidth, 2);
+                        }
                     } else {
-                        ctx.fillRect(x, y, barWidth, barH);
+                        // Minimal baseline dot during silence
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                        ctx.fillRect(x, baselineY - 1, barWidth, 1);
                     }
-
-                    // Peak drop marker
-                    let targetPeak = liveAudioPeaks[i] || targetVal;
-                    if (!liveAudioActive) targetPeak = targetVal;
-                    const peakY = Math.max(8, baselineY - Math.floor(targetPeak * (baselineY - 14)));
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(x, peakY - 2, barWidth, 2);
                 }
 
                 // Frequency Axis Labels
@@ -3361,18 +3365,24 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 ctx.fillRect(vuX + chWidth + 6, vuY, chWidth, vuHeight);
 
                 // Fill level normalized from RMS dB (-60 to 0) with smooth damping
-                smoothRms += (liveRmsDb - smoothRms) * 0.35;
-                const normDb = liveAudioActive ? Math.max(0.05, Math.min(1.0, (smoothRms + 60.0) / 60.0)) : 0.05;
-                const fillH = Math.floor(normDb * vuHeight);
+                if (liveAudioActive) {
+                    smoothRms += (liveRmsDb - smoothRms) * 0.35;
+                    const normDb = Math.max(0.0, Math.min(1.0, (smoothRms + 60.0) / 60.0));
+                    const fillH = Math.floor(normDb * vuHeight);
 
-                const vuGrad = ctx.createLinearGradient(0, vuY + vuHeight, 0, vuY);
-                vuGrad.addColorStop(0, '#7ee787');
-                vuGrad.addColorStop(0.7, '#ffeb3b');
-                vuGrad.addColorStop(1.0, '#f85149');
+                    if (fillH > 0) {
+                        const vuGrad = ctx.createLinearGradient(0, vuY + vuHeight, 0, vuY);
+                        vuGrad.addColorStop(0, '#7ee787');
+                        vuGrad.addColorStop(0.7, '#ffeb3b');
+                        vuGrad.addColorStop(1.0, '#f85149');
 
-                ctx.fillStyle = vuGrad;
-                ctx.fillRect(vuX + 1, vuY + vuHeight - fillH, chWidth - 2, fillH);
-                ctx.fillRect(vuX + chWidth + 7, vuY + vuHeight - Math.floor(fillH * 0.97), chWidth - 2, Math.floor(fillH * 0.97));
+                        ctx.fillStyle = vuGrad;
+                        ctx.fillRect(vuX + 1, vuY + vuHeight - fillH, chWidth - 2, fillH);
+                        ctx.fillRect(vuX + chWidth + 7, vuY + vuHeight - Math.floor(fillH * 0.97), chWidth - 2, Math.floor(fillH * 0.97));
+                    }
+                } else {
+                    smoothRms = -60.0;
+                }
 
                 // Channel labels
                 ctx.fillStyle = '#94a3b8';
@@ -3383,7 +3393,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 // Telemetry DSP Status Badge
                 ctx.fillStyle = liveAudioActive ? '#7ee787' : '#64748b';
                 ctx.font = '10px monospace';
-                const statusTxt = liveAudioActive ? `${liveRmsDb.toFixed(1)} dB RMS • ALSA Hardware PCM` : 'Standby / Ambient Silence';
+                const statusTxt = liveAudioActive ? `${liveRmsDb.toFixed(1)} dB RMS • ALSA Hardware PCM` : 'Standby / Silent (Zero Telemetry)';
                 ctx.fillText(statusTxt, startX + 2, 16);
             }
             requestAnimationFrame(renderLoop);
@@ -3615,11 +3625,17 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
                     // Update live audio telemetry for 30 FPS canvas visualizer
                     if (m.bars && m.bars.length === 24) {
-                        liveAudioBars = m.bars;
-                        liveAudioPeaks = m.peaks || m.bars;
-                        liveRmsDb = (typeof m.rms_db === 'number') ? m.rms_db : -60.0;
                         liveAudioActive = !!m.audio_active;
                         liveVideoActive = !!m.video_active;
+                        if (liveAudioActive) {
+                            liveAudioBars = m.bars;
+                            liveAudioPeaks = m.peaks || m.bars;
+                            liveRmsDb = (typeof m.rms_db === 'number') ? m.rms_db : -60.0;
+                        } else {
+                            liveAudioBars = new Array(24).fill(0.0);
+                            liveAudioPeaks = new Array(24).fill(0.0);
+                            liveRmsDb = -60.0;
+                        }
                     }
                 })
                 .catch(() => {});

@@ -482,6 +482,8 @@ pub fn spawn_opus_audio_streamer(
                 );
 
                 let mut child = match Command::new("gst-launch-1.0")
+                    .env("PULSE_SOURCE", "Raspberry_Pi_HDMI_Audio.monitor")
+                    .env("PULSE_PROP", "media.role=filter stream.dont-route=true node.dont-reconnect=true")
                     .arg("-q")
                     .arg("pulsesrc")
                     .arg("device=Raspberry_Pi_HDMI_Audio.monitor")
@@ -554,6 +556,8 @@ pub fn spawn_audio_spectrum_monitor(
                 ensure_audio_sink_exists();
 
                 let mut child = match Command::new("parec")
+                    .env("PULSE_SOURCE", "Raspberry_Pi_HDMI_Audio.monitor")
+                    .env("PULSE_PROP", "media.role=filter stream.dont-route=true node.dont-reconnect=true")
                     .args([
                         "--device=Raspberry_Pi_HDMI_Audio.monitor",
                         "--rate=48000",

@@ -208,17 +208,25 @@ pub fn update_audio_spectrum(bands: &[f32; 24], rms_db: f32) {
     let has_signal = rms_db > -55.0 || bands.iter().any(|&b| b > 0.02);
     let spec_arc = get_audio_spectrum();
     if let Ok(mut spec) = spec_arc.lock() {
-        spec.rms_db = rms_db;
-        spec.is_active = has_signal;
-        spec.last_update = std::time::Instant::now();
-        for i in 0..24 {
-            let val = bands[i].clamp(0.0, 1.0);
-            spec.bands[i] = val;
-            if val > spec.peaks[i] {
-                spec.peaks[i] = val;
-            } else {
-                spec.peaks[i] = (spec.peaks[i] - 0.02).max(0.0);
+        if has_signal {
+            spec.rms_db = rms_db;
+            spec.is_active = true;
+            spec.last_update = std::time::Instant::now();
+            for i in 0..24 {
+                let val = bands[i].clamp(0.0, 1.0);
+                spec.bands[i] = val;
+                if val > spec.peaks[i] {
+                    spec.peaks[i] = val;
+                } else {
+                    spec.peaks[i] = (spec.peaks[i] - 0.02).max(0.0);
+                }
             }
+        } else {
+            // Signal is silence / inactive: immediately zero out values to eliminate false/stale data
+            spec.is_active = false;
+            spec.rms_db = -60.0;
+            spec.bands = [0.0; 24];
+            spec.peaks = [0.0; 24];
         }
     }
 
@@ -308,10 +316,9 @@ impl VisualizerEngine {
                         let active = s.is_active && s.last_update.elapsed() < Duration::from_millis(800);
                         if !active {
                             s.is_active = false;
-                            for i in 0..24 {
-                                s.bands[i] *= 0.8;
-                                s.peaks[i] = (s.peaks[i] - 0.03).max(0.0);
-                            }
+                            s.rms_db = -60.0;
+                            s.bands = [0.0; 24];
+                            s.peaks = [0.0; 24];
                         }
                         (active, s.bands, s.peaks, s.rms_db)
                     };
