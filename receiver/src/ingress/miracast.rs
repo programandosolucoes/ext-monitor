@@ -119,8 +119,8 @@ impl MiracastIngress {
 
                     // If stream was active and now idle for > 2 seconds: return to splash screen
                     if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(2) {
-                        println!("\x1b[1;33m[miracast-ingress]\x1b[0m Miracast stream idle / disconnected -> Returning to Ready Splash Screen.");
-                        crate::display::SplashEngine::show_ready();
+                        println!("\x1b[1;33m[miracast-ingress]\x1b[0m Miracast stream idle / disconnected -> Returning to Miracast Splash Screen.");
+                        crate::display::SplashEngine::show_miracast();
                         splash_active = true;
                     }
 
@@ -133,7 +133,7 @@ impl MiracastIngress {
             }
         }
 
-        crate::display::SplashEngine::show_ready();
+        crate::display::SplashEngine::show_miracast();
         println!("\x1b[1;33m[miracast-ingress]\x1b[0m Miracast ingress worker stopped.");
     }
 }

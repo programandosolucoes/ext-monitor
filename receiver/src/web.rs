@@ -292,8 +292,8 @@ fn handle_http_client(
                             let pipe = pipeline_mgr.clone();
                             thread::spawn(move || {
                                 pipe.stop();
-                                crate::display::SplashEngine::show_ready();
-                                println!("\x1b[1;32m[web-server]\x1b[0m Miracast ready splash displayed. Listening on RTSP 7236 / MS-MICE 7250.");
+                                crate::display::SplashEngine::show_miracast();
+                                println!("\x1b[1;32m[web-server]\x1b[0m Miracast connection guide splash displayed. Listening on RTSP 7236 / MS-MICE 7250.");
                             });
                         }
                         _ => {}
@@ -566,7 +566,7 @@ fn handle_http_client(
                     });
                 }
                 "mode2_miracast" => {
-                    crate::display::SplashEngine::show_ready();
+                    crate::display::SplashEngine::show_miracast();
                 }
                 _ => {
                     forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");

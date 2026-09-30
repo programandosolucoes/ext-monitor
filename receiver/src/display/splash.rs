@@ -14,6 +14,8 @@ const SPLASH_LOADING_GZ: &[u8] =
     include_bytes!("../../../build-appliance/overlay/etc/splash_loading.raw.gz");
 const SPLASH_READY_GZ: &[u8] =
     include_bytes!("../../../build-appliance/overlay/etc/splash_ready.raw.gz");
+const SPLASH_MIRACAST_GZ: &[u8] =
+    include_bytes!("../../../build-appliance/overlay/etc/splash_miracast.raw.gz");
 
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 720;
@@ -38,6 +40,16 @@ impl SplashEngine {
         }
     }
 
+    /// Renders the Dedicated Miracast Connection Guide Splash (Win+K • 4 Languages) to /dev/fb0
+    pub fn show_miracast() {
+        if let Ok(raw_bytes) = decompress_gzip(SPLASH_MIRACAST_GZ) {
+            blit_to_framebuffer(&raw_bytes);
+            println!("\x1b[1;35m[splash]\x1b[0m Miracast connection guide displayed (Win+K • 4 Languages • WFD RTSP 7236).");
+        } else {
+            Self::show_ready();
+        }
+    }
+
     /// Clears the display to black
     #[allow(dead_code)]
     pub fn clear() {
@@ -48,13 +60,50 @@ impl SplashEngine {
 }
 
 /// Decompresses raw DEFLATE stream embedded within gzip container using pure Rust miniz_oxide
+/// Complies with RFC 1952 header parsing (FEXTRA, FNAME, FCOMMENT, FHCRC)
 fn decompress_gzip(gz: &[u8]) -> io::Result<Vec<u8>> {
     if gz.len() < 18 || gz[0] != 0x1F || gz[1] != 0x8B {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid GZIP header"));
     }
 
-    // Skip 10-byte GZIP header, omit 8-byte trailer (CRC32 + ISIZE)
-    let deflate_payload = &gz[10..gz.len() - 8];
+    let flg = gz[3];
+    let mut offset = 10;
+
+    // FEXTRA: skip 2-byte length + extra field
+    if flg & 0x04 != 0 {
+        if offset + 2 > gz.len() {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Truncated FEXTRA"));
+        }
+        let xlen = u16::from_le_bytes([gz[offset], gz[offset + 1]]) as usize;
+        offset += 2 + xlen;
+    }
+
+    // FNAME: zero-terminated string
+    if flg & 0x08 != 0 {
+        while offset < gz.len() && gz[offset] != 0 {
+            offset += 1;
+        }
+        offset += 1; // skip null byte
+    }
+
+    // FCOMMENT: zero-terminated string
+    if flg & 0x10 != 0 {
+        while offset < gz.len() && gz[offset] != 0 {
+            offset += 1;
+        }
+        offset += 1; // skip null byte
+    }
+
+    // FHCRC: 2-byte header CRC
+    if flg & 0x02 != 0 {
+        offset += 2;
+    }
+
+    if offset + 8 > gz.len() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "Corrupted GZIP stream"));
+    }
+
+    let deflate_payload = &gz[offset..gz.len() - 8];
     miniz_oxide::inflate::decompress_to_vec(deflate_payload)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Decompression failed: {:?}", e)))
 }
@@ -141,5 +190,22 @@ fn blit_to_framebuffer(buffer: &[u8]) {
         std::ptr::copy_nonoverlapping(buffer.as_ptr(), ptr, FB_SIZE);
         libc::munmap(ptr as *mut libc::c_void, FB_SIZE);
         let _ = libc::ioctl(fd, FBIOPAN_DISPLAY, &mut vinfo);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_splashes_decompress_to_fb_size() {
+        let loading = decompress_gzip(SPLASH_LOADING_GZ).expect("Failed to decompress splash_loading");
+        assert_eq!(loading.len(), FB_SIZE, "splash_loading must match 1280x720x2");
+
+        let ready = decompress_gzip(SPLASH_READY_GZ).expect("Failed to decompress splash_ready");
+        assert_eq!(ready.len(), FB_SIZE, "splash_ready must match 1280x720x2");
+
+        let miracast = decompress_gzip(SPLASH_MIRACAST_GZ).expect("Failed to decompress splash_miracast");
+        assert_eq!(miracast.len(), FB_SIZE, "splash_miracast must match 1280x720x2");
     }
 }
