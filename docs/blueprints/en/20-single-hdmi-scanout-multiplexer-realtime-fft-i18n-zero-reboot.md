@@ -107,3 +107,20 @@ To eliminate manual IP configuration when the receiver operates over Wi-Fi or Et
 2. **Sender Dynamic Probing (`sender/src/discovery.rs`):**
    - On startup, if the standard USB OTG IP `192.168.7.2` is unreachable, `ext-sender` broadcasts an `EXT-MONITOR-DISCOVER` probe on port 5002.
    - Upon receiving the `EXT-MONITOR-OFFER`, it extracts the dynamic IP address and connects RTP video and Opus audio channels automatically without manual user intervention.
+
+---
+
+## 7. WirePlumber Anti-Hijack Audio Isolation, Zero-Packet Silence Suppression, and Fast Cutoff (<800ms)
+
+To eliminate unintended capture of user personal PC audio (headphones, YouTube playback) and prevent artificial/fake data on the TV or Web UI:
+1. **PipeWire Anti-Hijack Locking (`sender/src/pipeline.rs`):**
+   - The environment variables `PULSE_SOURCE="Raspberry_Pi_HDMI_Audio.monitor"` and `PULSE_PROP="media.role=filter stream.dont-route=true node.dont-reconnect=true"` are strictly injected into `parec` (FFT spectrum) and `gst-launch-1.0` (Opus streamer).
+   - WirePlumber is permanently blocked from transferring the audio monitor stream to other sinks when GNOME audio output changes.
+2. **Zero-Packet Streaming on Silence:**
+   - During silence (`rms_db < -55.0 dB`), the sender transmits 3 transition frames and completely halts UDP 5006 datagrams (0 packets per second).
+3. **Fast Cutoff (<800ms) & Instant Splash Restoration:**
+   - Inactivity beyond 800ms forces frequency bars, peaks, and RMS (`-60.0 dB`) to zero.
+   - If the visualizer was actively drawing, it immediately invokes `SplashEngine::show_ready()`, displaying the 4-language Ready Splash on the TV without residual frames or black screens.
+4. **Elimination of Simulated Waves in Web UI:**
+   - Synthetic idle sine waves were eliminated. Canvas bars, peak markers, and VU meters remain at true zero when audio is stopped.
+

@@ -447,6 +447,12 @@ O painel web (`http://192.168.7.2:8080`) e aplicativos externos podem controlar 
   curl -X POST -H "Content-Type: application/json" -d '{"muted": true}' http://192.168.7.2:8080/api/audio/mute
   ```
 
+### 10.5 Isolamento Anti-Hijack (WirePlumber), Supressão de Silêncio e Fast Cutoff (<800ms)
+* **Proteção Anti-Hijack:** Tanto o streamer de áudio Opus quanto o monitor de espectro FFT rodam com `PULSE_PROP="stream.dont-route=true node.dont-reconnect=true"`. Isso bloqueia o WirePlumber do PipeWire de desviar o monitor para fones de ouvido ou caixas locais quando a saída do GNOME é comutada.
+* **Zero Pacotes em Silêncio:** Quando o sinal acústico cai abaixo de -55 dB, a emissão de pacotes UDP na porta 5006 é suspensa totalmente (0 pacotes/s).
+* **Restauração Imediata da Tela Pronta:** Se o áudio cessar por mais de 800ms, o visualizador é desligado e o appliance restaura imediatamente a tela oficial multilíngue `SplashEngine::show_ready()` sem telas pretas.
+* **Web UI Transparente:** O canvas Web UI não utiliza ondas simuladas; em repouso, as barras e medidores VU permanecem em zero absoluto.
+
 ---
 
 ## 11. Catálogo Exaustivo de Todos os Scripts (`scripts/`)

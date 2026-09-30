@@ -126,6 +126,11 @@ When desktop video streaming is inactive and music is playing:
 - The Pi Zero renders an animated 30 FPS audio visualizer on the TV HDMI output so the screen is never left black.
 - The Web Dashboard mirrors this with a reactive `<canvas>` visualizer.
 
+### WirePlumber Anti-Hijack & Zero-Packet Silence
+- **Routing Protection:** Both Opus audio and FFT spectrum pipelines are locked with `PULSE_PROP="stream.dont-route=true node.dont-reconnect=true"`. WirePlumber is blocked from hijacking streams to user headphones/speakers when GNOME audio output changes.
+- **Zero-Packet Transmission:** On silence (< -55 dB), UDP 5006 packet transmission completely halts (0 packets/s).
+- **Fast Cutoff (<800ms):** Inactivity beyond 800ms immediately turns off the visualizer and invokes `SplashEngine::show_ready()`, guaranteeing that the TV displays the 4-language Ready Splash with zero fake data and zero black screens.
+
 ---
 
 ## 6. Single-HDMI Scanout Multiplexer & Zero-Reboot Architecture

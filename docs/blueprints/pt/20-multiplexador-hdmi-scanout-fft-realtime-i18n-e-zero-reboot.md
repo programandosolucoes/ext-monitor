@@ -130,3 +130,20 @@ Para eliminar a necessidade de configuração manual de endereços IP quando o r
 2. **Probing Dinâmico no Transmissor (`sender/src/discovery.rs`):**
    - Na inicialização do `ext-sender`, caso o IP USB padrão `192.168.7.2` não esteja alcançável, o transmissor dispara automaticamente o broadcast `EXT-MONITOR-DISCOVER` na porta 5002.
    - Ao receber a resposta `EXT-MONITOR-OFFER`, extrai o endereço IP da interface Wi-Fi/Ethernet e reconecta o pipeline de vídeo RTP e áudio Opus sem intervenção manual do usuário.
+
+---
+
+## 9. Isolamento Estrito Anti-Hijack de Áudio (WirePlumber), Supressão de Silêncio e Fast Cutoff (<800ms)
+
+Para eliminar interferências indesejadas de áudio pessoal do usuário (fones de ouvido, YouTube no PC) e evitar dados falsos na TV e Web UI:
+1. **Bloqueio Anti-Hijack no PipeWire (`sender/src/pipeline.rs`):**
+   - Injetam-se as variáveis `PULSE_SOURCE="Raspberry_Pi_HDMI_Audio.monitor"` e `PULSE_PROP="media.role=filter stream.dont-route=true node.dont-reconnect=true"` nas chamadas de `parec` e `gst-launch-1.0` (Opus).
+   - O WirePlumber fica impedido de transferir o monitor para outro sink quando a saída de som do GNOME é comutada.
+2. **Zero-Packet Streaming no Host:**
+   - Durante silêncio (`rms_db < -55.0 dB`), transmitem-se 3 quadros de transição e cessa-se totalmente o tráfego UDP 5006 (0 pacotes por segundo).
+3. **Corte Rápido (<800ms) e Restauração Instantânea do Splash no Receptor:**
+   - Inatividade maior que 800ms zera barras, picos e RMS (`-60.0 dB`).
+   - Se o visualizador estava ativo, invoca imediatamente `SplashEngine::show_ready()`, garantindo que a TV exiba o Splash de Prontidão em 4 idiomas sem dados falsos ou telas pretas.
+4. **Eliminação de Ondas Simuladas na Web UI:**
+   - Removidas animações senoidais sintéticas ociosas. Barras e VU meters ficam estritamente em zero quando o áudio está desligado.
+

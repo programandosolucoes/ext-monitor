@@ -538,6 +538,12 @@ Com base na lição aprendida no diagnóstico do deadlock de USB Bulk (onde leit
 - Interface web com baseline 100% em inglês mundial (`EN`) e dicionários simétricos de 230 chaves para Português, Italiano e Chinês, sem vazamento de strings.
 - Documentação interativa Swagger OpenAPI 3.0.3 v2.3.0 disponível em `http://192.168.7.2:8080/swagger`.
 
+### 20.5 Isolamento Anti-Hijack WirePlumber e Fast Cutoff de Silêncio (<800ms)
+- **Bloqueio de Roteamento:** As instâncias de `parec` e `gst-launch-1.0` são travadas com `PULSE_SOURCE="Raspberry_Pi_HDMI_Audio.monitor"` e `PULSE_PROP="stream.dont-route=true node.dont-reconnect=true"`. O WirePlumber é impedido de sequestrar streams para fones de ouvido (ex: Yealink UH34) quando a saída do GNOME é comutada.
+- **Zero-Packet Streaming:** Em silêncio (`rms_db < -55.0 dB`), a transmissão UDP 5006 é suspensa totalmente (0 pacotes por segundo) após 3 frames de decaimento.
+- **Restauração Imediata da Tela Pronta:** Inatividade superior a 800ms desliga o visualizador e invoca instantaneamente `SplashEngine::show_ready()`, garantindo que a TV exiba o Splash de Prontidão em 4 idiomas sem dados falsos ou telas pretas.
+- **Web UI 100% Livre de Dados Simulados:** Removidas animações senoidais sintéticas; barras e VU meters mostram zero absoluto em repouso.
+
 ---
 
 # Epílogo e Apêndices
