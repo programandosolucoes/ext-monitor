@@ -16,7 +16,7 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
-pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
+pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1211,7 +1211,7 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     <div>
                         <div class="dl-icon">📦</div>
                         <div class="dl-title" data-i18n="dlPkgTitle">Full Client Package</div>
-                        <div class="dl-desc" data-i18n="dlPkgDesc">Contains precompiled ext-sender binary, start.sh, udev rules and installer in tar.gz.</div>
+                        <div class="dl-desc" data-i18n="dlPkgDesc">Contains precompiled ext-sender binary, udev rules and documentation in tar.gz.</div>
                     </div>
                     <a href="/download/client.tar.gz" class="dl-link" download data-i18n="btnDlPkg">Download client.tar.gz</a>
                 </div>
@@ -1373,10 +1373,10 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                     <!-- Section 5: Linux Wayland -->
                     <h3 style="color: #fff; margin: 1.5rem 0 0.5rem 0;" data-i18n="docLinuxTitle">5. Standard Linux Wayland (GNOME) Streaming</h3>
                     <p data-i18n="docLinuxDesc">
-                        Plug into the center USB port. The PC gets IP 192.168.7.1 automatically. Then run start.sh:
+                        Plug into the center USB port. The PC gets IP 192.168.7.1 automatically. Then run ext-sender (zero configuration needed):
                     </p>
                     <div class="cmd-box">
-                        <span class="cmd-text" id="cmdStart">./scripts/start.sh extend auto 30 false full --bitrate=3000</span>
+                        <span class="cmd-text" id="cmdStart">ext-sender</span>
                         <button class="copy-btn" onclick="copyCommand('cmdStart')" data-i18n="btnCopy">Copy</button>
                     </div>
 
@@ -1422,7 +1422,7 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
                         These models do not support peripheral USB gadget mode on standard USB-A ports. Streaming is delivered via Ethernet or Wi-Fi.
                     </p>
                     <p data-i18n="docNonOtgDesc2" style="color: #8b949e;">
-                        Required SD boot adjustments: In config.txt comment out 'dtoverlay=dwc2'. In cmdline.txt remove 'modules-load=dwc2'. Stream via: ./scripts/start.sh extend auto 60 false full &lt;PI_IP&gt;:5000
+                        Required SD boot adjustments: In config.txt comment out 'dtoverlay=dwc2'. In cmdline.txt remove 'modules-load=dwc2'. Stream via: ext-sender --ip=&lt;PI_IP&gt;
                     </p>
 
                     <!-- Section 11: Conventional PC Receiver -->
@@ -1500,19 +1500,19 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                     <div style="background: rgba(255, 179, 0, 0.08); border-left: 4px solid var(--accent-amber); border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
                         <h3 style="color: var(--accent-amber); margin: 0 0 0.5rem 0;" data-i18n="docCliManualTitle">18. 📖 Full Operation Manual, CLI Flags & Troubleshooting</h3>
                         <p style="margin: 0 0 0.5rem 0; color: #fff;" data-i18n="docCliManualDesc">
-                            Launcher syntax: <code>./scripts/start.sh [mode] [encoder] [fps] [hud] [options]</code>
+                            Launcher syntax: <code>ext-sender [extend|clone] [fps] [bitrate] [options]</code>
                         </p>
                         <ul style="margin: 0.4rem 0 0 1.2rem; color: #ccc; font-size: 0.88rem; line-height: 1.6;">
-                            <li><code>extend</code>: Creates or connects extended second screen on HDMI-1.</li>
+                            <li><code>extend</code>: Creates or connects extended second screen on HDMI-1 [DEFAULT].</li>
                             <li><code>clone</code>: Mirrors 1:1 primary laptop screen (eDP-1) to external display.</li>
                             <li><code>--continuous</code> or <code>--no-drop-only</code>: Forces CFR transmission at steady 60 FPS even on static screens (eliminates pauses).</li>
                             <li><code>--network</code> or <code>--udp</code>: Transmits over UDP network (port 5000).</li>
-                            <li><code>--transport=usb</code>: Transmits over direct USB Bulk channel (480 Mbps).</li>
+                            <li><code>--transport=usb</code> or <code>--usb</code>: Transmits over direct USB Bulk channel (&lt; 1ms latency).</li>
                             <li><code>--no-audio</code>: Disables audio transmission stream.</li>
                             <li><code>--capture=kms</code>: Direct hardware DRM capture from GPU (/dev/dri/card*), immune to Wayland compositor idle states.</li>
                         </ul>
                         <div style="margin-top: 0.6rem; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.84rem; color: #ffab40;">
-                            <strong>Quick Fix:</strong> If HDMI display goes dark when toggling modes, restart the pipeline with <code>./scripts/start.sh extend auto 30 false --continuous</code>. The receiver detects the stream and synchronizes IDR keyframes automatically in &lt; 1 second.
+                            <strong>Quick Fix:</strong> If HDMI display goes dark when toggling modes, restart the pipeline with <code>ext-sender stop && ext-sender</code>. The receiver detects the stream and synchronizes IDR keyframes automatically in &lt; 1 second.
                         </div>
                     </div>
 
@@ -1627,7 +1627,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 colorLabel: "Color Profile",
                 tipColor: "24-bit TrueColor provides 1:1 RGB fidelity. 256 Colors uses adaptive QP (30-44) to minimize USB bus bandwidth.",
                 colorFull: "24-bit TrueColor",
-                color256: "256 Cores (QP 30-44)",
+                color256: "256 Colors (QP 30-44)",
                 colorGray: "Monochrome",
                 dropOnlyLabel: "Transmission Mode (Continuous vs Economy)",
                 tipDropOnly: "Continuous (Default): Steady 30/60 FPS stream for Network and USB Bulk, ensuring smooth YouTube playback without needing mouse movement. Economy: Drops duplicate frames, saving 95% bandwidth on static screens.",
@@ -1650,7 +1650,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 oneLinerDesc: "On any Linux PC, paste this command in your terminal to start the extended monitor immediately:",
                 btnCopy: "Copy",
                 dlPkgTitle: "Full Client Package",
-                dlPkgDesc: "Contains precompiled ext-sender binary, start.sh, udev rules and installer in tar.gz.",
+                dlPkgDesc: "Contains precompiled ext-sender binary, udev rules and documentation in tar.gz.",
                 btnDlPkg: "Download client.tar.gz",
                 dlSenderTitle: "ext-sender Binary",
                 dlSenderDesc: "Standalone GPU offload transmitter binary compiled in Rust for Linux x86_64.",
@@ -1682,7 +1682,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docSerialTitle: "4. Zero-IP Reconfiguration via USB Serial (/dev/ttyACM0)",
                 docSerialDesc: "If network is disabled or misconfigured, the Pi Zero exposes a recovery serial console on /dev/ttyACM0 at 115200 baud.",
                 docLinuxTitle: "5. Standard Linux Wayland (GNOME) Streaming",
-                docLinuxDesc: "Plug into the center USB port. The PC gets IP 192.168.7.1 automatically. Then run start.sh:",
+                docLinuxDesc: "Plug into the center USB port. The PC gets IP 192.168.7.1 automatically. Then run ext-sender (zero configuration needed):",
                 docWinTitle: "6. Windows 10/11 Miracast (Zero Drivers)",
                 docWinDesc: "Plug into USB, press Win + K on Windows, select 'Pi Zero Wireless Display'.",
                 docSdTitle: "7. 100% RAM Architecture & Firmware Upgrade without SD Card Removal",
@@ -1697,14 +1697,14 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
                 docNonOtgTitle: "10. Non-OTG Raspberry Pi Models (Pi 2, Pi 3, Pi 4, Pi 5) & Boot Config",
                 docNonOtgDesc1: "These models do not support peripheral USB gadget mode on standard USB-A ports. Streaming is delivered via Ethernet or Wi-Fi.",
-                docNonOtgDesc2: "Required SD boot adjustments: In config.txt comment out 'dtoverlay=dwc2'. In cmdline.txt remove 'modules-load=dwc2'. Stream via: ./scripts/start.sh extend auto 60 false full <PI_IP>:5000",
+                docNonOtgDesc2: "Required SD boot adjustments: In config.txt comment out 'dtoverlay=dwc2'. In cmdline.txt remove 'modules-load=dwc2'. Stream via: ext-sender --ip=<PI_IP>",
                 docPcReceiverTitle: "11. Turning Any Linux PC / Laptop into a Secondary Screen Receiver",
                 docPcReceiverDesc: "Any Linux computer can act as a receiver. Install gstreamer1.0-tools and run:",
                 docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
                 docMultiMonTitle: "12. Directing Video to Screen 1 vs Screen 2 on Multi-Monitor PCs",
                 docMultiMonDesc: "On receiver PCs with multiple connected displays, specify 'kmssink connector-id=<ID>' in direct DRM KMS mode or 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' in graphical sessions to target the desired monitor.",
-                docPacerTitle: "13. 🚀 Wayland Damage Pacer: Continuous 60 FPS YouTube without Pausing",
-                docPacerDesc: "ext-monitor runs wayland-damage-pacer.py in the background on the Host. It emits 60 Hz micro-damage pulses to an invisible sub-surface with an empty Cairo click-through mask on the extended monitor, keeping the GNOME Mutter compositor active. YouTube videos, clocks, and terminals render at 60 FPS even when the mouse is motionless or on the primary screen.",
+                docPacerTitle: "13. 🚀 Continuous 60 FPS Anti-Freeze Streaming",
+                docPacerDesc: "ext-monitor provides continuous 60 FPS CFR anti-freeze streaming natively inside ext-sender. YouTube videos, clocks, and terminals render smoothly at 60 FPS even when the mouse is motionless or on the primary screen.",
                 docAltPlayersTitle: "14. Non-GNOME Receiver Alternatives (FFmpeg, MPV, VLC)",
                 docAltPlayersDesc: "The RFC 4571 RTP H.264 video stream is fully cross-platform. Receive it on KDE, XFCE, i3, Windows, or macOS with zero-buffer low delay:",
                 docBulkFallbackTitle: "15. ⚡ Default USB Bulk Direct Mode & Automatic UDP Network Fallback",
@@ -1742,7 +1742,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docClocksTitle: "17. ⚙️ Subhardware Clocks (H.264/VPU/ARM) & Power Consumption",
                 docClocksDesc: "The Raspberry Pi Zero W exposes internal telemetry of every Broadcom BCM2835 silicon block via <code>debugfs</code>. ext-monitor monitors hardware clocks continuously in real-time:",
                 docCliManualTitle: "18. 📖 Full Operation Manual, CLI Flags & Troubleshooting",
-                docCliManualDesc: "Launcher syntax: <code>./scripts/start.sh [mode] [encoder] [fps] [hud] [options]</code>",
+                docCliManualDesc: "Launcher syntax: <code>ext-sender [extend|clone] [fps] [bitrate] [options]</code>",
                 badgeStreaming: "● STREAMING",
                 badgeMode1On: "Enabled (UDP 5000)",
                 badgeMode2On: "Enabled (TCP 7236)",
@@ -1817,7 +1817,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 modalRebootTitle: "Reboot Appliance?",
                 modalRebootDesc: "Are you sure you want to reboot the Raspberry Pi Zero? It will reboot in < 2 seconds directly in RAM.",
                 btnCancel: "Cancel",
-                btnConfirmReboot: "Yes, Reboot"
+                btnConfirmReboot: "Yes, Reboot",
+                audioLabel: "HDMI Digital Audio (Opus 48kHz)",
+                tipAudio: "Digital audio volume sent to monitor/TV via HDMI cable. Sub-25ms latency with A/V sync.",
+                docAltPlayersCmd: "# FFmpeg / ffplay (Low Latency):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
+                copied: "Copied!",
+                copiedSuccess: "✓ Copied to clipboard!",
+                m1Title: "Mode 1: UDP Network (Linux Wayland / X11)",
+                m1Details: "UDP Port 5000 • Sub-15ms Latency • VA-API/M2M Pipeline",
+                m2Title: "Mode 2: Windows Miracast (Wi-Fi Display)",
+                m2Details: "RTSP Port 7236 • Windows Win+K • Hardware V4L2 M2M",
+                m3Title: "Mode 3: USB Bulk Direct (480 Mbps)",
+                m3Details: "USB 2.0 High-Speed • Zero-Network • Sub-1ms Latency",
+                waitingStreamDesc: "Receiver in readiness displaying splash screen with IP & QR Code.",
+                capKmsTitle: "KMS Direct (Anti-Freeze / GPU Scanout)",
+                capMutterTitle: "GNOME Mutter (PipeWire Screencast)"
             },
             pt: {
                 title: "Pi Zero Monitor Estendido",
@@ -1882,7 +1896,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 oneLinerDesc: "Em qualquer computador Linux, abra o terminal e cole o comando abaixo para iniciar a segunda tela:",
                 btnCopy: "Copiar",
                 dlPkgTitle: "Pacote Completo do Cliente",
-                dlPkgDesc: "Contém o binário ext-sender compilado, script start.sh, regras udev e instalador em tar.gz.",
+                dlPkgDesc: "Contém o binário ext-sender compilado, regras udev e documentação em tar.gz.",
                 btnDlPkg: "Baixar client.tar.gz",
                 dlSenderTitle: "Executável ext-sender",
                 dlSenderDesc: "Binário standalone do transmissor GPU offload compilado em Rust para Linux x86_64.",
@@ -1914,7 +1928,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docSerialTitle: "4. Reconfiguração sem IP via Serial USB (/dev/ttyACM0)",
                 docSerialDesc: "Caso a rede seja desativada, o Pi Zero expõe um console serial independente no PC em /dev/ttyACM0 a 115200 baud.",
                 docLinuxTitle: "5. Operação Normal no Linux Wayland (GNOME)",
-                docLinuxDesc: "Conecte o cabo na porta USB central. O PC recebe IP 192.168.7.1 pelo DHCP nativo. Em seguida execute o conector:",
+                docLinuxDesc: "Conecte o cabo na porta USB central. O PC recebe IP 192.168.7.1 pelo DHCP nativo. Em seguida execute o ext-sender (sem parâmetros necessários):",
                 docWinTitle: "6. Operação no Windows 10/11 (Miracast Sem Drivers)",
                 docWinDesc: "Conecte na USB, pressione Win + K no Windows e selecione 'Pi Zero Wireless Display'.",
                 docSdTitle: "7. Arquitetura 100% RAM & Atualização sem Retirar o Cartão",
@@ -1929,14 +1943,14 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
                 docNonOtgTitle: "10. Modelos Raspberry Pi Não-OTG (Pi 2, Pi 3, Pi 4, Pi 5) & Ajuste de Boot",
                 docNonOtgDesc1: "Esses modelos não possuem modo OTG periférico nas portas USB comuns. A conexão é feita via Ethernet ou Wi-Fi.",
-                docNonOtgDesc2: "Ajustes obrigatórios no SD: No config.txt comente 'dtoverlay=dwc2'. No cmdline.txt remova 'modules-load=dwc2'. Conecte via: ./scripts/start.sh extend auto 60 false full <IP_DO_PI>:5000",
+                docNonOtgDesc2: "Ajustes obrigatórios no SD: No config.txt comente 'dtoverlay=dwc2'. No cmdline.txt remova 'modules-load=dwc2'. Conecte via: ext-sender --ip=<IP_DO_PI>",
                 docPcReceiverTitle: "11. Transformar PC / Notebook Convencional em Segunda Tela",
                 docPcReceiverDesc: "Qualquer computador Linux pode atuar como receptor. Instale gstreamer1.0-tools e execute:",
                 docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
                 docMultiMonTitle: "12. Direcionamento para Tela 1 ou 2 em PCs com Múltiplos Monitores",
                 docMultiMonDesc: "Em PCs receptores com mais de uma tela conectada, use 'kmssink connector-id=<ID>' no modo direto KMS DRM ou 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' em sessão gráfica para projetar exatamente no monitor desejado.",
-                docPacerTitle: "13. 🚀 Wayland Damage Pacer: 60 FPS Contínuos no YouTube Sem Congelar",
-                docPacerDesc: "O ext-monitor executa o wayland-damage-pacer.py em segundo plano no Host. Ele emite micro-pulsos de dano a 60 Hz em superfície invisível na tela estendida com máscara 100% click-through (cairo.Region vazia), forçando o compositor GNOME Mutter a permanecer acordado. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.",
+                docPacerTitle: "13. 🚀 Transmissão Contínua 60 FPS Anti-Freeze",
+                docPacerDesc: "O ext-monitor fornece transmissão contínua a 60 FPS CFR anti-freeze de forma nativa no ext-sender. Vídeos do YouTube, clocks e terminais atualizam a 60 FPS contínuos mesmo com o mouse parado ou na tela principal.",
                 docAltPlayersTitle: "14. Alternativas ao GStreamer em Ambientes Não-GNOME (FFmpeg, MPV, VLC)",
                 docAltPlayersDesc: "O stream RTP H.264 (RFC 4571 / PT 96) gerado pelo ext-sender é universal e funciona perfeitamente em KDE, XFCE, i3, Windows e macOS sem depender de GNOME:",
                 docBulkFallbackTitle: "15. ⚡ Modo USB Bulk Direto Padrão & Auto-Fallback para Rede UDP",
@@ -1974,7 +1988,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docClocksTitle: "17. ⚙️ Clocks do Subhardware (H.264/VPU/ARM) & Consumo de Energia",
                 docClocksDesc: "O Raspberry Pi Zero W expõe a telemetria interna de cada bloco de silício Broadcom BCM2835 via <code>debugfs</code>. O ext-monitor monitora os clocks de hardware continuamente em tempo real:",
                 docCliManualTitle: "18. 📖 Manual Completo de Operação, Flags CLI & Solução de Problemas",
-                docCliManualDesc: "Sintaxe do iniciador: <code>./scripts/start.sh [modo] [encoder] [fps] [hud] [opções]</code>",
+                docCliManualDesc: "Sintaxe do transmissor: <code>ext-sender [extend|clone] [fps] [bitrate] [opções]</code>",
                 badgeStreaming: "● TRANSMITINDO",
                 badgeMode1On: "Ligado (UDP 5000)",
                 badgeMode2On: "Ligado (TCP 7236)",
@@ -2049,7 +2063,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 modalRebootTitle: "Reiniciar Appliance?",
                 modalRebootDesc: "Tem certeza que deseja reiniciar o Raspberry Pi Zero? O sistema reiniciará em menos de 2 segundos diretamente na RAM.",
                 btnCancel: "Cancelar",
-                btnConfirmReboot: "Sim, Reiniciar"
+                btnConfirmReboot: "Sim, Reiniciar",
+                audioLabel: "Áudio Digital HDMI (Opus 48kHz)",
+                tipAudio: "Volume do áudio digital enviado ao monitor/TV via cabo HDMI. Latência sub-25ms com sincronismo A/V.",
+                docAltPlayersCmd: "# FFmpeg / ffplay (Baixa Latência):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
+                copied: "Copiado!",
+                copiedSuccess: "✓ Copiado para a área de transferência!",
+                m1Title: "Modo 1: Rede UDP (Linux Wayland / X11)",
+                m1Details: "Porta UDP 5000 • Latência < 15ms • Pipeline VA-API/M2M",
+                m2Title: "Modo 2: Windows Miracast (Wi-Fi Display)",
+                m2Details: "Porta RTSP 7236 • Windows Win+K • Decodificação V4L2 M2M",
+                m3Title: "Modo 3: USB Bulk Direto (480 Mbps)",
+                m3Details: "Barramento USB 2.0 High-Speed • Zero-Rede • Latência < 1ms",
+                waitingStreamDesc: "Receptor em prontidão exibindo tela de splash com IP e QR Code.",
+                capKmsTitle: "KMS Direct (Anti-Congelamento / GPU Scanout)",
+                capMutterTitle: "GNOME Mutter (PipeWire Screencast)"
             },
             it: {
                 title: "Pi Zero Monitor Esteso",
@@ -2114,7 +2142,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 oneLinerDesc: "Su qualsiasi PC Linux, incolla questo comando nel terminale per avviare il monitor esteso:",
                 btnCopy: "Copia",
                 dlPkgTitle: "Pacchetto Completo Client",
-                dlPkgDesc: "Contiene il binario ext-sender, lo script start.sh, le regole udev e l'installer in tar.gz.",
+                dlPkgDesc: "Contiene il binario ext-sender, le regole udev e la documentazione in tar.gz.",
                 btnDlPkg: "Scarica client.tar.gz",
                 dlSenderTitle: "Binario ext-sender",
                 dlSenderDesc: "Binario autonomo del trasmettitore GPU compilato in Rust per Linux x86_64.",
@@ -2146,7 +2174,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docSerialTitle: "4. Riconfigurazione Senza IP via USB Seriale (/dev/ttyACM0)",
                 docSerialDesc: "Se la rete è disabilitata, il Pi Zero offre una console seriale di ripristino su /dev/ttyACM0 a 115200 baud.",
                 docLinuxTitle: "5. Funzionamento Standard su Linux Wayland (GNOME)",
-                docLinuxDesc: "Collega il cavo alla porta USB centrale. Il PC ottiene l'IP 192.168.7.1 dal DHCP. Esegui il connettore:",
+                docLinuxDesc: "Collega il cavo alla porta USB centrale. Il PC ottiene l'IP 192.168.7.1 dal DHCP. Esegui ext-sender (senza parametri):",
                 docWinTitle: "6. Proiezione Windows 10/11 (Miracast Senza Driver)",
                 docWinDesc: "Collega via USB, premi Win + K su Windows e seleziona 'Pi Zero Wireless Display'.",
                 docSdTitle: "7. Architettura 100% RAM & Aggiornamento senza rimuovere la scheda SD",
@@ -2161,14 +2189,14 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
                 docNonOtgTitle: "10. Modelli Raspberry Pi Non-OTG (Pi 2, Pi 3, Pi 4, Pi 5) & Parametri di Boot",
                 docNonOtgDesc1: "Questi modelli non supportano la modalità periferica USB sulle porte USB standard. La connessione avviene via Ethernet o Wi-Fi.",
-                docNonOtgDesc2: "Modifiche obbligatorie sulla scheda SD: In config.txt commentare 'dtoverlay=dwc2'. In cmdline.txt rimuovere 'modules-load=dwc2'. Collegarsi con: ./scripts/start.sh extend auto 60 false full <IP_PI>:5000",
+                docNonOtgDesc2: "Modifiche obbligatorie sulla scheda SD: In config.txt commentare 'dtoverlay=dwc2'. In cmdline.txt rimuovere 'modules-load=dwc2'. Collegarsi con: ext-sender --ip=<IP_PI>",
                 docPcReceiverTitle: "11. Trasformare qualsiasi PC / Laptop Linux in Schermo Secondario",
-                docPcReceiverDesc: "Qualsiasi PC Linux può funzionare come ricevitore. Installa gstreamer1.0-tools ed esegui:",
+                docPcReceiverDesc: "Qualquer computer Linux pode funcionar como receptor. Installa gstreamer1.0-tools ed esegui:",
                 docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
                 docMultiMonTitle: "12. Indirizzamento su Schermo 1 o 2 su PC con Più Monitor",
                 docMultiMonDesc: "Su PC ricevitori con più monitor, specifica 'kmssink connector-id=<ID>' in KMS DRM diretto o 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' per proiettare sul monitor desiderato.",
-                docPacerTitle: "13. 🚀 Wayland Damage Pacer: 60 FPS Continui su YouTube Senza Blocchi",
-                docPacerDesc: "ext-monitor esegue wayland-damage-pacer.py in background sull'Host. Invia micro-impulsi di danno a 60 Hz su una superficie invisibile con maschera 100% click-through (cairo.Region vuota), mantenendo attivo il compositore GNOME Mutter. I video di YouTube e i terminali continuano a 60 FPS anche con mouse fermo.",
+                docPacerTitle: "13. 🚀 Streaming Continuo a 60 FPS Anti-Freeze",
+                docPacerDesc: "ext-monitor fornisce streaming continuo a 60 FPS CFR anti-freeze in modo nativo in ext-sender. I video di YouTube e i terminali continuano a 60 FPS anche con mouse fermo.",
                 docAltPlayersTitle: "14. Alternative al Ricevitore Non-GNOME (FFmpeg, MPV, VLC)",
                 docAltPlayersDesc: "Il flusso video RFC 4571 RTP H.264 è universale. Ricevilo su KDE, XFCE, i3, Windows o macOS senza buffer:",
                 docBulkFallbackTitle: "15. ⚡ Modalità USB Bulk Predefinita & Auto-Fallback su Rete UDP",
@@ -2206,7 +2234,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docClocksTitle: "17. ⚙️ Frequenze Subhardware (H.264/VPU/ARM) & Consumo Energetico",
                 docClocksDesc: "Il Raspberry Pi Zero W espone la telemetria interna di ogni blocco Broadcom BCM2835 tramite <code>debugfs</code>. ext-monitor monitora costantemente le frequenze hardware in tempo reale:",
                 docCliManualTitle: "18. 📖 Manuale Operativo Completo, Opzioni CLI & Risoluzione Problemi",
-                docCliManualDesc: "Sintassi di avvio: <code>./scripts/start.sh [modo] [encoder] [fps] [hud] [opzioni]</code>",
+                docCliManualDesc: "Sintassi di avvio: <code>ext-sender [extend|clone] [fps] [bitrate] [opzioni]</code>",
                 badgeStreaming: "● STREAMING ATTIVO",
                 badgeMode1On: "Attivo (UDP 5000)",
                 badgeMode2On: "Attivo (TCP 7236)",
@@ -2281,7 +2309,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 modalRebootTitle: "Riavviare Appliance?",
                 modalRebootDesc: "Sei sicuro di voler riavviare il Raspberry Pi Zero? Si riavvierà in meno di 2 secondi direttamente in RAM.",
                 btnCancel: "Annulla",
-                btnConfirmReboot: "Sì, Riavvia"
+                btnConfirmReboot: "Sì, Riavvia",
+                audioLabel: "Audio Digitale HDMI (Opus 48kHz)",
+                tipAudio: "Volume dell'audio digitale inviato al monitor/TV tramite cavo HDMI. Latenza inferiore a 25ms con sincronizzazione A/V.",
+                docAltPlayersCmd: "# FFmpeg / ffplay (Bassa Latenza):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
+                copied: "Copiato!",
+                copiedSuccess: "✓ Copiato negli appunti!",
+                m1Title: "Modalità 1: Rete UDP (Linux Wayland / X11)",
+                m1Details: "Porta UDP 5000 • Latenza < 15ms • Pipeline VA-API/M2M",
+                m2Title: "Modalità 2: Windows Miracast (Wi-Fi Display)",
+                m2Details: "Porta RTSP 7236 • Windows Win+K • Decodifica Hardware V4L2 M2M",
+                m3Title: "Modalità 3: USB Bulk Diretto (480 Mbps)",
+                m3Details: "Bus USB 2.0 High-Speed • Zero-Network • Latenza < 1ms",
+                waitingStreamDesc: "Ricevitore in attesa che mostra schermata splash con IP e QR Code.",
+                capKmsTitle: "KMS Direct (Anti-Blocco / Scanout GPU)",
+                capMutterTitle: "GNOME Mutter (PipeWire Screencast)"
             },
             zh: {
                 title: "Pi Zero 扩展显示器",
@@ -2346,7 +2388,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 oneLinerDesc: "在任何 Linux 电脑上，只需在终端中运行以下命令即可立即扩展屏幕：",
                 btnCopy: "复制",
                 dlPkgTitle: "客户端完整安装包",
-                dlPkgDesc: "包含预编译 ext-sender 二进制文件、start.sh 脚本、udev 规则和安装器的 tar.gz 压缩包。",
+                dlPkgDesc: "包含预编译 ext-sender 二进制文件、udev 规则和说明文档的 tar.gz 压缩包。",
                 btnDlPkg: "下载 client.tar.gz",
                 dlSenderTitle: "ext-sender 二进制文件",
                 dlSenderDesc: "为 Linux x86_64 编译的独立 Rust GPU 硬件推流程序。",
@@ -2378,7 +2420,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docSerialTitle: "4. 通过 USB 虚拟串口 (/dev/ttyACM0) 零 IP 维护",
                 docSerialDesc: "若网络禁用或配置错误，树莓派会在电脑上提供 115200 波特率的 /dev/ttyACM0 救援控制台。",
                 docLinuxTitle: "5. Linux Wayland (GNOME) 正常连接",
-                docLinuxDesc: "将 USB 线插入中间的数据端口。电脑将通过内置 DHCP 自动获取 192.168.7.1，然后运行启动脚本：",
+                docLinuxDesc: "将 USB 线插入中间的数据端口。电脑将通过内置 DHCP 自动获取 192.168.7.1，然后运行 ext-sender（无需传入参数）：",
                 docWinTitle: "6. Windows 10/11 投屏 (Win + K 无需驱动)",
                 docWinDesc: "插入 USB 后在 Windows 上按 Win + K，选择 'Pi Zero Wireless Display' 即可。",
                 docSdTitle: "7. 100% 内存运行架构与免拔卡在线固件升级",
@@ -2393,14 +2435,14 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docArmv6Cmd: "cargo install cross && cd receiver && cross build --target arm-unknown-linux-musleabihf --release",
                 docNonOtgTitle: "10. 非 OTG 树莓派型号 (Pi 2, Pi 3, Pi 4, Pi 5) 与启动参数调整",
                 docNonOtgDesc1: "上述型号的标准 USB-A 接口不支持 USB Gadget 外设模式。视频流通过以太网或 Wi-Fi 进行传输。",
-                docNonOtgDesc2: "SD 引导必需调整：在 config.txt 中注释 'dtoverlay=dwc2'。在 cmdline.txt 中移除 'modules-load=dwc2'。连接命令：./scripts/start.sh extend auto 60 false full <树莓派IP>:5000",
+                docNonOtgDesc2: "SD 引导必需调整：在 config.txt 中注释 'dtoverlay=dwc2'。在 cmdline.txt 中移除 'modules-load=dwc2'。连接命令：ext-sender --ip=<树莓派IP>",
                 docPcReceiverTitle: "11. 将普通 Linux 电脑 / 笔记本改造为副屏接收器",
                 docPcReceiverDesc: "任何 Linux 计算机均可充当接收端。安装 gstreamer1.0-tools 并运行：",
                 docPcReceiverCmd: "gst-launch-1.0 -v udpsrc port=5000 buffer-size=524288 caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96\" ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink sync=false",
                 docMultiMonTitle: "12. 多显示器电脑接收端定向投影至屏幕 1 或屏幕 2",
                 docMultiMonDesc: "在连接多个显示器的电脑接收端上，在 DRM KMS 裸机模式下指定 'kmssink connector-id=<ID>'，或在桌面图形会话中使用 'ffplay -left 1920 -top 0 -fs rtp://0.0.0.0:5000' 定位全屏播放。",
-                docPacerTitle: "13. 🚀 Wayland 帧率起搏器：YouTube 视频 60 FPS 持续播放永不冻结",
-                docPacerDesc: "ext-monitor 在主机后台自动运行 wayland-damage-pacer.py。它在副屏边缘触发 60 Hz 微小重绘脉冲并应用空 Cairo 点击穿透掩码，强制 GNOME Mutter 合成器保持活跃。即使鼠标静止或停留在主屏，YouTube 视频与外部终端仍保持 60 FPS 极速刷新。",
+                docPacerTitle: "13. 🚀 持续 60 FPS 防冻结流畅推流",
+                docPacerDesc: "ext-monitor 在 ext-sender 中原生提供 60 FPS CFR 持续防冻结推流。即使鼠标静止或停留在主屏，YouTube 视频与外部终端仍保持 60 FPS 极速刷新。",
                 docAltPlayersTitle: "14. 非 GNOME 接收端通用替代方案 (FFmpeg, MPV, VLC)",
                 docAltPlayersDesc: "RFC 4571 RTP H.264 视频流完全跨平台。在 KDE、XFCE、i3、Windows 或 macOS 上无需缓冲区极低延迟接收：",
                 docBulkFallbackTitle: "15. ⚡ 默认 USB Bulk 裸通道模式与 UDP 网络自动平滑降级",
@@ -2438,7 +2480,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 docClocksTitle: "17. ⚙️ 硬件子模块时钟频率 (H.264/VPU/ARM) 与功耗",
                 docClocksDesc: "树莓派 Pi Zero W 通过 <code>debugfs</code> 暴露了博通 BCM2835 芯片内部各子模块的实时运行频率。ext-monitor 全程高精度监测硬件时钟：",
                 docCliManualTitle: "18. 📖 完整命令行手册、CLI 参数与故障排查",
-                docCliManualDesc: "启动脚本语法：<code>./scripts/start.sh [模式] [编码器] [帧率] [HUD] [参数]</code>",
+                docCliManualDesc: "推流程序语法：<code>ext-sender [extend|clone] [帧率] [码率] [参数]</code>",
                 badgeStreaming: "● 推流中",
                 badgeMode1On: "已启用 (UDP 5000)",
                 badgeMode2On: "已启用 (TCP 7236)",
@@ -2513,7 +2555,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 modalRebootTitle: "确定要重启设备？",
                 modalRebootDesc: "确定要重启树莓派 Pi Zero 吗？系统将在不到2秒内直接在内存中快速重启。",
                 btnCancel: "取消",
-                btnConfirmReboot: "确认重启"
+                btnConfirmReboot: "确认重启",
+                audioLabel: "HDMI 数字音频 (Opus 48kHz)",
+                tipAudio: "通过 HDMI 发送到监视器/电视的数字音频音量。低于 25ms 延迟并保证音画同步。",
+                docAltPlayersCmd: "# FFmpeg / ffplay (超低延迟播放):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
+                copied: "已复制!",
+                copiedSuccess: "✓ 已复制到剪贴板!",
+                m1Title: "模式 1: UDP 网络 (Linux Wayland / X11)",
+                m1Details: "UDP 端口 5000 • 低于 15ms 延迟 • VA-API/M2M 流水线",
+                m2Title: "模式 2: Windows Miracast (无线投屏)",
+                m2Details: "RTSP 端口 7236 • Windows Win+K • 硬件 V4L2 M2M 解码",
+                m3Title: "模式 3: USB Bulk 直连 (480 Mbps)",
+                m3Details: "USB 2.0 高速总线 • 无需网络协议栈 • 低于 1ms 延迟",
+                waitingStreamDesc: "接收端待机就绪，正在显示包含 IP 和二维码的启动屏。",
+                capKmsTitle: "KMS 直连 (防冻结 / GPU 扫描帧)",
+                capMutterTitle: "GNOME Mutter (PipeWire 屏幕录制)"
             }
         };
 
@@ -2561,9 +2617,19 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
 
             // Refresh dynamic labels to reflect new language
-            setDropOnly(currentDropOnly);
-            setSkipToFirst(currentSkipToFirst);
+            if (typeof currentColor !== 'undefined') {
+                const lbl = document.getElementById('valColor');
+                const labels = { full: t('colorFull'), '256': t('color256'), gray: t('colorGray') };
+                if (lbl) lbl.textContent = labels[currentColor] || currentColor;
+            }
+            if (typeof currentCapture !== 'undefined') {
+                const lbl = document.getElementById('valCapture');
+                if (lbl) lbl.textContent = currentCapture === 'kms' ? t('capKmsTitle') : t('capMutterTitle');
+            }
+            if (typeof currentDropOnly !== 'undefined') setDropOnly(currentDropOnly);
+            if (typeof currentSkipToFirst !== 'undefined') setSkipToFirst(currentSkipToFirst);
             if (typeof currentNetMode !== 'undefined') setNetModeUI(currentNetMode);
+            pollTelemetry();
         }
 
         // Bitrate & FPS Controls
@@ -2879,22 +2945,54 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 });
         }
 
-        // Copy Helper
+        // Copy Helper (HTTP-Safe Clipboard with textarea execCommand fallback)
         function copyCommand(id) {
             const el = document.getElementById(id);
-            if (el) {
-                navigator.clipboard.writeText(el.textContent.trim()).then(() => {
-                    const btn = el.parentElement.querySelector('.copy-btn');
-                    if (btn) {
-                        const oldText = btn.textContent;
-                        btn.textContent = '✓ Copied!';
-                        btn.classList.add('copied');
-                        setTimeout(() => {
-                            btn.textContent = oldText;
-                            btn.classList.remove('copied');
-                        }, 2000);
+            if (!el) return;
+            const text = el.textContent.trim();
+            const btn = el.parentElement ? el.parentElement.querySelector('.copy-btn') : null;
+
+            const markCopied = () => {
+                if (btn) {
+                    const oldText = btn.textContent;
+                    btn.textContent = '✓ ' + (t('copied') || 'Copied!');
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                        btn.textContent = oldText;
+                        btn.classList.remove('copied');
+                    }, 2000);
+                }
+                showToast(t('copiedSuccess') || '✓ Copied to clipboard!');
+            };
+
+            const fallbackCopy = (str) => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = str;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.top = '-9999px';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    const success = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (success) {
+                        markCopied();
+                    } else {
+                        showToast('Failed to copy');
                     }
-                });
+                } catch (err) {
+                    console.error('execCommand copy failed:', err);
+                    showToast('Failed to copy');
+                }
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(markCopied).catch(() => fallbackCopy(text));
+            } else {
+                fallbackCopy(text);
             }
         }
 
@@ -3111,23 +3209,29 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                         const elIcon = document.getElementById('activeModeIcon');
                         const banner = document.getElementById('activeStreamBanner');
 
-                        if (elTitle) elTitle.textContent = am.name;
-                        if (elDesc) elDesc.textContent = am.details;
                         if (elIcon) elIcon.textContent = am.icon || '📺';
 
                         if (am.id === 'mode1_udp') {
+                            if (elTitle) elTitle.textContent = t('m1Title') || am.name;
+                            if (elDesc) elDesc.textContent = t('m1Details') || am.details;
                             if (elBadge) { elBadge.textContent = '● ' + t('tbM1Method') + ' (60 FPS)'; elBadge.className = 'stat-badge badge-cyan'; }
                             if (banner) { banner.style.borderColor = 'var(--accent-cyan)'; banner.style.boxShadow = '0 0 25px rgba(0, 229, 255, 0.25)'; }
                             highlightActiveCard('cardMode1');
                         } else if (am.id === 'mode2_miracast') {
+                            if (elTitle) elTitle.textContent = t('m2Title') || am.name;
+                            if (elDesc) elDesc.textContent = t('m2Details') || am.details;
                             if (elBadge) { elBadge.textContent = '● ' + t('tbM2Method') + ' (60 FPS)'; elBadge.className = 'stat-badge badge-green'; }
                             if (banner) { banner.style.borderColor = 'var(--accent-emerald)'; banner.style.boxShadow = '0 0 25px rgba(0, 255, 102, 0.25)'; }
                             highlightActiveCard('cardMode2');
                         } else if (am.id === 'mode3_usb_bulk') {
+                            if (elTitle) elTitle.textContent = t('m3Title') || am.name;
+                            if (elDesc) elDesc.textContent = t('m3Details') || am.details;
                             if (elBadge) { elBadge.textContent = '● ' + t('tbM3Method') + ' (480 Mbps)'; elBadge.className = 'stat-badge badge-purple'; }
                             if (banner) { banner.style.borderColor = 'var(--accent-purple)'; banner.style.boxShadow = '0 0 25px rgba(179, 136, 255, 0.25)'; }
                             highlightActiveCard('cardMode3');
                         } else {
+                            if (elTitle) elTitle.textContent = t('waitingStream');
+                            if (elDesc) elDesc.textContent = t('waitingStreamDesc');
                             if (elBadge) { elBadge.textContent = '⏳ ' + t('waitingStream'); elBadge.className = 'stat-badge badge-amber'; }
                             if (banner) { banner.style.borderColor = 'rgba(255, 179, 0, 0.4)'; banner.style.boxShadow = 'none'; }
                             highlightActiveCard(null);
@@ -3399,4 +3503,4 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
     </script>
 </body>
 </html>
-"#;
+"##;

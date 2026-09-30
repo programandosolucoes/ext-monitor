@@ -1,5 +1,7 @@
 # ext-monitor: Universal Low-Latency USB Display & Multimedia Appliance Engine
 
+> [🇧🇷 Versão em Português (Brasil)](README.pt-BR.md) | 🇺🇸 English Version
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Language: Rust](https://img.shields.io/badge/Language-Rust_100%25-orange.svg)](https://www.rust-lang.org/)
 [![Hardware: BCM2835 / VideoCore IV](https://img.shields.io/badge/Hardware-Broadcom_BCM2835-red.svg)](https://www.raspberrypi.com/)
@@ -235,28 +237,28 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 * **[Manual de Operação em Português (docs/MANUAL-DE-OPERACAO.md)](docs/MANUAL-DE-OPERACAO.md):** Guia operacional exaustivo em português.
 * **[The Book of Ext-Monitor: 20 Engineering Blueprints (docs/LIVRO-EXT-MONITOR.md)](docs/LIVRO-EXT-MONITOR.md):** Comprehensive 20-chapter technical book detailing the reverse engineering, hardware architecture, and math behind the appliance.
 
-### Index of Engineering Blueprints
+### Index of Engineering Blueprints (100% English Suite)
 
-1. **[Blueprint 01: 32MB Appliance Image & BCM2835 Geometry](docs/blueprints/01-imagem-32mb-e-geometria-bcm2835.md):** Boot ROM boundaries, sector alignment, and 2KB FAT16 formatting.
-2. **[Blueprint 02: End-to-End Architecture vs. GUD](docs/blueprints/02-arquitetura-transmissor-receptor-e-comparativo-gud.md):** Silicon-level comparison with GUD and V4L2 M2M offloading.
-3. **[Blueprint 03: Packet Transmission & Drop-on-Late](docs/blueprints/03-transmissao-pacotes-drop-on-late-e-pipeline.md):** RFC 6184 NAL unit fragmentation and leaky ring buffer pacer.
-4. **[Blueprint 04: PipeWire & Suspend/Resume Recovery](docs/blueprints/04-pipewire-mutter-screencast-e-wayland.md):** Dual Rust watchdogs for instant recovery after PC S3 sleep.
-5. **[Blueprint 05: CPU/GPU Optimization & Scalers](docs/blueprints/05-otimizacoes-cpu-rust-gpu-vpu-e-cas-scaler.md):** ARM1176 compiler flags, VA-API/NVENC zero-copy, and CAS edge-sharpening filters.
-6. **[Blueprint 06: Concurrent Modes & USB ConfigFS Super-Gadget](docs/blueprints/06-modos-de-operacao-concorrentes-e-usb-gadget.md):** FunctionFS endpoint allocation and dynamic composite gadget creation.
-7. **[Blueprint 07: Micro-SD Protection & USB In-Situ Upgrades](docs/blueprints/07-cartao-sd-em-ram-e-upgrade-usb.md):** Pure RAM execution, zero flash wear, and USB-mounted firmware upgrades.
-8. **[Blueprint 08: Installation Manual & Multi-Distro Host Setup](docs/blueprints/08-manual-de-instalacao-e-portabilidade-host.md):** One-liner deployment, udev rules, and USB serial ACM recovery.
-9. **[Blueprint 09: Empirical Hardware Tests & Boot Diagnostics](docs/blueprints/09-testes-empiricos-e-diagnosticos-hardware.md):** VideoCore IV rainbow splash diagnostics and 1.8s boot timeline.
-10. **[Blueprint 10: Modular Rust Clean Code & V4L2 M2M State Machine](docs/blueprints/10-refatoracao-modular-clean-code-v4l2-m2m-e-enquadramento-au.md):** Refactored Rust pipeline, AU alignment, and V4L2 state machines.
-11. **[Blueprint 11: KMS DRM DMA-BUF Zero-Copy & EFAULT Resolution](docs/blueprints/11-kms-drm-dma-buf-scanout-zero-copy-e-correcao-efault.md):** Resolving errno 14 (EFAULT), pre-allocated DRM arrays, and zero-copy scanout.
-12. **[Blueprint 12: Multilingual Splash, Realtime EDID & Teardown](docs/blueprints/12-splash-quadrilingue-telemetria-edid-realtime-e-ciclo-vida-desconexao.md):** 4-language onboarding splash, live EDID telemetry, and graceful disconnection.
-13. **[Blueprint 13: Direct Kernel DRM/KMS Capture & Dual-Engine](docs/blueprints/13-captura-direta-drm-kms-e-dual-engine-universal.md):** Atomic PRIME DMA-BUF extraction via ioctl GETFB2.
-14. **[Blueprint 14: HDMI Digital Audio Subsystem, Opus & ALSA](docs/blueprints/14-subsistema-audio-hdmi-digital-opus-alsa-e-sincronismo-av.md):** Ultra-low-latency (< 25 ms) stereo digital audio pipeline on port 5004.
-15. **[Blueprint 15: Zero-Copy Pipeline, Wayland Quiescence & Display Lifecycle](docs/blueprints/15-pipeline-zero-copy-quiescencia-wayland-e-ciclo-vida-display.md):** VA-API zero-copy preservation, KMS retention, and silent console isolation.
-16. **[Blueprint 16: Wayland Quiescence Pacer & Universal Receivers](docs/blueprints/16-pacer-wayland-quiescencia-e-guia-universal-receptores.md):** Continuous CFR 60 FPS pacer eliminating Mutter video freezing.
-17. **[Blueprint 17: Bi-Directional Host Daemon, Rust D-Bus Screen Cast & Dynamic Topology](docs/blueprints/17-agente-host-rust-bidirecional-dbus-screencast-e-topologia-dinamica.md):** Dynamic virtual monitor sizing, D-Bus screencast handshake, and bidirectional control.
-18. **[Blueprint 18: Zero-Copy VA-API Pipeline, PipeWire HDMI Audio & Hot-Apply Engine](docs/blueprints/18-pipeline-zero-copy-vaapi-audio-pipewire-hdmi-e-motor-hot-apply.md):** VA-API DMA-BUF capture, PipeWire audio routing, and live parameter modulation.
-19. **[Blueprint 19: IoT Media Renderer, Chromecast/UPnP/DLNA & Web Visualizer](docs/blueprints/19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md):** Media streaming appliance mode, background player, and HDMI audio visualizer.
-20. **[Blueprint 20: Single-HDMI Scanout Multiplexer, Realtime Hardware FFT & Zero-Reboot](docs/blueprints/20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md):** 512-point Cooley-Tukey FFT, single-HDMI mutual exclusion, 4-language i18n, and zero-reboot teardown.
+1. **[Blueprint 01: 32MB Appliance Image & BCM2835 Geometry](docs/blueprints/en/01-32mb-image-bcm2835-geometry.md):** Boot ROM boundaries, sector alignment, and 2KB FAT16 formatting.
+2. **[Blueprint 02: End-to-End Architecture vs. GUD](docs/blueprints/en/02-architecture-tx-rx-and-gud-comparison.md):** Silicon-level comparison with GUD and V4L2 M2M offloading.
+3. **[Blueprint 03: Packet Transmission & Drop-on-Late](docs/blueprints/en/03-packet-transmission-drop-on-late-pipeline.md):** RFC 6184 NAL unit fragmentation and leaky ring buffer pacer.
+4. **[Blueprint 04: PipeWire & Suspend/Resume Recovery](docs/blueprints/en/04-pipewire-mutter-screencast-and-wayland.md):** Dual Rust watchdogs for instant recovery after PC S3 sleep.
+5. **[Blueprint 05: CPU/GPU Optimization & Scalers](docs/blueprints/en/05-cpu-optimizations-rust-gpu-vpu-cas-scaler.md):** ARM1176 compiler flags, VA-API/NVENC zero-copy, and CAS edge-sharpening filters.
+6. **[Blueprint 06: Concurrent Modes & USB ConfigFS Super-Gadget](docs/blueprints/en/06-concurrent-operating-modes-usb-gadget.md):** FunctionFS endpoint allocation and dynamic composite gadget creation.
+7. **[Blueprint 07: Micro-SD Protection & USB In-Situ Upgrades](docs/blueprints/en/07-sd-card-in-ram-and-usb-upgrade.md):** Pure RAM execution, zero flash wear, and USB-mounted firmware upgrades.
+8. **[Blueprint 08: Installation Manual & Multi-Distro Host Setup](docs/blueprints/en/08-host-installation-and-portability-manual.md):** One-liner deployment, udev rules, and USB serial ACM recovery.
+9. **[Blueprint 09: Empirical Hardware Tests & Boot Diagnostics](docs/blueprints/en/09-empirical-hardware-tests-boot-diagnostics.md):** VideoCore IV rainbow splash diagnostics and 1.8s boot timeline.
+10. **[Blueprint 10: Modular Rust Clean Code & V4L2 M2M State Machine](docs/blueprints/en/10-modular-clean-code-v4l2-m2m-au-framing.md):** Refactored Rust pipeline, AU alignment, and V4L2 state machines.
+11. **[Blueprint 11: KMS DRM DMA-BUF Zero-Copy & EFAULT Resolution](docs/blueprints/en/11-kms-drm-dma-buf-scanout-zero-copy-efault-fix.md):** Resolving errno 14 (EFAULT), pre-allocated DRM arrays, and zero-copy scanout.
+12. **[Blueprint 12: Multilingual Splash, Realtime EDID & Teardown](docs/blueprints/en/12-multilingual-splash-realtime-edid-teardown.md):** 4-language onboarding splash, live EDID telemetry, and graceful disconnection.
+13. **[Blueprint 13: Direct Kernel DRM/KMS Capture & Dual-Engine](docs/blueprints/en/13-direct-kernel-drm-kms-capture-dual-engine.md):** Atomic PRIME DMA-BUF extraction via ioctl GETFB2.
+14. **[Blueprint 14: HDMI Digital Audio Subsystem, Opus & ALSA](docs/blueprints/en/14-digital-hdmi-audio-opus-alsa-av-sync.md):** Ultra-low-latency (< 25 ms) stereo digital audio pipeline on port 5004.
+15. **[Blueprint 15: Zero-Copy Pipeline, Wayland Quiescence & Display Lifecycle](docs/blueprints/en/15-zero-copy-pipeline-wayland-quiescence-display-lifecycle.md):** VA-API zero-copy preservation, KMS retention, and silent console isolation.
+16. **[Blueprint 16: Wayland Quiescence Pacer & Universal Receivers](docs/blueprints/en/16-wayland-quiescence-pacer-cross-armv6-universal-receivers.md):** Continuous CFR 60 FPS pacer eliminating Mutter video freezing.
+17. **[Blueprint 17: Bi-Directional Host Daemon, Rust D-Bus Screen Cast & Dynamic Topology](docs/blueprints/en/17-native-rust-host-agent-bidirectional-web-control.md):** Dynamic virtual monitor sizing, D-Bus screencast handshake, and bidirectional control.
+18. **[Blueprint 18: Zero-Copy VA-API Pipeline, PipeWire HDMI Audio & Hot-Apply Engine](docs/blueprints/en/18-hybrid-audio-subsystem-network-opus-bluetooth-a2dp.md):** VA-API DMA-BUF capture, PipeWire audio routing, and live parameter modulation.
+19. **[Blueprint 19: IoT Media Renderer, Chromecast/UPnP/DLNA & Web Visualizer](docs/blueprints/en/19-iot-media-renderer-chromecast-upnp-hdmi-visualizer.md):** Media streaming appliance mode, background player, and HDMI audio visualizer.
+20. **[Blueprint 20: Single-HDMI Scanout Multiplexer, Realtime Hardware FFT & Zero-Reboot](docs/blueprints/en/20-single-hdmi-scanout-multiplexer-realtime-fft-i18n-zero-reboot.md):** 512-point Cooley-Tukey FFT, single-HDMI mutual exclusion, 4-language i18n, and zero-reboot teardown.
 
 ---
 
@@ -264,11 +266,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
 To compile the entire system and build a bootable 32MB SD card image:
 ```bash
-# Build complete universal appliance image (Pi Zero 1 & Zero 2 W):
-./scripts/build-fast-appliance.sh
+# Build complete universal appliance image (Pi Zero 1 & Zero 2 W) via native Rust tool:
+ext-tool build --image
 
 # Flash directly to micro-SD card (replace /dev/sdX with your card reader):
-sudo dd if=build-appliance/ext-monitor-pi0-appliance.img of=/dev/sdX bs=4M status=progress conv=fsync
+sudo ext-tool flash /dev/sdX
 ```
 
 ---

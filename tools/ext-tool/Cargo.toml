@@ -1,0 +1,10 @@
+[package]
+name = "ext-tool"
+version = "0.1.0"
+edition = "2021"
+authors = ["Carlos Alberto <carlosalberto4ti@gmail.com>"]
+license = "MIT"
+description = "ExtMonitor Rust Build, Deploy, Appliance Packaging and Splash Generation Tool"
+
+[dependencies]
+miniz_oxide = "0.9"

@@ -148,13 +148,138 @@ impl SenderConfig {
             return Ok(None);
         }
 
-        let target_ip = args.get(1).map(|s| s.as_str()).unwrap_or("192.168.7.2").to_string();
-        let target_port = args.get(2).and_then(|p| p.parse::<u16>().ok()).unwrap_or(5000);
-        let raw_bitrate = args.get(3).and_then(|p| p.parse::<u32>().ok()).unwrap_or(0);
-        let mode = args.get(4).map(|s| s.to_lowercase()).unwrap_or_else(|| "extend".to_string());
-        let encoder_arg = args.get(5).map(|s| s.as_str()).unwrap_or("auto");
-        let encoder = EncoderApi::from_str(encoder_arg);
-        let fps = args.get(6).and_then(|p| p.parse::<u32>().ok()).unwrap_or(30);
+        // Subcomandos de controle de serviço e processo
+        if let Some(cmd) = args.get(1) {
+            match cmd.as_str() {
+                "stop" | "--stop" => {
+                    crate::service::stop_all().map_err(|e| e.to_string())?;
+                    return Ok(None);
+                }
+                "status" | "--status" => {
+                    crate::service::show_status();
+                    return Ok(None);
+                }
+                "start" | "--start" => {
+                    crate::service::start_service().map_err(|e| e.to_string())?;
+                    return Ok(None);
+                }
+                "logs" | "--logs" => {
+                    crate::service::follow_logs();
+                    return Ok(None);
+                }
+                "install" | "--install" => {
+                    let path = crate::service::install_service().map_err(|e| e.to_string())?;
+                    println!("\x1b[1;32m[+] Serviço ext-monitor-sender instalado em {:?}!\x1b[0m", path);
+                    return Ok(None);
+                }
+                "uninstall" | "--uninstall" => {
+                    crate::service::uninstall_service().map_err(|e| e.to_string())?;
+                    println!("\x1b[1;32m[+] Serviço ext-monitor-sender desinstalado com sucesso.\x1b[0m");
+                    return Ok(None);
+                }
+                "service" => {
+                    let sub = args.get(2).map(|s| s.as_str()).unwrap_or("status");
+                    match sub {
+                        "install" => {
+                            let path = crate::service::install_service().map_err(|e| e.to_string())?;
+                            println!("\x1b[1;32m[+] Serviço ext-monitor-sender instalado em {:?}!\x1b[0m", path);
+                        }
+                        "uninstall" => {
+                            crate::service::uninstall_service().map_err(|e| e.to_string())?;
+                            println!("\x1b[1;32m[+] Serviço ext-monitor-sender desinstalado.\x1b[0m");
+                        }
+                        "start" => {
+                            crate::service::start_service().map_err(|e| e.to_string())?;
+                        }
+                        "stop" => {
+                            crate::service::stop_all().map_err(|e| e.to_string())?;
+                        }
+                        "status" | _ => {
+                            crate::service::show_status();
+                        }
+                    }
+                    return Ok(None);
+                }
+                _ => {}
+            }
+        }
+
+        // Se invocado sem flags de primeiro plano e sem ser daemon interno, ativa o serviço em background
+        let is_foreground = args.iter().any(|a| a == "--foreground" || a == "-f" || a == "run" || a == "--direct");
+        let is_daemon = args.iter().any(|a| a == "--service-daemon");
+
+        if !is_foreground && !is_daemon {
+            // Anti-duplicação: Se já está rodando, apenas relata o status e não duplica processo
+            if let Some(pid) = crate::service::get_running_pid() {
+                println!("\x1b[1;32m[i] ext-sender já está ativo em segundo plano (PID: {})\x1b[0m", pid);
+                println!("\x1b[1;36m    Controle Web: http://192.168.7.2:8080\x1b[0m");
+                println!("\x1b[1;36m    Para ver logs:  ext-sender logs\x1b[0m");
+                println!("\x1b[1;36m    Para parar:     ext-sender stop\x1b[0m");
+                println!("\x1b[1;36m    Para status:    ext-sender status\x1b[0m");
+                return Ok(None);
+            }
+
+            // Se não está rodando, sobe como serviço systemd --user liberando o terminal
+            println!("\x1b[1;34m[*] Iniciando ext-sender como serviço de usuário em segundo plano (systemd --user)...\x1b[0m");
+            crate::service::start_service().map_err(|e| e.to_string())?;
+            return Ok(None);
+        }
+
+        // Defaults de Máxima Velocidade e Fluidez (60 FPS, VBR 6000k, Modo Extend, VA-API)
+        let mut target_ip = "192.168.7.2".to_string();
+        let mut target_port: u16 = 5000;
+        let mut raw_bitrate: u32 = 0;
+        let mut mode = "extend".to_string();
+        let mut encoder = EncoderApi::detect();
+        let mut fps: u32 = 60; // 60 FPS por padrão para máxima fluidez do mouse e tela
+
+        // Checa se é chamada posicional legada (quando o primeiro argumento é IP numérico com 4 octetos)
+        let is_legacy_ip = args.get(1).map(|s| s.contains('.') && s.split('.').count() == 4 && s.chars().all(|c| c.is_ascii_digit() || c == '.')).unwrap_or(false);
+
+        if is_legacy_ip {
+            target_ip = args.get(1).unwrap().clone();
+            target_port = args.get(2).and_then(|p| p.parse::<u16>().ok()).unwrap_or(5000);
+            raw_bitrate = args.get(3).and_then(|p| p.parse::<u32>().ok()).unwrap_or(0);
+            if let Some(m) = args.get(4) {
+                if m == "extend" || m == "clone" { mode = m.to_lowercase(); }
+            }
+            if let Some(enc) = args.get(5) {
+                encoder = EncoderApi::from_str(enc);
+            }
+            if let Some(f) = args.get(6).and_then(|p| p.parse::<u32>().ok()) {
+                fps = f;
+            }
+        } else {
+            // Parser flexível e inteligente: suporta 'ext-sender', 'ext-sender extend', 'ext-sender 60', 'ext-sender --fps=60'
+            for arg in args.iter().skip(1) {
+                let lower = arg.to_lowercase();
+                if lower == "extend" || lower == "clone" {
+                    mode = lower;
+                } else if let Some(m) = lower.strip_prefix("--mode=") {
+                    mode = m.to_string();
+                } else if lower == "vaapi" || lower == "nvenc" || lower == "qsv" || lower == "cpu" || lower == "software" || lower == "auto" {
+                    encoder = EncoderApi::from_str(&lower);
+                } else if let Some(enc) = lower.strip_prefix("--encoder=") {
+                    encoder = EncoderApi::from_str(enc);
+                } else if let Some(ip_str) = lower.strip_prefix("--ip=") {
+                    target_ip = ip_str.to_string();
+                } else if let Some(p_str) = lower.strip_prefix("--port=") {
+                    if let Ok(p) = p_str.parse::<u16>() { target_port = p; }
+                } else if let Some(b_str) = lower.strip_prefix("--bitrate=").or_else(|| lower.strip_prefix("-b=")) {
+                    if let Ok(b) = b_str.parse::<u32>() { raw_bitrate = b; }
+                } else if let Some(f_str) = lower.strip_prefix("--fps=") {
+                    if let Ok(f) = f_str.parse::<u32>() { fps = f; }
+                } else if lower.contains('.') && lower.split('.').count() == 4 && lower.chars().all(|c| c.is_ascii_digit() || c == '.') {
+                    target_ip = lower;
+                } else if let Ok(num) = lower.parse::<u32>() {
+                    if num <= 120 {
+                        fps = num;
+                    } else {
+                        raw_bitrate = num;
+                    }
+                }
+            }
+        }
 
         let bitrate = if raw_bitrate == 0 || raw_bitrate == 8000 {
             Self::recommended_bitrate(fps)
@@ -222,14 +347,16 @@ impl SenderConfig {
                 port: target_port,
             }
         } else {
-            // Default: USB Bulk Direct (with auto-fallback to Network if device is absent)
+            // Padrão: USB Bulk Direto (com fallback automático para UDP caso dispositivo USB não esteja acessível)
             TransportKind::UsbBulk
         };
 
-        let capture = if args.iter().any(|a| a == "--capture=kms" || a == "--kms" || a == "--drm") {
-            CaptureEngine::Kms
-        } else {
+        // Padrão de fábrica: KMS Direct (Kernel DRM/KMS scanout de ultra-baixa latência)
+        // GNOME Mutter/Wayland é ativado apenas se explicitamente solicitado via CLI (--capture=mutter) ou painel web
+        let capture = if args.iter().any(|a| a == "--capture=mutter" || a == "--mutter" || a == "--gnome") {
             CaptureEngine::Mutter
+        } else {
+            CaptureEngine::Kms
         };
 
         let engine = if args.iter().any(|a| a == "--engine=native" || a == "--native" || a == "--rust") {

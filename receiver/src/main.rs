@@ -17,6 +17,7 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 mod decoder;
+pub mod discovery;
 mod display;
 mod drm;
 pub mod audio;
@@ -25,6 +26,7 @@ mod i18n;
 mod ingress;
 mod native_v4l2;
 mod pipeline;
+pub mod service;
 mod stream;
 mod usb_bulk;
 pub mod swagger;
@@ -56,6 +58,40 @@ fn main() {
         i18n::print_help(lang);
         return;
     }
+
+    // Subcomandos de controle de serviço para máquinas x86 / PC não-Pi Zero
+    if let Some(cmd) = args.get(1) {
+        match cmd.as_str() {
+            "stop" | "--stop" => {
+                let _ = service::stop_all();
+                return;
+            }
+            "start" | "--start" => {
+                if let Err(e) = service::start_service() {
+                    eprintln!("\x1b[1;31m[!] {}\x1b[0m", e);
+                }
+                return;
+            }
+            "install" | "--install" => {
+                match service::install_service() {
+                    Ok(p) => println!("\x1b[1;32m[+] ext-receiver serviço instalado em {:?}!\x1b[0m", p),
+                    Err(e) => eprintln!("\x1b[1;31m[!] {}\x1b[0m", e),
+                }
+                return;
+            }
+            _ => {}
+        }
+    }
+
+    // Anti-duplicação via PID Lock
+    let _pid_lock = match service::acquire_lock() {
+        Ok(lock) => lock,
+        Err(e) => {
+            eprintln!("\x1b[1;31m[!] {}\x1b[0m", e);
+            eprintln!("\x1b[1;33m    Para parar a instância existente: ext-receiver stop\x1b[0m");
+            return;
+        }
+    };
 
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m[ext-receiver]\x1b[0m Raspberry Pi Zero GPU Display Receiver v0.2.0");
@@ -99,6 +135,9 @@ fn main() {
 
     // 4. Start UPnP / DLNA SSDP auto-discovery daemon on UDP 1900
     media_renderer::start_ssdp_responder(running.clone(), 8080);
+
+    // 4.1 Start Ext-Monitor Wi-Fi/Ethernet auto-discovery beacon on UDP 5002
+    discovery::start_discovery_beacon(running.clone(), 8080, udp_port);
 
     // 5. Start HDMI dynamic visualizer engine (active when playing audio, multiplexed with video)
     media_renderer::VisualizerEngine::start(running.clone(), pipeline_mgr.clone());

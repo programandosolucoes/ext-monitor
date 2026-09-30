@@ -242,6 +242,7 @@ fn handle_http_client(
                 }
                 if let Some(true) = m3_change {
                     println!("\x1b[1;32m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) requested via Web UI!");
+                    forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
                     let run = running.clone();
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
@@ -250,11 +251,13 @@ fn handle_http_client(
                         }
                     });
                 } else if let Some(false) = m3_change {
-                    println!("\x1b[1;33m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) disabled. Returning to Miracast / Standby.");
+                    println!("\x1b[1;33m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) disabled. Returning to Network UDP.");
+                    forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
                         pipe.stop();
-                        let _ = pipe.start(PipelineKind::MiracastMp2t { port: crate::wfd::WFD_RTP_PORT });
+                        let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                        let _ = pipe.start(default_kind);
                     });
                 } else if let Some(m1) = m1_change {
                     let pipe = pipeline_mgr.clone();
@@ -264,6 +267,7 @@ fn handle_http_client(
                             pipe.pause();
                         } else {
                             println!("\x1b[1;32m[web-server]\x1b[0m Mode 1 (Linux UDP) turned ON by user flag.");
+                            forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
                             let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
                             let _ = pipe.resume(default_kind);
                         }
@@ -670,35 +674,35 @@ fn get_system_telemetry_json(
     let (mode_id, mode_name, mode_icon, mode_proto, mode_port, mode_details) = match cur_kind {
         Some(crate::pipeline::PipelineKind::RawH264Rtp { port }) => (
             "mode1_udp",
-            "Modo 1: Rede UDP (Linux Wayland / X11)",
+            "Mode 1: UDP Network (Linux Wayland / X11)",
             "🐧",
             "RTP H.264 / RFC 4571",
             port,
-            format!("Porta UDP {} • Latência < 15ms • Pipeline VA-API/M2M", port),
+            format!("UDP Port {} • Latency < 15ms • VA-API/M2M Pipeline", port),
         ),
         Some(crate::pipeline::PipelineKind::MiracastMp2t { port }) => (
             "mode2_miracast",
-            "Modo 2: Windows Miracast (Wi-Fi Display)",
+            "Mode 2: Windows Miracast (Wi-Fi Display)",
             "🪟",
             "MPEG-TS / RTSP WFD",
             port,
-            format!("Porta RTSP {} • Windows Win+K • Decodificação V4L2 M2M", port),
+            format!("RTSP Port {} • Windows Win+K • V4L2 M2M Hardware Decode", port),
         ),
         Some(crate::pipeline::PipelineKind::UsbBulkPipe { fd: _ }) => (
             "mode3_usb_bulk",
-            "Modo 3: USB Bulk Direct (480 Mbps)",
+            "Mode 3: USB Bulk Direct (480 Mbps)",
             "⚡",
             "USB FunctionFS Bulk Raw H.264",
             0,
-            "Barramento USB 2.0 High-Speed • Zero-Network • Latência < 1ms".to_string(),
+            "USB 2.0 High-Speed • Zero-Network • Latency < 1ms".to_string(),
         ),
         None => (
             "idle",
-            "Aguardando Transmissão (Standby / Splash)",
+            "Awaiting Stream (Standby / Splash)",
             "⏳",
-            "Nenhum Fluxo Ativo",
+            "No Active Stream",
             0,
-            "Receptor em prontidão exibindo tela de splash com IP e QR Code".to_string(),
+            "Receiver ready displaying splash screen with IP & QR Code".to_string(),
         ),
     };
 
@@ -771,8 +775,11 @@ fn get_system_telemetry_json(
 /// Forward JSON configuration to ext-sender on UDP port 5001
 fn forward_config_to_sender(payload: &str) {
     if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
-        // Send to host IP (192.168.7.1) and local loopback
+        let _ = sock.set_broadcast(true);
+        // Send to host USB IP (192.168.7.1), directed broadcast (192.168.7.255), global broadcast, and local loopback
         let _ = sock.send_to(payload.as_bytes(), "192.168.7.1:5001");
+        let _ = sock.send_to(payload.as_bytes(), "192.168.7.255:5001");
+        let _ = sock.send_to(payload.as_bytes(), "255.255.255.255:5001");
         let _ = sock.send_to(payload.as_bytes(), "127.0.0.1:5001");
     }
 }

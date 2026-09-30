@@ -83,21 +83,21 @@ impl MonitorInfo {
 
         // 3. Compute friendly physical socket name
         let connector_friendly = if hardware_model.contains("Zero") {
-            format!("Porta Mini-HDMI ({})", chosen_connector)
+            format!("Mini-HDMI Port ({})", chosen_connector)
         } else if hardware_model.contains("Raspberry Pi 4")
             || hardware_model.contains("Raspberry Pi 5")
             || hardware_model.contains("Pi 4")
             || hardware_model.contains("Pi 5")
         {
             if chosen_connector.contains("-2") {
-                format!("Porta Micro-HDMI 1 / Secundária ({})", chosen_connector)
+                format!("Micro-HDMI Port 1 / Secondary ({})", chosen_connector)
             } else {
-                format!("Porta Micro-HDMI 0 / Principal ({}) - Próxima ao USB-C", chosen_connector)
+                format!("Micro-HDMI Port 0 / Primary ({}) - Next to USB-C", chosen_connector)
             }
         } else if hardware_model.contains("Raspberry Pi") {
-            format!("Porta HDMI Principal ({})", chosen_connector)
+            format!("Primary HDMI Port ({})", chosen_connector)
         } else {
-            format!("Saída de Vídeo Digital ({})", chosen_connector)
+            format!("Digital Video Output ({})", chosen_connector)
         };
 
         // 4. Compute VPU name based on hardware

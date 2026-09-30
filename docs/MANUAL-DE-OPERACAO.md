@@ -609,7 +609,7 @@ ffplay -left 1920 -top 0 -x 1920 -y 1080 -fs -flags low_delay -framedrop rtp://0
 O **GNOME Mutter no Wayland** utiliza uma arquitetura estritamente orientada a danos (*damage-driven rendering*). Quando não há movimento de janelas ou quando o cursor do mouse não está sobre o monitor secundário, o compositor entra em dormência e suspende a gravação de frames no PipeWire.
 
 ### A Solução Definitiva do ext-monitor:
-O script [`scripts/wayland-damage-pacer.py`](file:///home/carlos/ide/ext-monitor/scripts/wayland-damage-pacer.py):
+O mecanismo de pacing integrado no `ext-sender`:
 1. Cria uma janela invisível de 1x1 pixel com transparência total (`RGBA 0,0,0,0`), sem foco e sem barra de tarefas.
 2. Posiciona essa janela no canto inferior direito da tela estendida (ex: `x=3518, y=898`).
 3. **Máscara 100% Click-Through (`cairo.Region()` vazia):** A janela aplica `gdk_win.input_shape_combine_region(cairo.Region(), 0, 0)`. Isso garante que cliques em logotipos, barras de endereço, abas ou botões (como o ícone inicial do YouTube no Firefox) nunca sejam interceptados.

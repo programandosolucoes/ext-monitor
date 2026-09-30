@@ -6,7 +6,7 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
-use crate::config::{CaptureEngine, ColorProfile};
+use crate::config::{CaptureEngine, ColorProfile, TransportKind};
 use std::net::UdpSocket;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +23,7 @@ pub enum ControlAction {
     SetKeyIntMax(u32),
     SetCapture(CaptureEngine),
     SetMonitor(String),
+    SetTransport(TransportKind),
     TriggerHud,
     HideHud,
 }
@@ -128,6 +129,17 @@ impl ControlListener {
                     if !mon_str.trim().is_empty() {
                         actions.push(ControlAction::SetMonitor(mon_str.trim().to_string()));
                     }
+                }
+
+                if let Some(trans_str) = v.get("transport").and_then(|x| x.as_str()) {
+                    let tk = match trans_str {
+                        "usb_bulk" | "usb" | "bulk" => TransportKind::UsbBulk,
+                        _ => TransportKind::Network {
+                            ip: "192.168.7.2".to_string(),
+                            port: 5000,
+                        },
+                    };
+                    actions.push(ControlAction::SetTransport(tk));
                 }
             }
         }
