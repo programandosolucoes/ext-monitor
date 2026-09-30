@@ -205,10 +205,11 @@ pub fn get_audio_spectrum() -> Arc<Mutex<AudioSpectrumState>> {
 }
 
 pub fn update_audio_spectrum(bands: &[f32; 24], rms_db: f32) {
+    let has_signal = rms_db > -55.0 || bands.iter().any(|&b| b > 0.02);
     let spec_arc = get_audio_spectrum();
     if let Ok(mut spec) = spec_arc.lock() {
         spec.rms_db = rms_db;
-        spec.is_active = true;
+        spec.is_active = has_signal;
         spec.last_update = std::time::Instant::now();
         for i in 0..24 {
             let val = bands[i].clamp(0.0, 1.0);
@@ -222,12 +223,16 @@ pub fn update_audio_spectrum(bands: &[f32; 24], rms_db: f32) {
     }
 
     if let Ok(mut trk) = get_media_state().lock() {
-        if trk.state != "playing" {
-            trk.state = "playing".to_string();
-            trk.source = "pc_audio".to_string();
-            trk.title = "HDMI Digital Audio (48kHz)".to_string();
-            trk.artist = "Real-time Host PC Signal (PCM PipeWire)".to_string();
-            trk.album = "Ext-Monitor Low-Latency Audio".to_string();
+        if has_signal {
+            if trk.state != "playing" {
+                trk.state = "playing".to_string();
+                trk.source = "pc_audio".to_string();
+                trk.title = "HDMI Digital Audio (48kHz)".to_string();
+                trk.artist = "Real-time Host PC Signal (PCM PipeWire)".to_string();
+                trk.album = "Ext-Monitor Low-Latency Audio".to_string();
+            }
+        } else if trk.state == "playing" && trk.source == "pc_audio" {
+            trk.state = "idle".to_string();
         }
     }
 }

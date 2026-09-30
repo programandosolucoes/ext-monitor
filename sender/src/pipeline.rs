@@ -22,12 +22,6 @@ use std::time::Duration;
 pub enum StreamerHandle {
     Child(Child),
     Native(native_streamer::NativeStreamer),
-    Composite {
-        video: Box<StreamerHandle>,
-        audio: Option<Child>,
-        audio_spectrum: Option<Child>,
-        audio_running: Option<Arc<AtomicBool>>,
-    },
 }
 
 impl StreamerHandle {
@@ -38,19 +32,6 @@ impl StreamerHandle {
                 n.stop();
                 Ok(())
             }
-            StreamerHandle::Composite { ref mut video, ref mut audio, ref mut audio_spectrum, ref mut audio_running } => {
-                let _ = video.kill();
-                if let Some(ref mut a) = audio {
-                    let _ = a.kill();
-                }
-                if let Some(ref mut spec) = audio_spectrum {
-                    let _ = spec.kill();
-                }
-                if let Some(ref r) = audio_running {
-                    r.store(false, Ordering::Relaxed);
-                }
-                Ok(())
-            }
         }
     }
 
@@ -58,15 +39,6 @@ impl StreamerHandle {
         match self {
             StreamerHandle::Child(ref mut c) => c.wait(),
             StreamerHandle::Native(_) => Ok(ExitStatus::from_raw(0)),
-            StreamerHandle::Composite { ref mut video, ref mut audio, ref mut audio_spectrum, .. } => {
-                if let Some(ref mut a) = audio {
-                    let _ = a.wait();
-                }
-                if let Some(ref mut spec) = audio_spectrum {
-                    let _ = spec.wait();
-                }
-                video.wait()
-            }
         }
     }
 
@@ -79,9 +51,6 @@ impl StreamerHandle {
                 } else {
                     Ok(Some(ExitStatus::from_raw(0)))
                 }
-            }
-            StreamerHandle::Composite { ref mut video, .. } => {
-                video.try_wait()
             }
         }
     }
@@ -107,85 +76,12 @@ pub struct PipelineBuilder {
     #[allow(dead_code)]
     pub kms_info: Option<KmsOutputInfo>,
     pub audio: bool,
+    #[allow(dead_code)]
     pub audio_port: u16,
 }
 
 impl PipelineBuilder {
     /// Spawns the configured streaming pipeline process
-    pub fn spawn_audio(&self) -> Option<Child> {
-        if !self.audio {
-            return None;
-        }
-
-        // 1. Ensure virtual sink Raspberry_Pi_HDMI_Audio exists in PulseAudio/PipeWire
-        let exists = Command::new("pactl")
-            .args(["list", "sinks", "short"])
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).contains("Raspberry_Pi_HDMI_Audio"))
-            .unwrap_or(false);
-
-        if !exists {
-            let _ = Command::new("pactl")
-                .args([
-                    "load-module",
-                    "module-null-sink",
-                    "sink_name=Raspberry_Pi_HDMI_Audio",
-                    "sink_properties=device.description=Raspberry_Pi_HDMI_Audio",
-                ])
-                .output();
-        }
-
-        let use_pulse = Command::new("pactl")
-            .args(["list", "sources", "short"])
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).contains("Raspberry_Pi_HDMI_Audio.monitor"))
-            .unwrap_or(false);
-
-        println!(
-            "\x1b[1;34m[*] Starting low-latency Opus audio streamer to {}:{} (source: {})...\x1b[0m",
-            self.target_ip,
-            self.audio_port,
-            if use_pulse { "Raspberry_Pi_HDMI_Audio.monitor" } else { "pipewiresrc (auto)" }
-        );
-
-        let mut cmd = Command::new("gst-launch-1.0");
-        cmd.arg("-q");
-
-        if use_pulse {
-            cmd.arg("pulsesrc")
-                .arg("device=Raspberry_Pi_HDMI_Audio.monitor")
-                .arg("do-timestamp=true");
-        } else {
-            cmd.arg("pipewiresrc")
-                .arg("client-name=ext-hdmi-audio")
-                .arg("do-timestamp=true");
-        }
-
-        cmd.arg("!")
-            .arg("audioconvert")
-            .arg("!")
-            .arg("audioresample")
-            .arg("!")
-            .arg("audio/x-raw,rate=48000,channels=2")
-            .arg("!")
-            .arg("opusenc")
-            .arg("bitrate=96000")
-            .arg("frame-size=10")
-            .arg("complexity=3")
-            .arg("!")
-            .arg("rtpopuspay")
-            .arg("pt=96")
-            .arg("!")
-            .arg("udpsink")
-            .arg(format!("host={}", self.target_ip))
-            .arg(format!("port={}", self.audio_port))
-            .arg("sync=false")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .ok()
-    }
-
     pub fn spawn(&self) -> io::Result<StreamerHandle> {
         let video_handle = if self.engine == StreamEngine::NativeRust {
             let streamer = native_streamer::NativeStreamer::start(
@@ -201,20 +97,7 @@ impl PipelineBuilder {
             StreamerHandle::Child(child)
         };
 
-        let (audio_child, spectrum_child, audio_running) = if self.audio {
-            let running = Arc::new(AtomicBool::new(true));
-            let spec_child = spawn_audio_spectrum_monitor(self.target_ip.clone(), running.clone());
-            (self.spawn_audio(), spec_child, Some(running))
-        } else {
-            (None, None, None)
-        };
-
-        Ok(StreamerHandle::Composite {
-            video: Box::new(video_handle),
-            audio: audio_child,
-            audio_spectrum: spectrum_child,
-            audio_running,
-        })
+        Ok(video_handle)
     }
 
     fn spawn_gstreamer(&self) -> io::Result<Child> {
@@ -563,16 +446,97 @@ fn fft_512(real: &mut [f32; 512], imag: &mut [f32; 512]) {
     }
 }
 
-pub fn spawn_audio_spectrum_monitor(target_ip: String, running: Arc<AtomicBool>) -> Option<Child> {
-    let mut child = Command::new("parec")
-        .args(["--device=Raspberry_Pi_HDMI_Audio.monitor", "--rate=48000", "--channels=2", "--format=s16le", "--raw"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+pub fn ensure_audio_sink_exists() {
+    let exists = Command::new("pactl")
+        .args(["list", "sinks", "short"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("Raspberry_Pi_HDMI_Audio"))
+        .unwrap_or(false);
 
-    let mut stdout = child.stdout.take()?;
+    if !exists {
+        let _ = Command::new("pactl")
+            .args([
+                "load-module",
+                "module-null-sink",
+                "sink_name=Raspberry_Pi_HDMI_Audio",
+                "sink_properties=device.description=Raspberry_Pi_HDMI_Audio",
+            ])
+            .output();
+    }
+}
 
+pub fn spawn_opus_audio_streamer(
+    target_ip: String,
+    audio_port: u16,
+    running: Arc<AtomicBool>,
+) -> thread::JoinHandle<()> {
+    thread::Builder::new()
+        .name("audio-opus-tx".to_string())
+        .spawn(move || {
+            while running.load(Ordering::Relaxed) {
+                ensure_audio_sink_exists();
+
+                println!(
+                    "\x1b[1;34m[*] Starting low-latency Opus audio streamer to {}:{} (source: Raspberry_Pi_HDMI_Audio.monitor)...\x1b[0m",
+                    target_ip, audio_port
+                );
+
+                let mut child = match Command::new("gst-launch-1.0")
+                    .arg("-q")
+                    .arg("pulsesrc")
+                    .arg("device=Raspberry_Pi_HDMI_Audio.monitor")
+                    .arg("do-timestamp=true")
+                    .arg("!")
+                    .arg("audioconvert")
+                    .arg("!")
+                    .arg("audioresample")
+                    .arg("!")
+                    .arg("audio/x-raw,rate=48000,channels=2")
+                    .arg("!")
+                    .arg("opusenc")
+                    .arg("bitrate=96000")
+                    .arg("frame-size=10")
+                    .arg("complexity=3")
+                    .arg("!")
+                    .arg("rtpopuspay")
+                    .arg("pt=96")
+                    .arg("!")
+                    .arg("udpsink")
+                    .arg(format!("host={}", target_ip))
+                    .arg(format!("port={}", audio_port))
+                    .arg("sync=false")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("\x1b[1;33m[!] Failed to spawn audio streamer: {}. Retrying in 1s...\x1b[0m", e);
+                        thread::sleep(Duration::from_secs(1));
+                        continue;
+                    }
+                };
+
+                while running.load(Ordering::Relaxed) {
+                    match child.try_wait() {
+                        Ok(Some(_status)) => break,
+                        Ok(None) => thread::sleep(Duration::from_millis(500)),
+                        Err(_) => break,
+                    }
+                }
+
+                let _ = child.kill();
+                let _ = child.wait();
+                thread::sleep(Duration::from_millis(500));
+            }
+        })
+        .expect("Failed to spawn audio streamer thread")
+}
+
+pub fn spawn_audio_spectrum_monitor(
+    target_ip: String,
+    running: Arc<AtomicBool>,
+) -> thread::JoinHandle<()> {
     thread::Builder::new()
         .name("audio-spectrum-tx".to_string())
         .spawn(move || {
@@ -587,50 +551,86 @@ pub fn spawn_audio_spectrum_monitor(target_ip: String, running: Arc<AtomicBool>)
             let mut packet = [0u8; 25];
 
             while running.load(Ordering::Relaxed) {
-                if stdout.read_exact(&mut raw_buf).is_err() {
-                    thread::sleep(Duration::from_millis(30));
-                    continue;
-                }
+                ensure_audio_sink_exists();
 
-                let mut real = [0.0f32; 512];
-                let mut imag = [0.0f32; 512];
-                let mut sum_sq = 0.0f64;
-
-                for i in 0..512 {
-                    let l = i16::from_le_bytes([raw_buf[i * 4], raw_buf[i * 4 + 1]]) as f32 / 32768.0;
-                    let r = i16::from_le_bytes([raw_buf[i * 4 + 2], raw_buf[i * 4 + 3]]) as f32 / 32768.0;
-                    let mono = (l + r) * 0.5;
-                    // Hann window to prevent spectral leakage
-                    let w = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / 512.0).cos());
-                    real[i] = mono * w;
-                    sum_sq += (mono * mono) as f64;
-                }
-
-                let rms = (sum_sq / 512.0).sqrt() as f32;
-                let rms_db = if rms > 1e-4 { 20.0 * rms.log10() } else { -90.0 };
-                let rms_byte = ((rms_db + 60.0).clamp(0.0, 60.0) / 60.0 * 255.0) as u8;
-
-                fft_512(&mut real, &mut imag);
-
-                for (idx, &(start_k, end_k)) in BAND_RANGES.iter().enumerate() {
-                    let mut mag_sum = 0.0f32;
-                    let count = (end_k - start_k).max(1);
-                    for k in start_k..end_k {
-                        let mag = (real[k] * real[k] + imag[k] * imag[k]).sqrt();
-                        mag_sum += mag;
+                let mut child = match Command::new("parec")
+                    .args([
+                        "--device=Raspberry_Pi_HDMI_Audio.monitor",
+                        "--rate=48000",
+                        "--channels=2",
+                        "--format=s16le",
+                        "--raw",
+                    ])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::null())
+                    .spawn()
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("\x1b[1;33m[!] Failed to spawn parec: {}. Retrying in 1s...\x1b[0m", e);
+                        thread::sleep(Duration::from_secs(1));
+                        continue;
                     }
-                    let avg_mag = mag_sum / count as f32;
-                    let normalized = (avg_mag * 4.0).clamp(0.0, 1.0);
-                    packet[idx] = (normalized * 255.0) as u8;
-                }
-                packet[24] = rms_byte;
+                };
 
-                let _ = socket.send_to(&packet, &dest_addr);
-                thread::sleep(Duration::from_millis(20)); // ~50 FPS spectrum refresh
+                let mut stdout = match child.stdout.take() {
+                    Some(s) => s,
+                    None => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        thread::sleep(Duration::from_millis(500));
+                        continue;
+                    }
+                };
+
+                while running.load(Ordering::Relaxed) {
+                    if stdout.read_exact(&mut raw_buf).is_err() {
+                        // EOF or pipe broken - break to restart parec
+                        break;
+                    }
+
+                    let mut real = [0.0f32; 512];
+                    let mut imag = [0.0f32; 512];
+                    let mut sum_sq = 0.0f64;
+
+                    for i in 0..512 {
+                        let l = i16::from_le_bytes([raw_buf[i * 4], raw_buf[i * 4 + 1]]) as f32 / 32768.0;
+                        let r = i16::from_le_bytes([raw_buf[i * 4 + 2], raw_buf[i * 4 + 3]]) as f32 / 32768.0;
+                        let mono = (l + r) * 0.5;
+                        // Hann window to prevent spectral leakage
+                        let w = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / 512.0).cos());
+                        real[i] = mono * w;
+                        sum_sq += (mono * mono) as f64;
+                    }
+
+                    let rms = (sum_sq / 512.0).sqrt() as f32;
+                    let rms_db = if rms > 1e-4 { 20.0 * rms.log10() } else { -90.0 };
+                    let rms_byte = ((rms_db + 60.0).clamp(0.0, 60.0) / 60.0 * 255.0) as u8;
+
+                    fft_512(&mut real, &mut imag);
+
+                    for (idx, &(start_k, end_k)) in BAND_RANGES.iter().enumerate() {
+                        let mut mag_sum = 0.0f32;
+                        let count = (end_k - start_k).max(1);
+                        for k in start_k..end_k {
+                            let mag = (real[k] * real[k] + imag[k] * imag[k]).sqrt();
+                            mag_sum += mag;
+                        }
+                        let avg_mag = mag_sum / count as f32;
+                        let normalized = (avg_mag * 4.0).clamp(0.0, 1.0);
+                        packet[idx] = (normalized * 255.0) as u8;
+                    }
+                    packet[24] = rms_byte;
+
+                    let _ = socket.send_to(&packet, &dest_addr);
+                    thread::sleep(Duration::from_millis(20)); // ~50 FPS spectrum refresh
+                }
+
+                let _ = child.kill();
+                let _ = child.wait();
+                thread::sleep(Duration::from_millis(300));
             }
         })
-        .ok()?;
-
-    Some(child)
+        .expect("Failed to spawn audio spectrum thread")
 }
 

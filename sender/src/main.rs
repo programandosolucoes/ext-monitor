@@ -137,10 +137,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;34m[*] Encoder API:\x1b[0m {:?}", cfg.encoder);
     println!("\x1b[1;34m[*] Stream Engine:\x1b[0m {}", cfg.engine.name());
     println!("\x1b[1;34m[*] Capture Engine:\x1b[0m {}", cfg.capture.name());
+    let audio_running = Arc::new(AtomicBool::new(cfg.audio));
     if cfg.audio {
-        println!("\x1b[1;34m[*] Audio Channel:\x1b[0m Enabled (UDP RTP Opus {}:{})", cfg.target_ip, cfg.audio_port);
+        println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Enabled (UDP RTP Opus {}:{}, Realtime Spectrum: 5006)", cfg.target_ip, cfg.audio_port);
+        let _ = pipeline::spawn_audio_spectrum_monitor(cfg.target_ip.clone(), audio_running.clone());
+        let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, audio_running.clone());
     } else {
-        println!("\x1b[1;33m[*] Audio Channel:\x1b[0m Disabled (--no-audio)");
+        println!("\x1b[1;33m[*] Audio Subsystem:\x1b[0m Disabled (--no-audio)");
     }
 
     let mut monitor_to_record = if cfg.mode == "clone" {
@@ -312,7 +315,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("\x1b[1;35m[*] Web Command: Áudio {} -> {}\x1b[0m", cfg.audio, a);
                             cfg.audio = a;
                             pipeline_builder.audio = a;
-                            restart_pipeline = true;
+                            audio_running.store(a, Ordering::SeqCst);
+                            if a {
+                                let _ = pipeline::spawn_audio_spectrum_monitor(cfg.target_ip.clone(), audio_running.clone());
+                                let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, audio_running.clone());
+                            }
                         }
                     }
                     ControlAction::TriggerHud => {

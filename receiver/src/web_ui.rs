@@ -3271,6 +3271,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         let liveRmsDb = -60.0;
         let liveAudioActive = false;
         let liveVideoActive = false;
+        let smoothBars = new Array(24).fill(0.04);
+        let smoothRms = -60.0;
 
         function initAudioVisualizerCanvas() {
             const canvas = document.getElementById('audioVisualizerCanvas');
@@ -3303,15 +3305,16 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 const startX = 16;
                 const baselineY = h - 22;
 
-                // Draw 24 Realtime Spectrum Bars
+                // Draw 24 Realtime Spectrum Bars with smooth 60 FPS physics
                 for (let i = 0; i < numBars; i++) {
                     const x = startX + i * (barWidth + barSpacing);
-                    let val = liveAudioBars[i] || 0.04;
+                    let targetVal = liveAudioBars[i] || 0.04;
                     if (!liveAudioActive) {
                         // Subtle ambient breathing idle wave
-                        val = 0.03 + Math.sin(now * 0.003 + i * 0.35) * 0.015;
+                        targetVal = 0.03 + Math.sin(now * 0.003 + i * 0.35) * 0.015;
                     }
-                    val = Math.max(0.02, Math.min(1.0, val));
+                    smoothBars[i] += (targetVal - smoothBars[i]) * 0.35;
+                    let val = Math.max(0.02, Math.min(1.0, smoothBars[i]));
                     const barH = Math.max(3, Math.floor(val * (baselineY - 14)));
                     const y = baselineY - barH;
 
@@ -3331,9 +3334,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                     }
 
                     // Peak drop marker
-                    let peak = liveAudioPeaks[i] || val;
-                    if (!liveAudioActive) peak = val;
-                    const peakY = Math.max(8, baselineY - Math.floor(peak * (baselineY - 14)));
+                    let targetPeak = liveAudioPeaks[i] || targetVal;
+                    if (!liveAudioActive) targetPeak = targetVal;
+                    const peakY = Math.max(8, baselineY - Math.floor(targetPeak * (baselineY - 14)));
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(x, peakY - 2, barWidth, 2);
                 }
@@ -3357,8 +3360,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 ctx.fillRect(vuX, vuY, chWidth, vuHeight);
                 ctx.fillRect(vuX + chWidth + 6, vuY, chWidth, vuHeight);
 
-                // Fill level normalized from RMS dB (-60 to 0)
-                const normDb = liveAudioActive ? Math.max(0.05, Math.min(1.0, (liveRmsDb + 60.0) / 60.0)) : 0.05;
+                // Fill level normalized from RMS dB (-60 to 0) with smooth damping
+                smoothRms += (liveRmsDb - smoothRms) * 0.35;
+                const normDb = liveAudioActive ? Math.max(0.05, Math.min(1.0, (smoothRms + 60.0) / 60.0)) : 0.05;
                 const fillH = Math.floor(normDb * vuHeight);
 
                 const vuGrad = ctx.createLinearGradient(0, vuY + vuHeight, 0, vuY);
@@ -3779,6 +3783,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         pollNetworkStatus();
         setInterval(pollTelemetry, 2000);
         setInterval(pollNetworkStatus, 3500);
+        setInterval(pollMediaStatus, 250);
     </script>
 </body>
 </html>
