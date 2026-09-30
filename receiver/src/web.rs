@@ -355,7 +355,8 @@ fn handle_http_client(
             let spec_arc = crate::media_renderer::get_audio_spectrum();
             let (bands, peaks, rms_db, is_audio_active) = {
                 let s = spec_arc.lock().unwrap();
-                (s.bands, s.peaks, s.rms_db, s.is_active)
+                let active = s.is_active && s.last_update.elapsed() < Duration::from_millis(800);
+                (s.bands, s.peaks, s.rms_db, active)
             };
             let is_video_active = pipeline_mgr.current_kind().is_some();
             let bars_json: Vec<String> = bands.iter().map(|b| format!("{:.2}", b)).collect();

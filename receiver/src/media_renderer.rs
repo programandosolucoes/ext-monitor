@@ -302,41 +302,42 @@ impl VisualizerEngine {
                         continue;
                     }
 
-                    // 2. Audio Spectrum Telemetry Evaluation
+                    // 2. Audio Spectrum Telemetry Evaluation (800ms silence/inactivity cutoff)
                     let (is_audio_active, bands, peaks, rms_db) = {
                         let mut s = spec_arc.lock().unwrap();
-                        let active = s.is_active && s.last_update.elapsed() < Duration::from_millis(1500);
+                        let active = s.is_active && s.last_update.elapsed() < Duration::from_millis(800);
                         if !active {
                             s.is_active = false;
-                            // Smooth decay of bars towards zero
                             for i in 0..24 {
-                                s.bands[i] *= 0.85;
-                                s.peaks[i] = (s.peaks[i] - 0.02).max(0.0);
+                                s.bands[i] *= 0.8;
+                                s.peaks[i] = (s.peaks[i] - 0.03).max(0.0);
                             }
                         }
-                        (active || s.bands.iter().any(|&b| b > 0.02), s.bands, s.peaks, s.rms_db)
+                        (active, s.bands, s.peaks, s.rms_db)
                     };
 
                     let (vis_enabled, title, artist, album) = {
                         let mut st = state_arc.lock().unwrap();
-                        if !is_audio_active && st.state == "playing" && st.source == "pc_audio" {
+                        if !is_audio_active && st.source == "pc_audio" {
                             st.state = "idle".to_string();
                         }
+                        let should_render = st.visualizer_enabled && is_audio_active;
                         (
-                            st.visualizer_enabled && (st.state == "playing" || is_audio_active),
+                            should_render,
                             st.title.clone(),
                             st.artist.clone(),
                             st.album.clone(),
                         )
                     };
 
-                    // 3. If audio has stopped and visualizer was drawing, restore Splash screen
+                    // 3. If audio has stopped and visualizer was drawing, restore Splash screen immediately
                     if !vis_enabled {
                         if was_drawing {
+                            println!("\x1b[1;33m[visualizer]\x1b[0m Audio stopped/silenced. Restoring Ready Splash screen...");
                             crate::display::SplashEngine::show_ready();
                             was_drawing = false;
                         }
-                        thread::sleep(Duration::from_millis(150));
+                        thread::sleep(Duration::from_millis(100));
                         continue;
                     }
 

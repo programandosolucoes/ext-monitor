@@ -583,6 +583,8 @@ pub fn spawn_audio_spectrum_monitor(
                     }
                 };
 
+                let mut silence_frames: u32 = 0;
+
                 while running.load(Ordering::Relaxed) {
                     if stdout.read_exact(&mut raw_buf).is_err() {
                         // EOF or pipe broken - break to restart parec
@@ -622,7 +624,19 @@ pub fn spawn_audio_spectrum_monitor(
                     }
                     packet[24] = rms_byte;
 
-                    let _ = socket.send_to(&packet, &dest_addr);
+                    let is_silence = rms_db < -55.0 && packet[..24].iter().all(|&b| b < 6);
+                    if is_silence {
+                        silence_frames = silence_frames.saturating_add(1);
+                    } else {
+                        silence_frames = 0;
+                    }
+
+                    // Send up to 3 frames of silence to notify receiver of silence transition,
+                    // then suppress UDP packets until active audio resumes (zero packets during silence)
+                    if silence_frames <= 3 {
+                        let _ = socket.send_to(&packet, &dest_addr);
+                    }
+
                     thread::sleep(Duration::from_millis(20)); // ~50 FPS spectrum refresh
                 }
 
