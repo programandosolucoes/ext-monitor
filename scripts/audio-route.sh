@@ -2,7 +2,7 @@
 # ==============================================================================
 # Gerenciador de Roteamento de Áudio Híbrido - Ext-Monitor
 # Permite alternar saída de som entre Headset Local e HDMI da TV (Raspberry Pi)
-# Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Autor: Carlos Alberto <carlosalberto4ti@gmail.com>
 # ==============================================================================
 
 set -euo pipefail

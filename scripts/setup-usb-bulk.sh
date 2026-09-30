@@ -4,7 +4,7 @@
 # Enables direct USB Bulk endpoint streaming bypassing TCP/IP and UDP.
 #
 # License: MIT
-# Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 set -e
 

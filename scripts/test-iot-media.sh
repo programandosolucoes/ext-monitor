@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Testador e Validador do IoT Media Renderer & Visualizador HDMI - Ext-Monitor
-# Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Autor: Carlos Alberto <carlosalberto4ti@gmail.com>
 # ==============================================================================
 
 set -euo pipefail

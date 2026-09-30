@@ -2,7 +2,7 @@
 # ==============================================================================
 # Suíte de Benchmark Automatizada Multimodal - Ext-Monitor
 # Avalia Latência, FPS, Clocks de Subhardware (H.264/VPU/ARM) e Consumo Elétrico
-# Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Autor: Carlos Alberto <carlosalberto4ti@gmail.com>
 # ==============================================================================
 
 import os

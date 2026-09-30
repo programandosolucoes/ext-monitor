@@ -2,7 +2,7 @@
 
 *Data: 2026-09-29*  
 *Status: Aprovado em Produção e Integrado ao Hardware do Pi Zero W*  
-*Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>*  
+*Autor: Carlos Alberto <carlosalberto4ti@gmail.com>*  
 
 ---
 

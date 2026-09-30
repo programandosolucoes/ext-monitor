@@ -7,7 +7,7 @@
 # without needing physical hardware or a micro-SD card.
 #
 # License: MIT
-# Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 # ==============================================================================
 
 set -e

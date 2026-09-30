@@ -2,7 +2,7 @@
 
 **Projeto:** `ext-monitor` — Monitor Secundário USB de Ultra-Baixa Latência  
 **Plataforma Alvo:** Raspberry Pi Zero W / Zero 2 W / Raspberry Pi 4 / PC Linux & Windows  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Data:** Setembro de 2026  
 **Status do Projeto:** Estável, Pronto para Produção, Compilado em Rust Nativo Puro  
 

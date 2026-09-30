@@ -6,7 +6,7 @@
 //! 3. CPU Fallback: Pure in-process H.264 encoder (via Cisco OpenH264).
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use openh264::encoder::{Encoder, EncoderConfig};
 use openh264::formats::{BgraSliceU8, YUVBuffer};

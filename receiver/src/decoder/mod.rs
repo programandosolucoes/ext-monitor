@@ -1,7 +1,7 @@
 //! Hardware decoder module
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 pub mod color_convert;
 pub mod v4l2_m2m;

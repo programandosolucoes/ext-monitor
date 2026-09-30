@@ -4,7 +4,7 @@ monitor-latency.py - Monitoramento Contínuo de Latência e Telemetria em Todas 
 Pipeline: Mutter/PipeWire -> VA-API AMD -> USB OTG Gadget -> VideoCore IV VPU -> KMS Scanout
 
 Licença: MIT
-Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+Autor: Carlos Alberto <carlosalberto4ti@gmail.com>
 """
 
 import sys

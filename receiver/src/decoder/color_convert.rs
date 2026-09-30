@@ -5,7 +5,7 @@
 //! Framebuffer RGB565 Little-Endian format.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 /// Converts a planar YUV420 (I420 / YU12) buffer to RGB565 in-place into `out`.
 ///

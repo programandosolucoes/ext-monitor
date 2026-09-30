@@ -2,7 +2,7 @@
 
 **Projeto:** `ext-monitor` — Monitor Secundário USB de Ultra-Baixa Latência  
 **Plataforma Alvo:** Raspberry Pi Zero W (BCM2835 ARMv6 @ 1.0 GHz, GPU VideoCore IV `vc4-drm`) / Host Linux  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Data:** Setembro de 2026  
 **Status:** Implementado em Rust Puro, Validado em Hardware Real (Zero Warnings, 60 FPS Real-Time)  
 

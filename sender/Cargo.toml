@@ -3,7 +3,7 @@ name = "ext-sender"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-authors = ["Carlos Alberto <psncarlosalberto4ti@gmail.com>"]
+authors = ["Carlos Alberto <carlosalberto4ti@gmail.com>"]
 description = "GPU Hardware-Accelerated Virtual Display Sender for Linux Wayland"
 
 [dependencies]

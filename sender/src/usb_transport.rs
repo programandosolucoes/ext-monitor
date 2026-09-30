@@ -5,7 +5,7 @@
 //! Completely bypasses kernel network sockets, IP, UDP, and ARP tables.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use rusb::{Context, DeviceHandle, UsbContext};
 use std::io::Read;

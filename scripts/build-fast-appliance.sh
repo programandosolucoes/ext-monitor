@@ -9,7 +9,7 @@
 # 4. FAT32 single partition (100% RAM initramfs boot in <2s, 0% SD corruption risk)
 #
 # License: MIT
-# Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 # ==============================================================================
 
 set -e

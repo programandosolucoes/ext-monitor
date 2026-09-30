@@ -5,7 +5,7 @@
 //! or system default audio sink.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::process::{Child, Command, Stdio};
 

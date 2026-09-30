@@ -15,7 +15,7 @@
 #   switch-mode.sh status      # Display status of all 3 subsystems
 #
 # License: MIT
-# Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 set -e
 

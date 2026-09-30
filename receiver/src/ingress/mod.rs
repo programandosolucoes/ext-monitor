@@ -1,7 +1,7 @@
 //! Ingress transport workers module
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 pub mod miracast;
 pub mod udp;

@@ -4,7 +4,7 @@
 //! Parses 188-byte TS packets and PES headers without allocating intermediate buffers.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::stream::AnnexBAssembler;
 

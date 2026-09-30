@@ -2,7 +2,9 @@
 ## Arquitetura, Engenharia Reversa de Silício e Implementação de um Monitor Secundário de 60 FPS com Latência Sub-15ms em Hardware de Baixo Custo
 
 **Autor:** Carlos Alberto  
-**E-mail:** [psncarlosalberto4ti@gmail.com](mailto:psncarlosalberto4ti@gmail.com)  
+**E-mail:** [carlosalberto4ti@gmail.com](mailto:carlosalberto4ti@gmail.com)  
+**LinkedIn:** [linkedin.com/in/carlosalberto4ti](https://www.linkedin.com/in/carlosalberto4ti)  
+**Portfólio & Blog:** [carloslopes.programandosolucoes.com.br](https://carloslopes.programandosolucoes.com.br)  
 **Versão do Projeto:** 2.3.0-final  
 **Data:** Setembro de 2026  
 **Repositório:** `ext-monitor`  
@@ -600,4 +602,4 @@ Qualquer computador antigo rodando Linux pode se transformar em um receptor de u
 ---
 
 *Fim do Livro do Ext-Monitor — Versão 2.3.0-final.*  
-*Projeto de Engenharia de Sistemas Embarcados por Carlos Alberto <psncarlosalberto4ti@gmail.com>.*
+*Projeto de Engenharia de Sistemas Embarcados por Carlos Alberto <carlosalberto4ti@gmail.com>.*

@@ -1,7 +1,7 @@
 # Blueprint 03: Transmissão de Pacotes, Fragmentação NALU e o Algoritmo Drop-on-Late
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Arquivos de Referência:** `sender/src/pipeline.rs`, `receiver/src/stream/rtp.rs`, `receiver/src/stream/annexb.rs`, `receiver/src/ingress/udp.rs`, `receiver/src/ingress/usb.rs`  
 **Data:** Setembro de 2026 (Atualizado com Enquadramento de Access Units RFC 6184 / RFC 4571)  
 

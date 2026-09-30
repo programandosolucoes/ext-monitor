@@ -1,7 +1,7 @@
 # Blueprint 02: Arquitetura Transmissor-Receptor e Comparativo Crítico com o Projeto GUD
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Arquivos de Referência:** `sender/src/main.rs`, `sender/src/pipeline.rs`, `sender/src/screencast.rs`, `receiver/src/decoder/v4l2_m2m.rs`, `receiver/src/stream/rtp.rs`, `receiver/src/display/framebuffer.rs`  
 **Data:** Setembro de 2026 (Atualizado com Refatoração Modular e Enquadramento AU)  
 

@@ -14,7 +14,7 @@
 //! - Interactive Reboot Modal & Hot-Apply commit actions
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 <html lang="en">

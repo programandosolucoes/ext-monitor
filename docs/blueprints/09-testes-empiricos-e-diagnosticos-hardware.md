@@ -1,7 +1,7 @@
 # Blueprint 09: Testes Empíricos em Hardware e Diagnósticos de Boot
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Ambiente de Testes:** Raspberry Pi Zero v1.3 Monocore (ARMv6 1.0 GHz, 512MB RAM, VideoCore IV VPU @ 500MHz)  
 **Data:** Setembro de 2026  
 

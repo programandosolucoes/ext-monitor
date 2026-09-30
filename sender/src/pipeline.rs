@@ -4,7 +4,7 @@
 //! and native Rust streaming engines following the Builder Pattern.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::config::{CaptureEngine, ColorProfile, EncoderApi, StreamEngine};
 use crate::kms::KmsOutputInfo;

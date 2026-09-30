@@ -8,7 +8,7 @@
 //! - Chinese (ZH - 中文)
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {

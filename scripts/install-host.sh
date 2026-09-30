@@ -10,7 +10,7 @@
 # 5. Helper binaries: ext-monitor-start and ext-monitor-connect
 #
 # License: MIT
-# Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 # ==============================================================================
 set -e
 

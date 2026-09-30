@@ -9,7 +9,7 @@
 //! - `ep2`: Bulk IN Endpoint (Pi Zero -> Host) for telemetry and flow control.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::pipeline::{PipelineKind, PipelineManager};
 use std::fs::{File, OpenOptions};

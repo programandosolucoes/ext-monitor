@@ -4,7 +4,7 @@
 //! (bcm2835-codec hardware VideoCore IV video decoder) on 32-bit ARM (ARMv6/v7).
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 // ARM 32-bit ioctl constants (verified against Linux kernel videodev2.h)
 pub const VIDIOC_ENUM_FMT: libc::c_ulong = 0xC0405602;

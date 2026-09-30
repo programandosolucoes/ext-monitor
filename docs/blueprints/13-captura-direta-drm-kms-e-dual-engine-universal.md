@@ -1,7 +1,7 @@
 # Blueprint 13: Captura Direta no Kernel Linux DRM/KMS e Arquitetura Dual-Engine Universal
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Arquivos de Referência:** `sender/src/kms.rs`, `sender/src/screencast.rs`, `sender/src/pipeline.rs`, `sender/src/config.rs`  
 **Data:** Setembro de 2026  
 

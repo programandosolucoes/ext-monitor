@@ -11,7 +11,7 @@
 //! stable GPU hardware-accelerated video decoding and zero-CPU framebuffer commits.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::fs;
 use std::path::Path;

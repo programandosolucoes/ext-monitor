@@ -11,7 +11,7 @@
 //! 3. `UsbBulkPipe`: Raw H.264 NAL stream from USB FunctionFS endpoint (Mode 2).
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::drm::ensure_drm_hdmi_connected;
 use crate::native_v4l2::NativeV4l2Decoder;

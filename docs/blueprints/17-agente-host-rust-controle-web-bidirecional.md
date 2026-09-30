@@ -2,7 +2,7 @@
 
 *Data: 2026-09-29*  
 *Status: Aprovado em Produção — Integrado ao Painel Web do Raspberry Pi (192.168.7.2:8080)*  
-*Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>*  
+*Autor: Carlos Alberto <carlosalberto4ti@gmail.com>*  
 
 ---
 

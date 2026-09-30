@@ -8,7 +8,7 @@
 //! are handled natively in pure Rust.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::pipeline::{PipelineKind, PipelineManager};
 use std::collections::HashMap;

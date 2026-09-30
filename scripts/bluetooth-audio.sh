@@ -2,7 +2,7 @@
 # ==============================================================================
 # Gerenciador de Áudio Bluetooth A2DP Sink - Ext-Monitor
 # Transforma o Raspberry Pi Zero W em receptor de áudio Bluetooth para TV HDMI
-# Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Autor: Carlos Alberto <carlosalberto4ti@gmail.com>
 # ==============================================================================
 
 set -euo pipefail

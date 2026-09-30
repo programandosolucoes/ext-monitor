@@ -8,7 +8,7 @@
 //! Distinguishes between internal laptop panels (eDP/LVDS) and external extended displays (HDMI/DP).
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use drm::control::Device as ControlDevice;
 use drm::Device;

@@ -1,7 +1,7 @@
 # Blueprint 14: Subsistema de Áudio HDMI Digital, Codec Opus de Baixa Latência e ALSA
 
 **Status:** Concluído / Em Produção  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Data:** Setembro de 2026  
 **Tecnologias:** Linux ALSA (`vc4-hdmi` / `snd-soc-hdmi-codec`), Opus Codec (48kHz Estéreo), PipeWire / PulseAudio, RTP UDP Porta 5004, GStreamer, QEMU ARMv6  
 

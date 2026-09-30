@@ -2,7 +2,7 @@
 
 *Data: 2026-09-29*  
 *Status: Aprovado em Produção e Validado com YouTube 60 FPS Sem Interrupção*  
-*Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>*  
+*Autor: Carlos Alberto <carlosalberto4ti@gmail.com>*  
 
 ---
 

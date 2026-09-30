@@ -12,7 +12,7 @@
 //! 3. Transmits directly over native Rust `std::net::UdpSocket` or USB Bulk pipe.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::fs::OpenOptions;
 use std::io::Write;

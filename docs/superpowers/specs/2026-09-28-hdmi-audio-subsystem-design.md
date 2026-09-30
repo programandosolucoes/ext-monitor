@@ -1,7 +1,7 @@
 # Especificação Técnica: Sub дву Sub-Sistema de Áudio HDMI de Baixa Latência (ext-audio)
 
 **Projeto:** ext-monitor  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Data:** 2026-09-28  
 **Status:** Proposto / Planejamento  
 

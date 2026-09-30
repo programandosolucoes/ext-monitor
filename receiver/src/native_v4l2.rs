@@ -4,7 +4,7 @@
 //! `ingress`, `decoder`, `stream`, and `display` subsystems.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::decoder::V4l2DecoderSession;
 use crate::ingress::{MiracastIngress, UdpRtpIngress, UsbBulkIngress};

@@ -4,7 +4,7 @@ test-wfd-client.py - Emulador de Cliente Windows 10/11 Miracast (Win + K)
 Testa o handshake completo M1 a M7 e o canal de streaming RTSP/RTP com o Pi Zero.
 
 Licença: MIT
-Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+Autor: Carlos Alberto <carlosalberto4ti@gmail.com>
 """
 
 import sys

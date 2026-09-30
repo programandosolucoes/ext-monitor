@@ -4,7 +4,7 @@
 //! embedded web dashboard or CLI triggers, returning strongly typed control actions.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::config::{CaptureEngine, ColorProfile};
 use std::net::UdpSocket;

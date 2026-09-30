@@ -3,7 +3,7 @@
 //! Follows Clean Code and Single Responsibility Principle (SRP).
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::i18n::{self, Language};
 use std::process::Command;

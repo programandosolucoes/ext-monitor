@@ -9,7 +9,7 @@
 //! Eliminates external BusyBox udhcpd, lease files, and external daemons.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
 use std::os::unix::io::AsRawFd;

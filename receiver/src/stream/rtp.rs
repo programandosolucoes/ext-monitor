@@ -12,7 +12,7 @@
 //! 3. Zero latency / zero waiting for subsequent frames.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 pub struct RtpDepayloader {
     fu_accumulator: Vec<u8>,

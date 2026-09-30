@@ -5,7 +5,7 @@
 //! - Engine 2: GNOME Mutter D-Bus ScreenCast + PipeWire Graph Linking
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::env;
 use std::os::unix::io::RawFd;

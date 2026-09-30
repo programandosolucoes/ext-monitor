@@ -4,7 +4,7 @@
 //! monitors and acquire PipeWire node IDs cleanly with RAII session cleanup.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::collections::HashMap;
 use std::error::Error;

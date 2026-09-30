@@ -14,7 +14,7 @@
 //!    - Automatically forces DRM HDMI status 'on' when no physical monitor is connected.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 mod decoder;
 mod display;

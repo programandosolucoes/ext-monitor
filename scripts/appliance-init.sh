@@ -10,7 +10,7 @@
 # 4. Pure Rust ext-receiver (Web Dashboard + V4L2 M2M hardware video decoder)
 #
 # License: MIT
-# Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+# Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 # ==============================================================================
 
 # Install busybox symlinks if missing

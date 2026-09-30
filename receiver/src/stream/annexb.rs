@@ -10,7 +10,7 @@
 //! 3. Static/idle frames flush automatically on timeout without waiting for future motion.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 pub struct AnnexBAssembler {
     accumulator: Vec<u8>,

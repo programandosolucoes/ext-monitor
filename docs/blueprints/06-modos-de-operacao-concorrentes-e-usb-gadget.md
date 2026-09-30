@@ -1,7 +1,7 @@
 # Blueprint 06: Modos Concorrentes de Operação e o Super-Gadget USB ConfigFS
 
 **Projeto:** `ext-monitor`  
-**Autor:** Carlos Alberto <psncarlosalberto4ti@gmail.com>  
+**Autor:** Carlos Alberto <carlosalberto4ti@gmail.com>  
 **Arquivos de Referência:** `build-appliance/initramfs/init`, `receiver/src/wfd.rs`, `receiver/src/usb_bulk.rs`, `sender/src/usb_transport.rs`, `receiver/src/web_ui.rs`  
 **Data:** Setembro de 2026  
 

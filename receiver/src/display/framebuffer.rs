@@ -4,7 +4,7 @@
 //! Configures console VT graphics mode to suppress console cursor and terminal text.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::fs::{File, OpenOptions};
 use std::io;

@@ -3,7 +3,7 @@
 //! Provides clean, decoupled parsers for Annex-B byte streams and RTP H.264 streams.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 pub mod annexb;
 pub mod rtp;

@@ -2,7 +2,7 @@
 
 *Data: 2026-09-29*  
 *Status: Implementado, Validado em Hardware Real e Congelado (v2.3.0)*  
-*Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>*  
+*Autor: Carlos Alberto <carlosalberto4ti@gmail.com>*  
 
 ---
 

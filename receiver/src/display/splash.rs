@@ -4,7 +4,7 @@
 //! Embeds compressed splash assets directly within the binary for zero external runtime dependencies.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::fs::OpenOptions;
 use std::io;

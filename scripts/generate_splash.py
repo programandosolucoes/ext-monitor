@@ -5,7 +5,7 @@ Generates high-definition splash screens for:
 1. Loading / Boot ("Aguarde carregando...") in 4 languages
 2. Ready / Idle ("Pronto para Conexão - 4 Modos de Operação • IoT Media • Bluetooth A2DP") in 4 languages
 
-Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 """
 
 import os

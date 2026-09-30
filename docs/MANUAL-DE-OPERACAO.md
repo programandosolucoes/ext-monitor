@@ -1,7 +1,7 @@
 # Manual de Operação Definitivo: ext-monitor
 **Sistema de Segunda Tela HDMI via USB Hardware-Offloaded para Raspberry Pi Zero (BCM2835) e Host Linux/Windows**
 
-*Autor: Carlos Alberto ([psncarlosalberto4ti@gmail.com](mailto:psncarlosalberto4ti@gmail.com))*  
+*Autor: Carlos Alberto ([carlosalberto4ti@gmail.com](mailto:carlosalberto4ti@gmail.com) | [LinkedIn](https://www.linkedin.com/in/carlosalberto4ti) | [Blog](https://carloslopes.programandosolucoes.com.br))*  
 *Versão da Documentação: 2.0.0 (Clean Rust & KMS DRM DMA-BUF Zero-Copy)*  
 *Compatibilidade: Raspberry Pi Zero (v1.2, v1.3, W, Zero 2 W) | Ubuntu 24.04 / GNOME 46 Wayland | Windows 10/11*
 

@@ -7,7 +7,7 @@
 //! 4. Background metadata tracking for Bluetooth A2DP (AVRCP) and network audio.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::fs::OpenOptions;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};

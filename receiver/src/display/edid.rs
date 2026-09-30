@@ -4,7 +4,7 @@
 //! and decodes binary VESA EDID 1.3/1.4 structures without any external dependencies.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::fs;
 

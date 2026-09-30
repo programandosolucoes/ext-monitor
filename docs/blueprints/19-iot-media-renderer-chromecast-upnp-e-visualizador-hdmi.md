@@ -2,7 +2,7 @@
 
 *Data: 2026-09-29*  
 *Status: Concluído e Operacional na Release v2.3.0 (Congelado em 2026-09-29)*  
-*Autor: Carlos Alberto <psncarlosalberto4ti@gmail.com>*  
+*Autor: Carlos Alberto <carlosalberto4ti@gmail.com>*  
 
 ---
 

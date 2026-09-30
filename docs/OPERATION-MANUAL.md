@@ -1,7 +1,7 @@
 # Definitive Operation Manual: ext-monitor
 **GPU Hardware-Offloaded USB Secondary Display & Appliance Engine for Raspberry Pi Zero (BCM2835) and Linux/Windows Hosts**
 
-*Author: Carlos Alberto ([psncarlosalberto4ti@gmail.com](mailto:psncarlosalberto4ti@gmail.com))*  
+*Author: Carlos Alberto ([carlosalberto4ti@gmail.com](mailto:carlosalberto4ti@gmail.com) | [LinkedIn](https://www.linkedin.com/in/carlosalberto4ti) | [Blog](https://carloslopes.programandosolucoes.com.br))*  
 *Documentation Version: 2.3.0 (Clean Rust, KMS DRM DMA-BUF Zero-Copy, Real-Time Audio FFT & Zero-Reboot Architecture)*  
 *Target Hardware: Raspberry Pi Zero (v1.2, v1.3, W, Zero 2 W) | Linux (Ubuntu 24.04, Debian, Arch, Fedora / GNOME 46 Wayland) | Windows 10/11*
 

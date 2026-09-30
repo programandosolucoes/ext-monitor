@@ -4,7 +4,7 @@
 //! directly into raw RGB565 frames with hardware acceleration on Raspberry Pi.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::decoder::v4l2_types::*;
 use crate::display::KmsPlaneSink;

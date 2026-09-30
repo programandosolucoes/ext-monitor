@@ -277,4 +277,10 @@ sudo dd if=build-appliance/ext-monitor-pi0-appliance.img of=/dev/sdX bs=4M statu
 
 Distributed under the **MIT License**. See [LICENSE](LICENSE) for full details.
 
-**Author:** Carlos Alberto ([psncarlosalberto4ti@gmail.com](mailto:psncarlosalberto4ti@gmail.com))
+### Author & Contact
+* **Author:** Carlos Alberto
+* **E-mail:** [carlosalberto4ti@gmail.com](mailto:carlosalberto4ti@gmail.com)
+* **LinkedIn:** [linkedin.com/in/carlosalberto4ti](https://www.linkedin.com/in/carlosalberto4ti)
+* **Personal Blog & Portfolio:** [carloslopes.programandosolucoes.com.br](https://carloslopes.programandosolucoes.com.br)
+* **Website:** [programandosolucoes.com.br](https://programandosolucoes.com.br)
+

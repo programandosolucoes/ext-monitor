@@ -4,7 +4,7 @@
 //! for all Raspberry Pi Zero Extended Monitor receiver API endpoints.
 //!
 //! License: MIT
-//! Author: Carlos Alberto <psncarlosalberto4ti@gmail.com>
+//! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 pub const OPENAPI_JSON: &str = r##"{
 
@@ -15,7 +15,7 @@ pub const OPENAPI_JSON: &str = r##"{
     "version": "2.3.0",
     "contact": {
       "name": "Carlos Alberto",
-      "email": "psncarlosalberto4ti@gmail.com"
+      "email": "carlosalberto4ti@gmail.com"
     },
     "license": {
       "name": "MIT"
