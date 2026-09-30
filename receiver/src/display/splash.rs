@@ -59,7 +59,7 @@ fn decompress_gzip(gz: &[u8]) -> io::Result<Vec<u8>> {
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Decompression failed: {:?}", e)))
 }
 
-/// Directly copies RGB565 buffer into memory-mapped /dev/fb0
+/// Directly copies RGB565 buffer into memory-mapped /dev/fb0 and forces scanout re-attachment
 fn blit_to_framebuffer(buffer: &[u8]) {
     if buffer.len() < FB_SIZE {
         return;
@@ -72,13 +72,56 @@ fn blit_to_framebuffer(buffer: &[u8]) {
 
     let fd = file.as_raw_fd();
 
-    // 1. Force unblank
     const FBIOBLANK: libc::c_ulong = 0x4611;
-    unsafe {
-        libc::ioctl(fd, FBIOBLANK, 0 as libc::c_int);
+    const FBIOPAN_DISPLAY: libc::c_ulong = 0x4606;
+    const FBIOGET_VSCREENINFO: libc::c_ulong = 0x4600;
+    const FBIOPUT_VSCREENINFO: libc::c_ulong = 0x4601;
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct FbVarScreeninfo {
+        xres: u32,
+        yres: u32,
+        xres_virtual: u32,
+        yres_virtual: u32,
+        xoffset: u32,
+        yoffset: u32,
+        bits_per_pixel: u32,
+        grayscale: u32,
+        red: [u32; 4],
+        green: [u32; 4],
+        blue: [u32; 4],
+        transp: [u32; 4],
+        nonstd: u32,
+        activate: u32,
+        height: u32,
+        width: u32,
+        accel_flags: u32,
+        pixclock: u32,
+        left_margin: u32,
+        right_margin: u32,
+        upper_margin: u32,
+        lower_margin: u32,
+        hsync_len: u32,
+        vsync_len: u32,
+        sync: u32,
+        vmode: u32,
+        rotate: u32,
+        colorspace: u32,
+        reserved: [u32; 4],
     }
 
-    // 2. Memory map framebuffer
+    let mut vinfo = FbVarScreeninfo::default();
+    unsafe {
+        let _ = libc::ioctl(fd, FBIOBLANK, 0 as libc::c_int);
+        if libc::ioctl(fd, FBIOGET_VSCREENINFO, &mut vinfo) == 0 {
+            vinfo.activate = 0; // FB_ACTIVATE_NOW
+            let _ = libc::ioctl(fd, FBIOPUT_VSCREENINFO, &mut vinfo);
+            let _ = libc::ioctl(fd, FBIOPAN_DISPLAY, &mut vinfo);
+        }
+    }
+
+    // Memory map framebuffer
     let ptr = unsafe {
         libc::mmap(
             std::ptr::null_mut(),
@@ -97,5 +140,6 @@ fn blit_to_framebuffer(buffer: &[u8]) {
     unsafe {
         std::ptr::copy_nonoverlapping(buffer.as_ptr(), ptr, FB_SIZE);
         libc::munmap(ptr as *mut libc::c_void, FB_SIZE);
+        let _ = libc::ioctl(fd, FBIOPAN_DISPLAY, &mut vinfo);
     }
 }

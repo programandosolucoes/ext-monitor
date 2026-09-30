@@ -17,6 +17,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
 
 const DRM_IOCTL_SET_MASTER: libc::c_ulong = 0x641e;
+const DRM_IOCTL_DROP_MASTER: libc::c_ulong = 0x641f;
 const DRM_IOCTL_GEM_CLOSE: libc::c_ulong = 0x4008_6409;
 const DRM_IOCTL_PRIME_FD_TO_HANDLE: libc::c_ulong = 0xc00c_642e;
 const DRM_IOCTL_MODE_GETRESOURCES: libc::c_ulong = 0xc040_64a0;
@@ -378,6 +379,7 @@ impl Drop for KmsPlaneSink {
                 unsafe { libc::ioctl(self.fd, DRM_IOCTL_GEM_CLOSE, &mut gem); }
             }
         }
+        unsafe { libc::ioctl(self.fd, DRM_IOCTL_DROP_MASTER, 0); }
     }
 }
 
