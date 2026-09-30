@@ -406,11 +406,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     }
                                     pipeline_builder.usb_pipe_fd = current_usb_pipe_fd;
                                 }
-                                TransportKind::Network { .. } => {
+                                TransportKind::Network { ip, port } => {
                                     if let Some(fd) = current_usb_pipe_fd.take() {
                                         unsafe { libc::close(fd); }
                                     }
                                     pipeline_builder.usb_pipe_fd = None;
+                                    pipeline_builder.target_ip = ip.clone();
+                                    pipeline_builder.target_port = port;
                                 }
                             }
                             restart_pipeline = true;

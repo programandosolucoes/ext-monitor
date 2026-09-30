@@ -68,148 +68,123 @@ impl UsbBulkIngress {
 
         let mut total_bytes = 0u64;
         let mut last_log = std::time::Instant::now();
-
-        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(4);
-        let run_read = running.clone();
-        let read_handle = thread::spawn(move || {
-            let mut buffer = [0u8; 65536];
-            let mut pfd = libc::pollfd {
-                fd: read_fd,
-                events: libc::POLLIN,
-                revents: 0,
-            };
-
-            while run_read.load(Ordering::SeqCst) {
-                // Poll with 100ms timeout so thread checks run_read flag periodically and never deadlocks
-                let ret = unsafe { libc::poll(&mut pfd, 1, 100) };
-                if ret < 0 {
-                    let err = io::Error::last_os_error();
-                    if err.kind() == io::ErrorKind::Interrupted {
-                        continue;
-                    }
-                    break;
-                }
-                if ret == 0 {
-                    // Poll timeout (100ms): loop restarts and checks run_read.load()
-                    continue;
-                }
-                if (pfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL)) != 0 {
-                    break;
-                }
-                if (pfd.revents & libc::POLLIN) == 0 {
-                    continue;
-                }
-
-                let n = unsafe {
-                    libc::read(
-                        read_fd,
-                        buffer.as_mut_ptr() as *mut libc::c_void,
-                        buffer.len(),
-                    )
-                };
-
-                if n > 0 {
-                    let chunk = buffer[..n as usize].to_vec();
-                    if tx.send(chunk).is_err() {
-                        break;
-                    }
-                } else if n == 0 {
-                    // FunctionFS Bulk OUT endpoint returns 0 bytes on USB Zero-Length Packets (ZLP)
-                    // or momentary bus idle. This is NOT EOF.
-                    thread::sleep(Duration::from_millis(1));
-                    continue;
-                } else {
-                    let err = io::Error::last_os_error();
-                    if err.kind() == io::ErrorKind::Interrupted || err.kind() == io::ErrorKind::WouldBlock {
-                        thread::sleep(Duration::from_millis(1));
-                        continue;
-                    }
-                    // EBADF (closed by dec.stop()) or fatal error -> exit cleanly
-                    break;
-                }
-            }
-        });
-
         let mut last_packet_time = std::time::Instant::now();
         let mut splash_active = false;
 
+        let mut buffer = [0u8; 65536];
+        let mut pfd = libc::pollfd {
+            fd: read_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+
         while running.load(Ordering::SeqCst) {
-            match rx.recv_timeout(Duration::from_millis(5)) {
-                Ok(chunk_vec) => {
-                    let chunk = &chunk_vec[..];
-                    last_packet_time = std::time::Instant::now();
-                    if splash_active {
-                        splash_active = false;
-                    }
-
-                    match framing_mode {
-                        IngressFramingMode::AutoDetect | IngressFramingMode::AnnexB => {
-                            annexb_assembler.push(chunk, &mut completed_frames);
-                            for frame in &completed_frames {
-                                decoder.decode_chunk(frame, |frame_rgb565| {
-                                    display.render_frame(frame_rgb565);
-                                });
-                            }
-                            completed_frames.clear();
-                        }
-                        IngressFramingMode::Rfc4571 => {
-                            rfc_assembler.push(chunk, &mut rtp_depayloader, &mut completed_frames);
-                            for frame in &completed_frames {
-                                decoder.decode_chunk(frame, |frame_rgb565| {
-                                    display.render_frame(frame_rgb565);
-                                });
-                            }
-                            completed_frames.clear();
-                        }
-                    }
-
-                    total_bytes += chunk.len() as u64;
-                    if last_log.elapsed() >= Duration::from_secs(5) {
-                        let mb = (total_bytes as f64) / (1024.0 * 1024.0);
-                        println!(
-                            "\x1b[1;34m[usb-ingress]\x1b[0m Total received via USB Bulk: {:.2} MB",
-                            mb
-                        );
-                        last_log = std::time::Instant::now();
-                    }
+            // Poll with 20ms timeout so worker thread reacts quickly to shutdown / pause
+            let ret = unsafe { libc::poll(&mut pfd, 1, 20) };
+            if ret < 0 {
+                let err = io::Error::last_os_error();
+                if err.kind() == io::ErrorKind::Interrupted {
+                    continue;
                 }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    // USB endpoint idle: flush any assembled AU and ready decoded frames to screen immediately
-                    annexb_assembler.flush(&mut completed_frames);
-                    for frame in &completed_frames {
-                        decoder.decode_chunk(frame, |frame_rgb565| {
-                            display.render_frame(frame_rgb565);
-                        });
-                    }
-                    completed_frames.clear();
-                    decoder.drain_decoded_frames(|frame_rgb565| {
+                break;
+            }
+            if ret == 0 {
+                // Idle: flush any assembled AU and ready decoded frames to screen
+                annexb_assembler.flush(&mut completed_frames);
+                for frame in &completed_frames {
+                    decoder.decode_chunk(frame, |frame_rgb565| {
                         display.render_frame(frame_rgb565);
                     });
+                }
+                completed_frames.clear();
+                decoder.drain_decoded_frames(|frame_rgb565| {
+                    display.render_frame(frame_rgb565);
+                });
 
-                    // If stream was active and now idle for > 2 seconds: return to splash screen
-                    if !splash_active && total_bytes > 0 && last_packet_time.elapsed() >= Duration::from_secs(2) {
-                        println!("\x1b[1;33m[usb-ingress]\x1b[0m USB stream idle / disconnected -> Returning to Ready Splash Screen.");
-                        crate::display::SplashEngine::show_ready();
-                        splash_active = true;
+                if !splash_active && total_bytes > 0 && last_packet_time.elapsed() >= Duration::from_secs(2) {
+                    println!("\x1b[1;33m[usb-ingress]\x1b[0m USB stream idle / disconnected -> Returning to Ready Splash Screen.");
+                    crate::display::SplashEngine::show_ready();
+                    splash_active = true;
+                }
+                continue;
+            }
+
+            if (pfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL)) != 0 {
+                break;
+            }
+            if (pfd.revents & libc::POLLIN) == 0 {
+                continue;
+            }
+
+            let n = unsafe {
+                libc::read(
+                    read_fd,
+                    buffer.as_mut_ptr() as *mut libc::c_void,
+                    buffer.len(),
+                )
+            };
+
+            if n > 0 {
+                let chunk = &buffer[..n as usize];
+                last_packet_time = std::time::Instant::now();
+                if splash_active {
+                    splash_active = false;
+                }
+
+                match framing_mode {
+                    IngressFramingMode::AutoDetect | IngressFramingMode::AnnexB => {
+                        annexb_assembler.push(chunk, &mut completed_frames);
+                        for frame in &completed_frames {
+                            decoder.decode_chunk(frame, |frame_rgb565| {
+                                display.render_frame(frame_rgb565);
+                            });
+                        }
+                        completed_frames.clear();
+                    }
+                    IngressFramingMode::Rfc4571 => {
+                        rfc_assembler.push(chunk, &mut rtp_depayloader, &mut completed_frames);
+                        for frame in &completed_frames {
+                            decoder.decode_chunk(frame, |frame_rgb565| {
+                                display.render_frame(frame_rgb565);
+                            });
+                        }
+                        completed_frames.clear();
                     }
                 }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    annexb_assembler.flush(&mut completed_frames);
-                    for frame in &completed_frames {
-                        decoder.decode_chunk(frame, |frame_rgb565| {
-                            display.render_frame(frame_rgb565);
-                        });
-                    }
-                    completed_frames.clear();
-                    decoder.drain_decoded_frames(|frame_rgb565| {
-                        display.render_frame(frame_rgb565);
-                    });
-                    break;
+
+                total_bytes += n as u64;
+                if last_log.elapsed() >= Duration::from_secs(5) {
+                    let mb = (total_bytes as f64) / (1024.0 * 1024.0);
+                    println!(
+                        "\x1b[1;34m[usb-ingress]\x1b[0m Total received via USB Bulk: {:.2} MB",
+                        mb
+                    );
+                    last_log = std::time::Instant::now();
                 }
+            } else if n == 0 {
+                // USB Zero-Length Packet or bus idle
+                thread::sleep(Duration::from_millis(1));
+            } else {
+                let err = io::Error::last_os_error();
+                if err.kind() == io::ErrorKind::Interrupted || err.kind() == io::ErrorKind::WouldBlock {
+                    thread::sleep(Duration::from_millis(1));
+                    continue;
+                }
+                break;
             }
         }
 
-        let _ = read_handle.join();
+        annexb_assembler.flush(&mut completed_frames);
+        for frame in &completed_frames {
+            decoder.decode_chunk(frame, |frame_rgb565| {
+                display.render_frame(frame_rgb565);
+            });
+        }
+        completed_frames.clear();
+        decoder.drain_decoded_frames(|frame_rgb565| {
+            display.render_frame(frame_rgb565);
+        });
+
         crate::display::SplashEngine::show_ready();
         println!("\x1b[1;33m[usb-ingress]\x1b[0m Ingress worker stopped.");
     }

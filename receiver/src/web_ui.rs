@@ -718,6 +718,34 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                 </div>
             </div>
 
+            <!-- Display Extension & Topology Control (Extend / Clone / Stop) -->
+            <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(0, 230, 118, 0.4); background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(13, 20, 36, 0.98) 100%);">
+                <div class="card-header" style="margin-bottom: 0.8rem;">
+                    <div class="card-title">
+                        <span>🖥️</span>
+                        <span data-i18n="extHeader">Display Extension Action & Topology</span>
+                    </div>
+                    <span class="card-badge badge-green" id="badgeExtState" data-i18n="extBadge">Active Screen</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1rem; line-height: 1.4;" data-i18n="extDesc">
+                    Extend desktop area onto HDMI-1, clone primary notebook display (eDP-1), or turn off the extension to put the screen on standby.
+                </p>
+                <div class="btn-grid" id="extActionGrid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+                    <button class="btn-toggle active" id="btnActionExtend" onclick="setExtensionAction('extend')">
+                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;" data-i18n="btnActionExtend">🖥️ Extended Display (HDMI-1)</div>
+                        <div style="font-size: 0.76rem; opacity: 0.8;" data-i18n="btnActionExtendDesc">Virtual second monitor on TV</div>
+                    </button>
+                    <button class="btn-toggle" id="btnActionClone" onclick="setExtensionAction('clone')">
+                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;" data-i18n="btnActionClone">💻 Clone Screen (eDP-1)</div>
+                        <div style="font-size: 0.76rem; opacity: 0.8;" data-i18n="btnActionCloneDesc">Mirror primary notebook screen</div>
+                    </button>
+                    <button class="btn-toggle" id="btnActionStop" onclick="setExtensionAction('stop')" style="border-color: rgba(255, 82, 82, 0.6);">
+                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem; color: #ff5252;" data-i18n="btnActionStop">⏹ Disable Extension / Standby</div>
+                        <div style="font-size: 0.76rem; opacity: 0.8;" data-i18n="btnActionStopDesc">Stop transmission & put TV on standby</div>
+                    </button>
+                </div>
+            </div>
+
             <!-- Dynamic Displays Container (Renders a section per HDMI/DP video output) -->
             <div id="displaysSectionContainer" style="margin-bottom: 1.5rem;">
                 <div class="glass-card" id="displayCard_default">
@@ -1865,6 +1893,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 connHeader: "Active Extension Connection (Active Transport)",
                 connBadge: "Hot-Switchable",
                 connDesc: "Select the active transmission pipeline between your PC and this screen. Switches immediately on the fly without rebooting.",
+                extHeader: "Display Extension Action & Topology",
+                extBadge: "Active Screen",
+                extBadgeActive: "Extending (HDMI-1)",
+                extBadgeClone: "Cloning (eDP-1)",
+                extBadgeOff: "Standby (Paused)",
+                extDesc: "Extend desktop area onto HDMI-1, clone primary notebook display (eDP-1), or turn off the extension to put the screen on standby.",
+                btnActionExtend: "🖥️ Extended Display (HDMI-1)",
+                btnActionExtendDesc: "Virtual second monitor on TV",
+                btnActionClone: "💻 Clone Screen (eDP-1)",
+                btnActionCloneDesc: "Mirror primary notebook screen",
+                btnActionStop: "⏹ Disable Extension / Standby",
+                btnActionStopDesc: "Stop transmission & put TV on standby",
+                toastExtStopped: "⏹ Screen extension disabled. TV in standby.",
+                toastExtCloned: "💻 Mirroring notebook display (eDP-1)...",
+                toastExtExtended: "🖥️ Extending desktop to TV (HDMI-1)...",
                 servicesHeader: "Appliance Listener Daemons & Services",
                 servicesBadge: "Hardware Listeners"
             },
@@ -2116,6 +2159,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 connHeader: "Conexão Ativa da Extensão (Transporte Ativo)",
                 connBadge: "Chaveamento a Quente",
                 connDesc: "Selecione a via ativa de transmissão para a tela estendida. Chaveia na hora sem necessidade de reiniciar o sistema.",
+                extHeader: "Ação da Extensão de Tela & Topologia",
+                extBadge: "Tela Ativa",
+                extBadgeActive: "Estendendo (HDMI-1)",
+                extBadgeClone: "Clonando (eDP-1)",
+                extBadgeOff: "Standby (Pausado)",
+                extDesc: "Estenda a área de trabalho para o monitor HDMI-1, clone a tela primária do notebook (eDP-1), ou desative a extensão para repouso.",
+                btnActionExtend: "🖥️ Estender Tela (HDMI-1)",
+                btnActionExtendDesc: "Segundo monitor virtual na TV",
+                btnActionClone: "💻 Espelhar / Clonar (eDP-1)",
+                btnActionCloneDesc: "Espelha tela primária do notebook",
+                btnActionStop: "⏹ Desativar Extensão / Standby",
+                btnActionStopDesc: "Interrompe transmissão e repousa a TV",
+                toastExtStopped: "⏹ Extensão de tela desativada. TV em repouso.",
+                toastExtCloned: "💻 Espelhando tela primária do notebook (eDP-1)...",
+                toastExtExtended: "🖥️ Estendendo área de trabalho para TV (HDMI-1)...",
                 servicesHeader: "Daemons & Serviços de Escuta do Appliance",
                 servicesBadge: "Listeners no Hardware"
             },
@@ -2367,6 +2425,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 connHeader: "Connessione Schermo Attiva (Trasporto)",
                 connBadge: "Scambio a Caldo",
                 connDesc: "Seleziona il canale di trasmissione attivo tra il PC e lo schermo. Commuta istantaneamente senza riavviare.",
+                extHeader: "Azione di Estensione dello Schermo & Topologia",
+                extBadge: "Schermo Attivo",
+                extBadgeActive: "Esteso (HDMI-1)",
+                extBadgeClone: "Clonato (eDP-1)",
+                extBadgeOff: "Standby (In Pausa)",
+                extDesc: "Estendi l'area di lavoro sullo schermo HDMI-1, clona lo schermo principale del notebook (eDP-1), o disattiva l'estensione.",
+                btnActionExtend: "🖥️ Estendi Schermo (HDMI-1)",
+                btnActionExtendDesc: "Secondo monitor virtuale sulla TV",
+                btnActionClone: "💻 Clona Schermo (eDP-1)",
+                btnActionCloneDesc: "Duplica lo schermo del notebook",
+                btnActionStop: "⏹ Disattiva Estensione / Standby",
+                btnActionStopDesc: "Ferma la trasmissione e metti la TV in standby",
+                toastExtStopped: "⏹ Estensione schermo disattivata. TV in standby.",
+                toastExtCloned: "💻 Duplicazione schermo notebook (eDP-1)...",
+                toastExtExtended: "🖥️ Estensione desktop su TV (HDMI-1)...",
                 servicesHeader: "Servizi e Daemon di Ascolto dell'Appliance",
                 servicesBadge: "Listener Hardware"
             },
@@ -2618,6 +2691,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 connHeader: "活动屏幕连接 (活动传输通道)",
                 connBadge: "热切换",
                 connDesc: "选择 PC 与此屏幕之间的活动传输通道。无需重启即可即时切换。",
+                extHeader: "屏幕扩展与拓扑操作",
+                extBadge: "活动屏幕",
+                extBadgeActive: "扩展模式 (HDMI-1)",
+                extBadgeClone: "克隆模式 (eDP-1)",
+                extBadgeOff: "待机 (暂停)",
+                extDesc: "将桌面扩展到HDMI-1电视，克隆主笔记本屏幕（eDP-1），或停用屏幕扩展让电视进入待机状态。",
+                btnActionExtend: "🖥️ 扩展屏幕 (HDMI-1)",
+                btnActionExtendDesc: "电视作为第二虚拟显示器",
+                btnActionClone: "💻 克隆屏幕 (eDP-1)",
+                btnActionCloneDesc: "镜像笔记本主屏幕",
+                btnActionStop: "⏹ 停用扩展 / 待机",
+                btnActionStopDesc: "停止传输并让电视待机",
+                toastExtStopped: "⏹ 屏幕扩展已停用。电视进入待机。",
+                toastExtCloned: "💻 正在镜像笔记本屏幕 (eDP-1)...",
+                toastExtExtended: "🖥️ 正在将桌面扩展到电视 (HDMI-1)...",
                 servicesHeader: "设备监听守护进程与服务",
                 servicesBadge: "硬件监听服务"
             }
@@ -2768,7 +2856,21 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             document.querySelectorAll('#activeTransportGrid .btn-toggle').forEach(b => {
                 b.classList.toggle('active', b.id === 'btnTransport_' + shortKey);
             });
-            showToast('Switching active screen connection to ' + shortKey.toUpperCase() + '...');
+
+            if (transport === 'mode2_miracast') {
+                showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • ' + (t('waitingStream') || 'Ready for Win + K'));
+                const btnExt = document.getElementById('btnActionExtend');
+                const btnCln = document.getElementById('btnActionClone');
+                const btnStop = document.getElementById('btnActionStop');
+                const badge = document.getElementById('badgeExtState');
+                if (btnExt) btnExt.classList.remove('active');
+                if (btnCln) btnCln.classList.remove('active');
+                if (btnStop) btnStop.classList.add('active');
+                if (badge) { badge.textContent = 'Miracast (Standby)'; badge.className = 'card-badge badge-cyan'; }
+            } else {
+                showToast('Switching active screen connection to ' + shortKey.toUpperCase() + '...');
+            }
+
             fetch('/api/transport/active', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2777,6 +2879,35 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 setTimeout(pollTelemetry, 250);
                 setTimeout(pollTelemetry, 800);
             }).catch(() => {});
+        }
+
+        // Display Extension Actions: Extend (HDMI-1), Clone (eDP-1), or Stop / Standby
+        function setExtensionAction(action) {
+            const btnExt = document.getElementById('btnActionExtend');
+            const btnCln = document.getElementById('btnActionClone');
+            const btnStop = document.getElementById('btnActionStop');
+            const badge = document.getElementById('badgeExtState');
+
+            if (btnExt) btnExt.classList.toggle('active', action === 'extend');
+            if (btnCln) btnCln.classList.toggle('active', action === 'clone');
+            if (btnStop) btnStop.classList.toggle('active', action === 'stop');
+
+            if (action === 'stop') {
+                if (badge) { badge.textContent = t('extBadgeOff'); badge.className = 'card-badge badge-amber'; }
+                showToast(t('toastExtStopped') || '⏹ Extension disabled (Standby)');
+                sendHostControl({ action: 'stop' });
+                fetch('/api/stream/stop', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
+            } else if (action === 'clone') {
+                if (badge) { badge.textContent = t('extBadgeClone'); badge.className = 'card-badge badge-cyan'; }
+                showToast(t('toastExtCloned') || '💻 Mirroring notebook display (eDP-1)...');
+                sendHostControl({ action: 'start', mode: 'clone' });
+                fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
+            } else {
+                if (badge) { badge.textContent = t('extBadgeActive'); badge.className = 'card-badge badge-green'; }
+                showToast(t('toastExtExtended') || '🖥️ Extending desktop to TV (HDMI-1)...');
+                sendHostControl({ action: 'start', mode: 'extend' });
+                fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
+            }
         }
 
         // Operating Modes State & Toggle
@@ -3315,13 +3446,35 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                         }
 
                         // Update Active Transport Connection buttons
-                        const curId = am.id;
+                        const activeTrans = data.active_transport || am.id;
                         document.querySelectorAll('#activeTransportGrid .btn-toggle').forEach(b => {
-                            const isCurrent = (curId === 'mode1_udp' && b.id === 'btnTransport_mode1') ||
-                                              (curId === 'mode2_miracast' && b.id === 'btnTransport_mode2') ||
-                                              (curId === 'mode3_usb_bulk' && b.id === 'btnTransport_mode3');
+                            const isCurrent = (activeTrans.includes('mode1') && b.id === 'btnTransport_mode1') ||
+                                              (activeTrans.includes('mode2') && b.id === 'btnTransport_mode2') ||
+                                              (activeTrans.includes('mode3') && b.id === 'btnTransport_mode3');
                             b.classList.toggle('active', isCurrent);
                         });
+
+                        // Update Display Extension Action buttons (Extend / Clone / Stop)
+                        const isPaused = data.stream_state === 'paused' || am.id === 'standby';
+                        const btnExt = document.getElementById('btnActionExtend');
+                        const btnCln = document.getElementById('btnActionClone');
+                        const btnStop = document.getElementById('btnActionStop');
+                        const badgeExt = document.getElementById('badgeExtState');
+
+                        if (btnExt && btnCln && btnStop) {
+                            if (isPaused) {
+                                btnExt.classList.remove('active');
+                                btnCln.classList.remove('active');
+                                btnStop.classList.add('active');
+                                if (badgeExt) { badgeExt.textContent = t('extBadgeOff'); badgeExt.className = 'card-badge badge-amber'; }
+                            } else {
+                                btnStop.classList.remove('active');
+                                if (!btnCln.classList.contains('active')) {
+                                    btnExt.classList.add('active');
+                                    if (badgeExt) { badgeExt.textContent = t('extBadgeActive'); badgeExt.className = 'card-badge badge-green'; }
+                                }
+                            }
+                        }
 
                         // Also update statStream card
                         const valState = document.getElementById('valState');
@@ -3330,8 +3483,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                             valState.textContent = am.id === 'mode1_udp' ? 'UDP' : (am.id === 'mode2_miracast' ? 'MIRACAST' : (am.id === 'mode3_usb_bulk' ? 'USB BULK' : 'STANDBY'));
                         }
                         if (badgeStream) {
-                            badgeStream.textContent = am.id !== 'idle' ? t('statStreamActive') : t('statStreamPaused');
-                            badgeStream.className = am.id !== 'idle' ? 'stat-badge badge-green' : 'stat-badge badge-amber';
+                            badgeStream.textContent = am.id !== 'idle' && !isPaused ? t('statStreamActive') : t('statStreamPaused');
+                            badgeStream.className = am.id !== 'idle' && !isPaused ? 'stat-badge badge-green' : 'stat-badge badge-amber';
                         }
                     }
 

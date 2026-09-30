@@ -38,6 +38,7 @@ pub struct ConfigState {
     pub mode1: bool,
     pub mode2: bool,
     pub mode3: bool,
+    pub active_transport: String,
 }
 
 pub static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
@@ -52,6 +53,7 @@ pub static CONFIG: Mutex<ConfigState> = Mutex::new(ConfigState {
     mode1: true,
     mode2: true,
     mode3: false,
+    active_transport: String::new(),
 });
 
 /// Start the embedded HTTP dashboard server in a background thread
@@ -246,8 +248,16 @@ fn handle_http_client(
 
                 if let Some(transport) = active_transport {
                     println!("\x1b[1;36m[web-server]\x1b[0m Direct Active Transport switch requested: {}", transport);
+                    if let Ok(mut cfg) = CONFIG.lock() {
+                        cfg.active_transport = transport.to_string();
+                    }
                     match transport {
                         "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
+                            if let Ok(mut cfg) = CONFIG.lock() {
+                                cfg.mode3 = true;
+                                cfg.mode1 = false;
+                                cfg.mode2 = false;
+                            }
                             forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
                             let run = running.clone();
                             let pipe = pipeline_mgr.clone();
@@ -258,6 +268,11 @@ fn handle_http_client(
                             });
                         }
                         "mode1_udp" | "network" | "udp" | "mode1" => {
+                            if let Ok(mut cfg) = CONFIG.lock() {
+                                cfg.mode1 = true;
+                                cfg.mode2 = false;
+                                cfg.mode3 = false;
+                            }
                             forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
                             let pipe = pipeline_mgr.clone();
                             thread::spawn(move || {
@@ -267,43 +282,41 @@ fn handle_http_client(
                             });
                         }
                         "mode2_miracast" | "miracast" | "mode2" => {
+                            if let Ok(mut cfg) = CONFIG.lock() {
+                                cfg.mode1 = false;
+                                cfg.mode2 = true;
+                                cfg.mode3 = false;
+                            }
+                            // Notify host to stop stream while receiver is in Miracast mode
+                            forward_config_to_sender("{\"action\":\"stop\"}");
                             let pipe = pipeline_mgr.clone();
                             thread::spawn(move || {
                                 pipe.stop();
-                                let miracast_kind = PipelineKind::MiracastMp2t { port: 7236 };
-                                let _ = pipe.start(miracast_kind);
+                                crate::display::SplashEngine::show_ready();
+                                println!("\x1b[1;32m[web-server]\x1b[0m Miracast ready splash displayed. Listening on RTSP 7236 / MS-MICE 7250.");
                             });
                         }
                         _ => {}
                     }
                 } else if let Some(true) = m3_change {
-                    println!("\x1b[1;32m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) requested via Web UI!");
-                    forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
+                    println!("\x1b[1;32m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) listener enabled.");
                     let run = running.clone();
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
                         if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
-                            eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
+                            eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk listener: {}", e);
                         }
                     });
                 } else if let Some(false) = m3_change {
-                    println!("\x1b[1;33m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) disabled. Returning to Network UDP.");
-                    forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
-                    let pipe = pipeline_mgr.clone();
-                    thread::spawn(move || {
-                        pipe.stop();
-                        let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
-                        let _ = pipe.start(default_kind);
-                    });
+                    println!("\x1b[1;33m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) listener disabled.");
                 } else if let Some(m1) = m1_change {
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
                         if !m1 {
-                            println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) turned OFF by user flag.");
+                            println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) listener turned OFF.");
                             pipe.pause();
                         } else {
-                            println!("\x1b[1;32m[web-server]\x1b[0m Mode 1 (Linux UDP) turned ON by user flag.");
-                            forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
+                            println!("\x1b[1;32m[web-server]\x1b[0m Mode 1 (Linux UDP) listener turned ON.");
                             let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
                             let _ = pipe.resume(default_kind);
                         }
@@ -518,9 +531,13 @@ fn handle_http_client(
             send_response(&mut stream, "200 OK", "application/json", format!("{{\"status\":\"{}\"}}", status).as_bytes());
         }
         ("POST", "/api/stream/stop") => {
-            println!("\x1b[1;33m[web-server]\x1b[0m User requested stream PAUSE via Web UI.");
-            pipeline_mgr.pause();
-            crate::display::SplashEngine::clear();
+            println!("\x1b[1;33m[web-server]\x1b[0m User requested stream STOP / STANDBY via Web UI.");
+            let pipe = pipeline_mgr.clone();
+            thread::spawn(move || {
+                pipe.pause();
+                crate::display::SplashEngine::show_ready();
+                forward_config_to_sender("{\"action\":\"stop\"}");
+            });
             send_response(
                 &mut stream,
                 "200 OK",
@@ -530,10 +547,38 @@ fn handle_http_client(
         }
         ("POST", "/api/stream/start") => {
             println!("\x1b[1;32m[web-server]\x1b[0m User requested stream RESUME via Web UI.");
-            let default_kind = PipelineKind::RawH264Rtp {
-                port: default_udp_port,
+            let trans = if let Ok(cfg) = CONFIG.lock() {
+                if cfg.active_transport.is_empty() {
+                    "mode3_usb_bulk".to_string()
+                } else {
+                    cfg.active_transport.clone()
+                }
+            } else {
+                "mode3_usb_bulk".to_string()
             };
-            let _ = pipeline_mgr.resume(default_kind);
+            match trans.as_str() {
+                "mode3_usb_bulk" => {
+                    forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
+                    let run = running.clone();
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        let _ = crate::usb_bulk::activate_usb_bulk(run, pipe);
+                    });
+                }
+                "mode2_miracast" => {
+                    crate::display::SplashEngine::show_ready();
+                }
+                _ => {
+                    forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
+                    let default_kind = PipelineKind::RawH264Rtp {
+                        port: default_udp_port,
+                    };
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        let _ = pipe.resume(default_kind);
+                    });
+                }
+            }
             send_response(
                 &mut stream,
                 "200 OK",
@@ -657,7 +702,7 @@ fn handle_http_client(
 
 fn send_response(stream: &mut TcpStream, status: &str, content_type: &str, body: &[u8]) {
     let header = format!(
-        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-cache, no-store, must-revalidate, max-age=0\r\nPragma: no-cache\r\nExpires: 0\r\n\r\n",
         status,
         content_type,
         body.len()
@@ -707,6 +752,16 @@ fn get_system_telemetry_json(
         "idle"
     };
 
+    let active_trans = if let Ok(cfg) = CONFIG.lock() {
+        if cfg.active_transport.is_empty() {
+            "mode3_usb_bulk".to_string()
+        } else {
+            cfg.active_transport.clone()
+        }
+    } else {
+        "mode3_usb_bulk".to_string()
+    };
+
     let (mode_id, mode_name, mode_icon, mode_proto, mode_port, mode_details) = match cur_kind {
         Some(crate::pipeline::PipelineKind::RawH264Rtp { port }) => (
             "mode1_udp",
@@ -732,14 +787,36 @@ fn get_system_telemetry_json(
             0,
             "USB 2.0 High-Speed • Zero-Network • Latency < 1ms".to_string(),
         ),
-        None => (
-            "idle",
-            "Awaiting Stream (Standby / Splash)",
-            "⏳",
-            "No Active Stream",
-            0,
-            "Receiver ready displaying splash screen with IP & QR Code".to_string(),
-        ),
+        None => {
+            if is_paused {
+                (
+                    "standby",
+                    "Extension Disabled (Standby)",
+                    "⏹",
+                    "Standby",
+                    0,
+                    "Screen extension is turned off. Ready to resume.".to_string(),
+                )
+            } else if active_trans == "mode2_miracast" {
+                (
+                    "mode2_miracast",
+                    "Mode 2: Windows Miracast (Ready)",
+                    "🪟",
+                    "RTSP WFD / TCP 7236",
+                    7236,
+                    "Ready for connection: press Win + K on Windows or cast via GNOME Displays".to_string(),
+                )
+            } else {
+                (
+                    "idle",
+                    "Awaiting Stream (Standby / Splash)",
+                    "⏳",
+                    "No Active Stream",
+                    0,
+                    "Receiver ready displaying splash screen with IP & QR Code".to_string(),
+                )
+            }
+        }
     };
 
     let all_displays = crate::display::MonitorInfo::read_all_realtime();
@@ -783,11 +860,12 @@ fn get_system_telemetry_json(
     let est_ma = (est_watts / 5.0) * 1000.0;
 
     format!(
-        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"displays\":{},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
+        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_transport\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"displays\":{},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
         temp_val,
         cpu_load,
         mem_free_mb,
         pipeline_state,
+        active_trans,
         mode_id,
         mode_name,
         mode_icon,
@@ -825,14 +903,17 @@ fn get_system_telemetry_json(
 
 /// Forward JSON configuration to ext-sender on UDP port 5001
 fn forward_config_to_sender(payload: &str) {
-    if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
-        let _ = sock.set_broadcast(true);
-        // Send to host USB IP (192.168.7.1), directed broadcast (192.168.7.255), global broadcast, and local loopback
-        let _ = sock.send_to(payload.as_bytes(), "192.168.7.1:5001");
-        let _ = sock.send_to(payload.as_bytes(), "192.168.7.255:5001");
-        let _ = sock.send_to(payload.as_bytes(), "255.255.255.255:5001");
-        let _ = sock.send_to(payload.as_bytes(), "127.0.0.1:5001");
-    }
+    let data = payload.as_bytes().to_vec();
+    thread::spawn(move || {
+        if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
+            let _ = sock.set_broadcast(true);
+            let _ = sock.set_write_timeout(Some(Duration::from_millis(50)));
+            // Send to host USB IP (192.168.7.1), directed broadcast (192.168.7.255), and local loopback
+            let _ = sock.send_to(&data, "192.168.7.1:5001");
+            let _ = sock.send_to(&data, "192.168.7.255:5001");
+            let _ = sock.send_to(&data, "127.0.0.1:5001");
+        }
+    });
 }
 
 /// Retrieve network interfaces status (IPs, DHCP server, gateway)
