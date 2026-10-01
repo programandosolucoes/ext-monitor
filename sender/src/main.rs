@@ -39,45 +39,62 @@ struct UsbTransportHandle {
     stop_flag: Arc<AtomicBool>,
 }
 
-fn open_usb_pipe_transport(
-    running: Arc<AtomicBool>,
-    writer_alive: Arc<AtomicBool>,
-) -> Option<UsbTransportHandle> {
-    println!("\x1b[1;33m[*] Attempting USB Bulk Direct connection (480 Mbps FunctionFS Endpoint)...\x1b[0m");
-    for attempt in 1..=5 {
-        match usb_transport::open_usb_display_device() {
-            Ok((handle, iface_num, ep_out)) => {
-                println!("\x1b[1;32m[*] USB Bulk Direct connected successfully! (480 Mbps FunctionFS Endpoint)\x1b[0m");
-                let mut pipe_fds = [0 as libc::c_int; 2];
-                unsafe {
-                    libc::pipe2(pipe_fds.as_mut_ptr(), libc::O_CLOEXEC);
-                    const F_SETPIPE_SZ: libc::c_int = 1031;
-                    libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 65536);
-                }
-                let read_fd = pipe_fds[0];
-                let write_fd = pipe_fds[1];
-                let stop_flag = Arc::new(AtomicBool::new(false));
-                let _ = usb_transport::spawn_usb_bulk_writer(
-                    handle,
-                    read_fd,
-                    running.clone(),
-                    writer_alive.clone(),
-                    stop_flag.clone(),
-                    iface_num,
-                    ep_out,
-                );
-                return Some(UsbTransportHandle { write_fd, stop_flag });
-            }
-            Err(err) => {
-                if attempt < 5 {
-                    thread::sleep(Duration::from_millis(250));
-                } else {
-                    println!("\x1b[1;33m[!] USB Bulk device/interface not available on USB bus: {}\x1b[0m", err);
+fn is_pi_zero_usb_present() -> bool {
+    if let Ok(entries) = std::fs::read_dir("/sys/bus/usb/devices") {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let (Ok(v), Ok(p)) = (
+                std::fs::read_to_string(path.join("idVendor")),
+                std::fs::read_to_string(path.join("idProduct")),
+            ) {
+                let v = v.trim();
+                let p = p.trim();
+                if (v == "1d50" || v == "1d6b") && (p == "614d" || p == "0104") {
+                    return true;
                 }
             }
         }
     }
-    None
+    false
+}
+
+fn open_usb_pipe_transport(
+    running: Arc<AtomicBool>,
+    writer_alive: Arc<AtomicBool>,
+) -> Option<UsbTransportHandle> {
+    if !is_pi_zero_usb_present() {
+        return None;
+    }
+
+    println!("\x1b[1;33m[*] Attempting USB Bulk Direct connection (480 Mbps FunctionFS Endpoint)...\x1b[0m");
+    match usb_transport::open_usb_display_device() {
+        Ok((handle, iface_num, ep_out)) => {
+            println!("\x1b[1;32m[*] USB Bulk Direct connected successfully! (480 Mbps FunctionFS Endpoint)\x1b[0m");
+            let mut pipe_fds = [0 as libc::c_int; 2];
+            unsafe {
+                libc::pipe2(pipe_fds.as_mut_ptr(), libc::O_CLOEXEC);
+                const F_SETPIPE_SZ: libc::c_int = 1031;
+                libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 65536);
+            }
+            let read_fd = pipe_fds[0];
+            let write_fd = pipe_fds[1];
+            let stop_flag = Arc::new(AtomicBool::new(false));
+            let _ = usb_transport::spawn_usb_bulk_writer(
+                handle,
+                read_fd,
+                running.clone(),
+                writer_alive.clone(),
+                stop_flag.clone(),
+                iface_num,
+                ep_out,
+            );
+            Some(UsbTransportHandle { write_fd, stop_flag })
+        }
+        Err(err) => {
+            println!("\x1b[1;33m[!] USB Bulk device/interface not available on USB bus: {}\x1b[0m", err);
+            None
+        }
+    }
 }
 
 fn close_usb_transport(
@@ -163,6 +180,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "\x1b[1;36m[i] Automatically falling back to Network transport (UDP RTP {}:{})...\x1b[0m",
                     cfg.target_ip, cfg.target_port
                 );
+                cfg.transport = TransportKind::Network {
+                    ip: cfg.target_ip.clone(),
+                    port: cfg.target_port,
+                };
             }
             pipe_handle
         }
@@ -482,11 +503,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Health watchdog: Detect USB Bulk disconnect / Pi Zero reboot
             if !is_paused && cfg.transport == TransportKind::UsbBulk && !usb_writer_alive.load(Ordering::SeqCst) {
-                if last_usb_reconnect.elapsed() >= Duration::from_millis(1500) {
+                if last_usb_reconnect.elapsed() >= Duration::from_millis(2000) {
                     last_usb_reconnect = Instant::now();
-                    println!("\x1b[1;33m[*] USB Bulk writer finalizou (Pi Zero desconectou ou reiniciou). Reconectando...\x1b[0m");
                     close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
-                    restart_pipeline = true;
+                    if let Some(new_pipe) = open_usb_pipe_transport(running.clone(), usb_writer_alive.clone()) {
+                        println!("\x1b[1;32m[*] USB Bulk reconectado com sucesso! Reiniciando pipeline...\x1b[0m");
+                        pipeline_builder.usb_pipe_fd = Some(new_pipe.write_fd);
+                        current_usb_pipe = Some(new_pipe);
+                        restart_pipeline = true;
+                    } else if let Some(mut c) = child.take() {
+                        let _ = c.kill();
+                        let _ = c.wait();
+                        pipeline_builder.usb_pipe_fd = None;
+                    }
                 }
             }
 
@@ -509,8 +538,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                     if cfg.transport == TransportKind::UsbBulk {
-                        current_usb_pipe = open_usb_pipe_transport(running.clone(), usb_writer_alive.clone());
+                        if current_usb_pipe.is_none() {
+                            current_usb_pipe = open_usb_pipe_transport(running.clone(), usb_writer_alive.clone());
+                        }
                         pipeline_builder.usb_pipe_fd = current_usb_pipe.as_ref().map(|h| h.write_fd);
+                        if pipeline_builder.usb_pipe_fd.is_none() {
+                            println!("\x1b[1;33m[!] USB Bulk indisponível no momento. Aguardando reconexão...\x1b[0m");
+                            child = None;
+                            continue;
+                        }
                     } else {
                         pipeline_builder.usb_pipe_fd = None;
                     }

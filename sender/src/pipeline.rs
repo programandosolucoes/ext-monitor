@@ -668,6 +668,7 @@ pub fn compute_spectrum_packet(raw_buf: &[u8; 2048], packet: &mut [u8; 25]) -> (
 }
 
 impl PipelineBuilder {
+    #[allow(dead_code)]
     pub fn build_sink_args(&self) -> Vec<String> {
         let mut args = Vec::new();
         if let Some(fd) = self.usb_pipe_fd {

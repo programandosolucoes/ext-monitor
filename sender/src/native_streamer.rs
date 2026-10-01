@@ -15,7 +15,6 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use std::fs::OpenOptions;
-use std::io::Write;
 use std::net::UdpSocket;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::RawFd;
@@ -160,8 +159,26 @@ impl NativeStreamer {
             // Transmit packet via USB Bulk or RFC 6184 UDP RTP
             if let Some(fd) = usb_pipe_fd {
                 // USB Bulk Direct transport (Raw Annex-B NAL stream)
-                let mut f = unsafe { std::fs::File::from_raw_fd_unchecked(fd) };
-                let _ = f.write_all(&h264_stream);
+                let mut offset = 0;
+                while offset < h264_stream.len() {
+                    let res = unsafe {
+                        libc::write(
+                            fd,
+                            h264_stream[offset..].as_ptr() as *const libc::c_void,
+                            h264_stream.len() - offset,
+                        )
+                    };
+                    if res > 0 {
+                        offset += res as usize;
+                    } else if res < 0 {
+                        let err = std::io::Error::last_os_error();
+                        if err.kind() != std::io::ErrorKind::Interrupted {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
             } else {
                 // UDP RTP: Split H.264 stream into individual NAL units and packetize
                 let nals = split_nal_units(&h264_stream);
@@ -285,15 +302,4 @@ fn write_rtp_header(buf: &mut Vec<u8>, marker: bool, seq_num: u16, timestamp: u3
     buf.extend_from_slice(&timestamp.to_be_bytes());
     // Bytes 8-11: SSRC (big-endian)
     buf.extend_from_slice(&ssrc.to_be_bytes());
-}
-
-trait FromRawFdUnchecked {
-    unsafe fn from_raw_fd_unchecked(fd: RawFd) -> std::fs::File;
-}
-
-impl FromRawFdUnchecked for std::fs::File {
-    unsafe fn from_raw_fd_unchecked(fd: RawFd) -> std::fs::File {
-        use std::os::unix::io::FromRawFd;
-        std::fs::File::from_raw_fd(fd)
-    }
 }

@@ -350,6 +350,15 @@ impl KmsPlaneSink {
         if err.raw_os_error() == Some(libc::EBUSY) {
             return Ok(false);
         }
+        if err.raw_os_error() == Some(libc::EACCES) {
+            // DRM master lost - reacquire master and retry SETPLANE once
+            unsafe {
+                libc::ioctl(self.fd, DRM_IOCTL_SET_MASTER, 0);
+            }
+            if unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_SETPLANE, &mut req) } == 0 {
+                return Ok(true);
+            }
+        }
         Err(err)
     }
 }

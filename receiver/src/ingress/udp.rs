@@ -88,8 +88,13 @@ impl UdpRtpIngress {
             );
         }
 
-        let _ = sock.set_read_timeout(Some(Duration::from_millis(10)));
-        let mut buffer = [0u8; 4096];
+        let _ = sock.set_nonblocking(true);
+        let mut buffer = [0u8; 8192];
+        let mut pfd = libc::pollfd {
+            fd: sock.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
 
         let mut display = match FramebufferSink::open(1280, 720) {
             Ok(d) => d,
@@ -120,41 +125,52 @@ impl UdpRtpIngress {
         let mut total_packets = 0u64;
 
         while running.load(Ordering::SeqCst) {
-            match sock.recv(&mut buffer) {
-                Ok(n) if n > 12 => {
+            let ret = unsafe { libc::poll(&mut pfd, 1, 15) };
+            if ret < 0 {
+                let err = io::Error::last_os_error();
+                if err.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                break;
+            }
+            if ret == 0 {
+                // Socket idle for 15ms: drain any pending decoded frames from hardware VPU
+                decoder.drain_decoded_frames(|frame_rgb565| {
+                    display.render_frame(frame_rgb565);
+                });
+
+                if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(15) {
+                    println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP stream disconnected (>15s) -> Exibindo Ready Splash...");
+                    crate::display::SplashEngine::show_ready();
+                    splash_active = true;
+                }
+                continue;
+            }
+
+            if (pfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL)) != 0 {
+                break;
+            }
+            if (pfd.revents & libc::POLLIN) == 0 {
+                continue;
+            }
+
+            // Drain all available UDP packets from the socket buffer in a tight userspace loop
+            while let Ok(n) = sock.recv(&mut buffer) {
+                if n > 12 {
                     last_packet_time = std::time::Instant::now();
                     total_packets += 1;
                     if splash_active {
                         splash_active = false;
                     }
-
-                    completed_frames.clear();
                     depayloader.depayload_packet(&buffer[..n], &mut completed_frames);
+                }
+            }
 
-                    for frame in &completed_frames {
-                        decoder.decode_chunk(frame, |frame_rgb565| {
-                            display.render_frame(frame_rgb565);
-                        });
-                    }
-                }
-                Ok(_) => {}
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
-                    decoder.drain_decoded_frames(|frame_rgb565| {
-                        display.render_frame(frame_rgb565);
-                    });
-
-                    // If stream was active and truly disconnected (> 15s without packets): restore ready splash
-                    if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(15) {
-                        println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP stream disconnected (>15s) -> Exibindo Ready Splash...");
-                        crate::display::SplashEngine::show_ready();
-                        splash_active = true;
-                    }
-                    thread::sleep(Duration::from_micros(500));
-                }
-                Err(e) => {
-                    eprintln!("\x1b[1;31m[udp-ingress]\x1b[0m Socket read error: {}", e);
-                    break;
-                }
+            // Decode all complete Access Units assembled from the drained burst
+            for frame in completed_frames.drain(..) {
+                decoder.decode_chunk(&frame, |frame_rgb565| {
+                    display.render_frame(frame_rgb565);
+                });
             }
         }
 
