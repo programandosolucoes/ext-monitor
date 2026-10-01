@@ -147,6 +147,11 @@ fn main() {
         cfg.mode3 = is_usb_bulk_mode;
         cfg.mode1 = !is_usb_bulk_mode;
         cfg.mode2 = !is_usb_bulk_mode;
+        cfg.active_transport = if is_usb_bulk_mode {
+            "mode3_usb_bulk".to_string()
+        } else {
+            "mode1_udp".to_string()
+        };
     }
 
     if is_usb_bulk_mode {

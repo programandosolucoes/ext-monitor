@@ -441,6 +441,26 @@ Esta lista de trabalho consolida todos os pontos apontados pelo Carlos, organiza
   - Atualizar o commit raiz órfão limpo da branch `main` sob a tag `v2.3.0-final`.
   - Publicar no GitHub público e no servidor privado.
 
+---
+
+### [x] 31. Resolução Definitiva de Deadlock FunctionFS, Vinculação PipeWire e Ciclo de Vida do Stream
+- [x] **31.1 Identificação e Correção do Mapeamento de Portas PipeWire no Sender (`sender/src/pipewire.rs` & `pipeline.rs`)**:
+  - Causa raiz: quando `pipewiresrc` era iniciado, `link_monitor_port_to_sender` buscava por portas contendo `gst-launch`. Como o streamer de áudio Opus (`pulsesrc`) também é um processo `gst-launch-1.0`, o algoritmo vinculava o vídeo `gnome-shell:output_1` à porta de áudio `gst-launch-1.0:input_FL` (porta 103), deixando o decodificador de vídeo com zero buffers de entrada.
+  - Correção: configurado `client-name=ext-video-sender` no `pipewiresrc` e adicionado filtro estrito no `pipewire.rs` para ignorar portas com `audio.channel` ou `format.dsp` de áudio, garantindo conexão determinística entre a saída de vídeo e a entrada do encoder (`ext-video-sender:input_0` / `input_1`).
+- [x] **31.2 Eliminação de Deadlock no Encerramento e Pausa do FunctionFS no Receiver (`receiver/src/native_v4l2.rs`, `pipeline.rs`, `ingress/usb.rs`)**:
+  - Causa raiz: a chamada síncrona `libc::read` no endpoint FunctionFS `ep1` entrava em suspensão ininterrupta no kernel (`ffs_epfile_io` -> `wait_for_completion`) aguardando novos pacotes USB do host. Ao pausar ou parar o stream, `pipeline_mgr.stop()` bloqueava no mutex `native_decoder` enquanto `dec.stop()` esperava indefinidamente por `handle.join()`, pois o descritor `active_fd` só era fechado após o join.
+  - Correção: o mutex `native_decoder` agora é liberado antes da chamada de `stop()`; `libc::close(fd)` é executado imediatamente para que o driver FunctionFS aborte operações pendentes com `EBADF`/`ESHUTDOWN`; e o join do worker é realizado de forma não-bloqueante via thread reaper caso o worker ainda esteja concluindo.
+  - Implementado envio de ZLP (Zero-Length Packet) pelo host em `sender/src/usb_transport.rs` antes de liberar o dispositivo USB, acordando limpa e imediatamente a leitura do receptor.
+- [x] **31.3 Abertura Não-Bloqueante Confiável em `ep1` (`receiver/src/usb_bulk.rs`)**:
+  - Adicionado `custom_flags(libc::O_NONBLOCK)` em todas as aberturas do endpoint `/dev/usb-ffs/display/ep1`, impedindo travamento em aberturas pós-inicialização.
+- [x] **31.4 Preservação do Modo Gráfico Virtual Terminal (`receiver/src/display/framebuffer.rs`, `splash.rs`)**:
+  - Removido o restore para `KD_TEXT` no drop do `FramebufferSink`, mantendo `/dev/tty1` em modo `KD_GRAPHICS` para evitar que o console fbcon pinte a paleta de cinza por cima das telas de Standby e do Media Visualizer.
+- [x] **31.5 Validação Prática em Tempo Real (Ciclos de Parada, Retomada e Alternância)**:
+  - Validada a troca contínua entre USB Bulk e UDP Network via Web UI / API REST.
+  - Validado "Desativar Extensão" -> Standby imediato (Ready Splash).
+  - Validado "Estender Tela" -> Retomada instantânea a 60 FPS com decodificação por hardware VideoCore IV M2M e scanout direto via KMS plane 86.
+  - 100% Rust nativo sem scripts bash/python intermediários.
+
 
 
 

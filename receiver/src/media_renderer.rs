@@ -263,8 +263,8 @@ pub fn start_audio_telemetry_listener(running: Arc<AtomicBool>) {
 
             let mut buf = [0u8; 1024];
             while running.load(Ordering::Relaxed) {
-                if let Ok((len, _)) = socket.recv_from(&mut buf) {
-                    if len >= 24 {
+                match socket.recv_from(&mut buf) {
+                    Ok((len, _)) if len >= 24 => {
                         let mut bands = [0.0f32; 24];
                         for i in 0..24 {
                             bands[i] = (buf[i] as f32) / 255.0f32;
@@ -272,6 +272,10 @@ pub fn start_audio_telemetry_listener(running: Arc<AtomicBool>) {
                         let rms_byte = if len >= 25 { buf[24] } else { 128 };
                         let rms_db = ((rms_byte as f32) / 255.0f32 * 60.0) - 60.0;
                         update_audio_spectrum(&bands, rms_db);
+                    }
+                    _ => {
+                        // Socket timeout (500ms): zero out spectrum so stale/false data does not persist
+                        update_audio_spectrum(&[0.0; 24], -60.0);
                     }
                 }
             }
@@ -621,29 +625,24 @@ fn blit_to_fb0(buffer: &[u8]) {
         return;
     }
 
-    if let Ok(file) = OpenOptions::new().read(true).write(true).open("/dev/fb0") {
+    if let Ok(mut file) = OpenOptions::new().read(true).write(true).open("/dev/fb0") {
         let fd = file.as_raw_fd();
         const FBIOBLANK: libc::c_ulong = 0x4611;
         unsafe {
             libc::ioctl(fd, FBIOBLANK, 0 as libc::c_int);
         }
 
-        let ptr = unsafe {
-            libc::mmap(
-                std::ptr::null_mut(),
-                FB_SIZE,
-                libc::PROT_WRITE,
-                libc::MAP_SHARED,
-                fd,
-                0,
-            ) as *mut u8
-        };
-
-        if !ptr.is_null() && ptr != libc::MAP_FAILED as *mut u8 {
+        if let Ok(tty1) = OpenOptions::new().read(true).write(true).open("/dev/tty1") {
+            const KDSETMODE: libc::c_ulong = 0x4B3A;
+            const KD_GRAPHICS: libc::c_ulong = 0x01;
             unsafe {
-                std::ptr::copy_nonoverlapping(buffer.as_ptr(), ptr, FB_SIZE);
-                libc::munmap(ptr as *mut libc::c_void, FB_SIZE);
+                libc::ioctl(tty1.as_raw_fd(), KDSETMODE, KD_GRAPHICS);
             }
         }
+
+        use std::io::{Seek, SeekFrom, Write};
+        let _ = file.seek(SeekFrom::Start(0));
+        let _ = file.write_all(&buffer[..FB_SIZE]);
+        let _ = file.flush();
     }
 }

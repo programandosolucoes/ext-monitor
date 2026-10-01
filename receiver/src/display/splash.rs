@@ -114,9 +114,12 @@ fn blit_to_framebuffer(buffer: &[u8]) {
         return;
     }
 
-    let file = match OpenOptions::new().read(true).write(true).open("/dev/fb0") {
+    let mut file = match OpenOptions::new().read(true).write(true).open("/dev/fb0") {
         Ok(f) => f,
-        Err(_) => return,
+        Err(e) => {
+            eprintln!("\x1b[1;31m[splash]\x1b[0m Failed to open /dev/fb0: {}", e);
+            return;
+        }
     };
 
     let fd = file.as_raw_fd();
@@ -170,25 +173,21 @@ fn blit_to_framebuffer(buffer: &[u8]) {
         }
     }
 
-    // Memory map framebuffer
-    let ptr = unsafe {
-        libc::mmap(
-            std::ptr::null_mut(),
-            FB_SIZE,
-            libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_SHARED,
-            fd,
-            0,
-        ) as *mut u8
-    };
-
-    if ptr.is_null() || ptr == libc::MAP_FAILED as *mut u8 {
-        return;
+    if let Ok(tty1) = OpenOptions::new().read(true).write(true).open("/dev/tty1") {
+        const KDSETMODE: libc::c_ulong = 0x4B3A;
+        const KD_GRAPHICS: libc::c_ulong = 0x01;
+        unsafe {
+            libc::ioctl(tty1.as_raw_fd(), KDSETMODE, KD_GRAPHICS);
+        }
     }
 
+    use std::io::{Seek, SeekFrom, Write};
+    let _ = file.seek(SeekFrom::Start(0));
+    if let Err(e) = file.write_all(&buffer[..FB_SIZE]) {
+        eprintln!("\x1b[1;31m[splash]\x1b[0m write_all to /dev/fb0 failed: {}", e);
+    }
+    let _ = file.flush();
     unsafe {
-        std::ptr::copy_nonoverlapping(buffer.as_ptr(), ptr, FB_SIZE);
-        libc::munmap(ptr as *mut libc::c_void, FB_SIZE);
         let _ = libc::ioctl(fd, FBIOPAN_DISPLAY, &mut vinfo);
     }
 }

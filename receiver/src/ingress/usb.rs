@@ -163,9 +163,20 @@ impl UsbBulkIngress {
                 }
             } else if n == 0 {
                 // USB Zero-Length Packet or bus idle
+                if !running.load(Ordering::SeqCst) {
+                    println!("\x1b[1;33m[usb-ingress]\x1b[0m ZLP received while stopping. Exiting ingress loop.");
+                    break;
+                }
                 thread::sleep(Duration::from_millis(1));
             } else {
                 let err = io::Error::last_os_error();
+                if err.raw_os_error() == Some(libc::EBADF)
+                    || err.raw_os_error() == Some(libc::ESHUTDOWN)
+                    || err.raw_os_error() == Some(libc::ENODEV)
+                {
+                    println!("\x1b[1;33m[usb-ingress]\x1b[0m Endpoint closed ({}). Exiting ingress loop.", err);
+                    break;
+                }
                 if err.kind() == io::ErrorKind::Interrupted || err.kind() == io::ErrorKind::WouldBlock {
                     thread::sleep(Duration::from_millis(1));
                     continue;

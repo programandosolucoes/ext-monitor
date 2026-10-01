@@ -101,16 +101,8 @@ impl Drop for FramebufferSink {
                 libc::munmap(self.fb_ptr as *mut libc::c_void, self.fb_size);
             }
         }
-        // Restore VT1 text mode if graphics mode was activated
-        if self.graphics_mode {
-            if let Ok(tty1) = OpenOptions::new().read(true).write(true).open("/dev/tty1") {
-                const KDSETMODE: libc::c_ulong = 0x4B3A;
-                const KD_TEXT: libc::c_ulong = 0x00;
-                unsafe {
-                    libc::ioctl(tty1.as_raw_fd(), KDSETMODE, KD_TEXT);
-                }
-            }
-        }
+        // Do NOT restore KD_TEXT mode: appliance display must stay in graphics mode
+        // so Linux fbcon never erases the framebuffer or splash screens!
     }
 }
 

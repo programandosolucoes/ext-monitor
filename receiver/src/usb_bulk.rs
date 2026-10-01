@@ -18,7 +18,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::IntoRawFd;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -302,21 +302,42 @@ pub fn ensure_functionfs_gadget() -> std::io::Result<()> {
     Ok(())
 }
 
+static ACTIVATE_LOCK: Mutex<()> = Mutex::new(());
+
 /// Activates USB Bulk Mode: sets up FunctionFS, writes ep0 descriptors, binds UDC, and starts decoder pipeline
 pub fn activate_usb_bulk(
     running: Arc<AtomicBool>,
     pipeline_mgr: Arc<PipelineManager>,
 ) -> std::io::Result<()> {
-    // If ep1 is already active (e.g. configured at boot by /init), directly open it
+    let _lock = ACTIVATE_LOCK.lock().unwrap();
+
+    // 1. Stop previous pipeline and release any previous ep1 descriptor first
+    pipeline_mgr.stop();
+
+    // 2. If ep1 is already active (configured at boot by /init), directly open it with retries
     if Path::new(FFS_EP1).exists() {
         println!("\x1b[1;32m[usb-bulk]\x1b[0m Bulk OUT endpoint {} already active. Opening directly...", FFS_EP1);
-        let ep1 = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NONBLOCK)
-            .open(FFS_EP1)?;
-        let raw_fd = ep1.into_raw_fd();
-        pipeline_mgr.start(PipelineKind::UsbBulkPipe { fd: raw_fd })?;
-        return Ok(());
+        let mut ep1_opt = None;
+        for attempt in 0..10 {
+            match OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(FFS_EP1) {
+                Ok(file) => {
+                    ep1_opt = Some(file);
+                    break;
+                }
+                Err(e) => {
+                    if attempt == 9 {
+                        eprintln!("\x1b[1;31m[usb-bulk]\x1b[0m Failed to open {} after retries: {}", FFS_EP1, e);
+                        return Err(e);
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+            }
+        }
+        if let Some(ep1) = ep1_opt {
+            let raw_fd = ep1.into_raw_fd();
+            pipeline_mgr.start(PipelineKind::UsbBulkPipe { fd: raw_fd })?;
+            return Ok(());
+        }
     }
 
     let _ = ensure_functionfs_gadget();
@@ -350,7 +371,7 @@ pub fn activate_usb_bulk(
     println!("\x1b[1;34m[usb-bulk]\x1b[0m Opening Bulk OUT data endpoint at {}...", FFS_EP1);
     let mut ep1_opt = None;
     for _ in 0..30 {
-        if let Ok(file) = OpenOptions::new().read(true).open(FFS_EP1) {
+        if let Ok(file) = OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(FFS_EP1) {
             ep1_opt = Some(file);
             break;
         }

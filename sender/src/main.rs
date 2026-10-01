@@ -34,25 +34,66 @@ use screencast::MutterScreenCastSession;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
-fn open_usb_pipe_transport(running: Arc<AtomicBool>) -> Option<RawFd> {
+struct UsbTransportHandle {
+    write_fd: RawFd,
+    stop_flag: Arc<AtomicBool>,
+}
+
+fn open_usb_pipe_transport(
+    running: Arc<AtomicBool>,
+    writer_alive: Arc<AtomicBool>,
+) -> Option<UsbTransportHandle> {
     println!("\x1b[1;33m[*] Attempting USB Bulk Direct connection (480 Mbps FunctionFS Endpoint)...\x1b[0m");
-    match usb_transport::open_usb_display_device() {
-        Ok((handle, iface_num, ep_out)) => {
-            println!("\x1b[1;32m[*] USB Bulk Direct connected successfully! (480 Mbps FunctionFS Endpoint)\x1b[0m");
-            let mut pipe_fds = [0 as libc::c_int; 2];
-            unsafe {
-                libc::pipe(pipe_fds.as_mut_ptr());
-                const F_SETPIPE_SZ: libc::c_int = 1031;
-                libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 65536);
+    for attempt in 1..=5 {
+        match usb_transport::open_usb_display_device() {
+            Ok((handle, iface_num, ep_out)) => {
+                println!("\x1b[1;32m[*] USB Bulk Direct connected successfully! (480 Mbps FunctionFS Endpoint)\x1b[0m");
+                let mut pipe_fds = [0 as libc::c_int; 2];
+                unsafe {
+                    libc::pipe2(pipe_fds.as_mut_ptr(), libc::O_CLOEXEC);
+                    const F_SETPIPE_SZ: libc::c_int = 1031;
+                    libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 65536);
+                }
+                let read_fd = pipe_fds[0];
+                let write_fd = pipe_fds[1];
+                let stop_flag = Arc::new(AtomicBool::new(false));
+                let _ = usb_transport::spawn_usb_bulk_writer(
+                    handle,
+                    read_fd,
+                    running.clone(),
+                    writer_alive.clone(),
+                    stop_flag.clone(),
+                    iface_num,
+                    ep_out,
+                );
+                return Some(UsbTransportHandle { write_fd, stop_flag });
             }
-            let read_fd = pipe_fds[0];
-            let write_fd = pipe_fds[1];
-            let _ = usb_transport::spawn_usb_bulk_writer(handle, read_fd, running, iface_num, ep_out);
-            Some(write_fd)
+            Err(err) => {
+                if attempt < 5 {
+                    thread::sleep(Duration::from_millis(250));
+                } else {
+                    println!("\x1b[1;33m[!] USB Bulk device/interface not available on USB bus: {}\x1b[0m", err);
+                }
+            }
         }
-        Err(err) => {
-            println!("\x1b[1;33m[!] USB Bulk device/interface not available on USB bus: {}\x1b[0m", err);
-            None
+    }
+    None
+}
+
+fn close_usb_transport(
+    transport: &mut Option<UsbTransportHandle>,
+    writer_alive: &Arc<AtomicBool>,
+) {
+    if let Some(h) = transport.take() {
+        h.stop_flag.store(true, Ordering::SeqCst);
+        unsafe {
+            libc::close(h.write_fd);
+        }
+        for _ in 0..15 {
+            if !writer_alive.load(Ordering::SeqCst) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
         }
     }
 }
@@ -112,17 +153,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 3. Initialize Transport (USB Bulk as Default, with Automatic Fallback to Network UDP)
-    let mut current_usb_pipe_fd: Option<RawFd> = match cfg.transport {
+    let usb_writer_alive = Arc::new(AtomicBool::new(false));
+    let mut current_usb_pipe: Option<UsbTransportHandle> = match cfg.transport {
         TransportKind::UsbBulk => {
             println!("\x1b[1;33m[*] Transport Mode: USB Bulk Direct (Default - Zero Network Stack)\x1b[0m");
-            let fd = open_usb_pipe_transport(running.clone());
-            if fd.is_none() {
+            let pipe_handle = open_usb_pipe_transport(running.clone(), usb_writer_alive.clone());
+            if pipe_handle.is_none() {
                 println!(
                     "\x1b[1;36m[i] Automatically falling back to Network transport (UDP RTP {}:{})...\x1b[0m",
                     cfg.target_ip, cfg.target_port
                 );
             }
-            fd
+            pipe_handle
         }
         TransportKind::Network { ref ip, port } => {
             println!("\x1b[1;34m[*] Transport Mode: Network IP (UDP RTP {}:{})\x1b[0m", ip, port);
@@ -226,7 +268,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             drop_only: cfg.drop_only,
             skip_to_first: cfg.skip_to_first,
             key_int_max: cfg.key_int_max,
-            usb_pipe_fd: current_usb_pipe_fd,
+            usb_pipe_fd: current_usb_pipe.as_ref().map(|h| h.write_fd),
             engine: cfg.engine,
             capture: cfg.capture,
             kms_info: kms_info.clone(),
@@ -267,6 +309,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let mut last_node_check = Instant::now();
+        let mut last_usb_reconnect = Instant::now();
         let mut last_telemetry_check = Instant::now();
 
         // 6. Watchdog and Web Hot-Apply loop
@@ -299,9 +342,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let _ = c.kill();
                             let _ = c.wait();
                         }
-                        if let Some(fd) = current_usb_pipe_fd.take() {
-                            unsafe { libc::close(fd); }
-                        }
+                        close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                         pipeline_builder.usb_pipe_fd = None;
                         is_paused = true;
                     }
@@ -312,7 +353,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             cfg.mode = m;
                             monitor_to_record = target_mon;
                             switch_engine_or_monitor = true;
-                        } else if is_paused {
+                        } else {
+                            println!("\x1b[1;35m[*] Web Command: Reativando Modo '{}' (Monitor: {})\x1b[0m", m, target_mon);
                             is_paused = false;
                             restart_pipeline = true;
                         }
@@ -409,24 +451,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Explicit transport request always unpauses the stream!
                         is_paused = false;
                         cfg.transport = new_trans.clone();
-                        match new_trans {
-                            TransportKind::UsbBulk => {
-                                if let Some(fd) = current_usb_pipe_fd.take() {
-                                    unsafe { libc::close(fd); }
-                                }
-                                pipeline_builder.usb_pipe_fd = None;
-                            }
-                            TransportKind::Network { ip, port } => {
-                                if let Some(fd) = current_usb_pipe_fd.take() {
-                                    unsafe { libc::close(fd); }
-                                }
-                                pipeline_builder.usb_pipe_fd = None;
-                                pipeline_builder.target_ip = ip.clone();
-                                pipeline_builder.target_port = port;
-                            }
+                        close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                        pipeline_builder.usb_pipe_fd = None;
+                        if let TransportKind::Network { ref ip, port } = new_trans {
+                            pipeline_builder.target_ip = ip.clone();
+                            pipeline_builder.target_port = port;
                         }
                         restart_pipeline = true;
                     }
+                }
+            }
+
+            // Health watchdog: Detect suspend/resume or PipeWire crash (when using PipeWire capture)
+            let uses_pipewire = cfg.capture == CaptureEngine::Mutter || kms_info.is_none();
+            if !is_paused && uses_pipewire {
+                if last_node_check.elapsed() >= Duration::from_millis(1500) {
+                    last_node_check = Instant::now();
+                    if !pipewire::is_pipewire_node_alive(node_id) {
+                        println!("\x1b[1;31m[!] Screencast node {} disappeared. Reconnecting...\x1b[0m", node_id);
+                        if let Some(mut c) = child.take() {
+                            let _ = c.kill();
+                            let _ = c.wait();
+                        }
+                        close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                        thread::sleep(Duration::from_millis(1500));
+                        break;
+                    }
+                }
+            }
+
+            // Health watchdog: Detect USB Bulk disconnect / Pi Zero reboot
+            if !is_paused && cfg.transport == TransportKind::UsbBulk && !usb_writer_alive.load(Ordering::SeqCst) {
+                if last_usb_reconnect.elapsed() >= Duration::from_millis(1500) {
+                    last_usb_reconnect = Instant::now();
+                    println!("\x1b[1;33m[*] USB Bulk writer finalizou (Pi Zero desconectou ou reiniciou). Reconectando...\x1b[0m");
+                    close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                    restart_pipeline = true;
                 }
             }
 
@@ -436,6 +496,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _ = c.kill();
                     let _ = c.wait();
                 }
+                close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                 break;
             }
 
@@ -446,13 +507,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let _ = c.kill();
                         let _ = c.wait();
                     }
-                    if let Some(fd) = current_usb_pipe_fd.take() {
-                        unsafe { libc::close(fd); }
-                        thread::sleep(Duration::from_millis(50));
-                    }
+                    close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                     if cfg.transport == TransportKind::UsbBulk {
-                        current_usb_pipe_fd = open_usb_pipe_transport(running.clone());
-                        pipeline_builder.usb_pipe_fd = current_usb_pipe_fd;
+                        current_usb_pipe = open_usb_pipe_transport(running.clone(), usb_writer_alive.clone());
+                        pipeline_builder.usb_pipe_fd = current_usb_pipe.as_ref().map(|h| h.write_fd);
                     } else {
                         pipeline_builder.usb_pipe_fd = None;
                     }
@@ -464,7 +522,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             break;
                         }
                     };
-                    if cfg.capture == CaptureEngine::Mutter {
+                    if uses_pipewire {
                         thread::sleep(Duration::from_millis(500));
                         pipewire::link_monitor_port_to_sender(node_id, &monitor_to_record);
                     }
@@ -491,22 +549,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 // Em standby / pausa
                 thread::sleep(Duration::from_millis(200));
-            }
-
-            // Health watchdog: Detect suspend/resume or PipeWire crash (Mutter mode only)
-            if !is_paused && cfg.capture == CaptureEngine::Mutter {
-                if last_node_check.elapsed() >= Duration::from_millis(1500) {
-                    last_node_check = Instant::now();
-                    if !pipewire::is_pipewire_node_alive(node_id) {
-                        println!("\x1b[1;31m[!] Screencast node {} disappeared. Reconnecting...\x1b[0m", node_id);
-                        if let Some(mut c) = child.take() {
-                            let _ = c.kill();
-                            let _ = c.wait();
-                        }
-                        thread::sleep(Duration::from_millis(1500));
-                        break;
-                    }
-                }
             }
 
             // Telemetria Periódica de Diagnóstico (a cada 2.5s)
@@ -546,6 +588,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _ = c.kill();
             let _ = c.wait();
         }
+        close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
 
         if !running.load(Ordering::SeqCst) {
             break;
@@ -554,6 +597,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         thread::sleep(Duration::from_secs(1));
     }
 
+    close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
     println!("\x1b[1;32m[*] ext-sender terminated cleanly.\x1b[0m");
     Ok(())
 }

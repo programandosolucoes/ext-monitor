@@ -107,14 +107,28 @@ pub fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
                             let props = &item["info"]["props"];
                             let dir = props["port.direction"].as_str().unwrap_or("");
                             if dir == "in" {
+                                // Skip any audio ports
+                                if props["audio.channel"].as_str().is_some() {
+                                    continue;
+                                }
+                                if let Some(dsp) = props["format.dsp"].as_str() {
+                                    if dsp.contains("audio") {
+                                        continue;
+                                    }
+                                }
+
                                 if let Some(alias) = props["port.alias"].as_str() {
-                                    if alias.contains("ext-hdmi-sender") || alias.contains("gst-launch") {
+                                    if alias.contains("ext-video-sender") || alias.contains("ext-hdmi-sender") {
+                                        in_port = item["id"].as_u64();
+                                        break;
+                                    }
+                                    if alias.contains("gst-launch") && !alias.contains("_FL") && !alias.contains("_FR") {
                                         in_port = item["id"].as_u64();
                                         break;
                                     }
                                 }
                                 if let Some(path) = props["object.path"].as_str() {
-                                    if path.contains("ext-hdmi-sender") {
+                                    if path.contains("ext-video-sender") || path.contains("ext-hdmi-sender") {
                                         in_port = item["id"].as_u64();
                                         break;
                                     }
@@ -126,9 +140,9 @@ pub fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
                     if let Some(p) = out_port {
                         println!("\x1b[1;34m[*] Found {} Output Port: {}\x1b[0m", monitor_name, p);
                         let targets: Vec<String> = if let Some(inp) = in_port {
-                            vec![inp.to_string(), "ext-hdmi-sender:input_0".to_string(), "ext-hdmi-sender:input_1".to_string()]
+                            vec![inp.to_string(), "ext-video-sender:input_0".to_string(), "ext-video-sender:input_1".to_string(), "ext-hdmi-sender:input_0".to_string(), "ext-hdmi-sender:input_1".to_string()]
                         } else {
-                            vec!["ext-hdmi-sender:input_0".to_string(), "ext-hdmi-sender:input_1".to_string()]
+                            vec!["ext-video-sender:input_0".to_string(), "ext-video-sender:input_1".to_string(), "ext-hdmi-sender:input_0".to_string(), "ext-hdmi-sender:input_1".to_string()]
                         };
 
                         for target in targets {

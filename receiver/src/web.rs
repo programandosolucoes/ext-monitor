@@ -339,10 +339,31 @@ fn handle_http_client(
                 } else if body.contains("\"action\":\"start\"") {
                     let pipe = pipeline_mgr.clone();
                     let run = running.clone();
+                    let body_str = body.to_string();
                     thread::spawn(move || {
-                        let trans = if let Ok(cfg) = CONFIG.lock() {
+                        let req_trans = if body_str.contains("\"transport\":\"usb_bulk\"") || body_str.contains("\"transport\":\"usb\"") {
+                            Some("mode3_usb_bulk".to_string())
+                        } else if body_str.contains("\"transport\":\"network\"") || body_str.contains("\"transport\":\"udp\"") {
+                            Some("mode1_udp".to_string())
+                        } else {
+                            None
+                        };
+
+                        let trans = if let Ok(mut cfg) = CONFIG.lock() {
+                            if let Some(ref rt) = req_trans {
+                                cfg.active_transport = rt.clone();
+                                if rt == "mode3_usb_bulk" {
+                                    cfg.mode3 = true;
+                                    cfg.mode1 = false;
+                                } else {
+                                    cfg.mode1 = true;
+                                    cfg.mode3 = false;
+                                }
+                            }
                             if cfg.active_transport.is_empty() { "mode3_usb_bulk".to_string() } else { cfg.active_transport.clone() }
-                        } else { "mode3_usb_bulk".to_string() };
+                        } else {
+                            req_trans.unwrap_or_else(|| "mode3_usb_bulk".to_string())
+                        };
 
                         if trans == "mode3_usb_bulk" {
                             let _ = crate::usb_bulk::activate_usb_bulk(run, pipe);
@@ -557,11 +578,11 @@ fn handle_http_client(
         }
         ("POST", "/api/stream/stop") => {
             println!("\x1b[1;33m[web-server]\x1b[0m User requested stream STOP / STANDBY via Web UI.");
+            forward_config_to_sender("{\"action\":\"stop\"}");
             let pipe = pipeline_mgr.clone();
             thread::spawn(move || {
                 pipe.pause();
                 crate::display::SplashEngine::show_ready();
-                forward_config_to_sender("{\"action\":\"stop\"}");
             });
             send_response(
                 &mut stream,
@@ -587,7 +608,14 @@ fn handle_http_client(
                     let run = running.clone();
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
-                        let _ = crate::usb_bulk::activate_usb_bulk(run, pipe);
+                        if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe.clone()) {
+                            eprintln!("\x1b[1;31m[web-server]\x1b[0m USB Bulk failed: {}. Falling back to UDP...", e);
+                            forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
+                            let default_kind = PipelineKind::RawH264Rtp {
+                                port: default_udp_port,
+                            };
+                            let _ = pipe.resume(default_kind);
+                        }
                     });
                 }
                 "mode2_miracast" => {
@@ -700,7 +728,7 @@ fn handle_http_client(
                         let _ = std::process::Command::new("sync").output();
                         let _ = std::process::Command::new("umount").arg("/mnt/boot").output();
                         thread::sleep(Duration::from_secs(1));
-                        let _ = std::process::Command::new("/sbin/reboot").output();
+                        let _ = std::process::Command::new("/sbin/reboot").arg("-f").output();
                         return;
                     }
                 }

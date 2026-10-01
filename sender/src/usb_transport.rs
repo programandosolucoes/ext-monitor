@@ -8,8 +8,7 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use rusb::{Context, DeviceHandle, UsbContext};
-use std::io::Read;
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -127,85 +126,124 @@ pub fn spawn_usb_bulk_writer(
     handle: DeviceHandle<Context>,
     pipe_read_fd: RawFd,
     running: Arc<AtomicBool>,
+    writer_alive: Arc<AtomicBool>,
+    stop_flag: Arc<AtomicBool>,
     iface_num: u8,
     ep_out: u8,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
+        writer_alive.store(true, Ordering::SeqCst);
+        struct Guard {
+            alive: Arc<AtomicBool>,
+            fd: RawFd,
+        }
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                self.alive.store(false, Ordering::SeqCst);
+                unsafe { libc::close(self.fd); }
+            }
+        }
+        let _guard = Guard {
+            alive: writer_alive,
+            fd: pipe_read_fd,
+        };
+
         println!(
             "\x1b[1;32m[usb-transport]\x1b[0m USB Bulk streaming thread active on Endpoint 0x{:02x} (RFC 4571 Framed RTP + ZLP)...",
             ep_out
         );
 
-        let mut file = unsafe { std::fs::File::from_raw_fd(pipe_read_fd) };
         let mut buffer = [0u8; 65536]; // 64 KB chunk size matching OS pipe capacity
-
         let mut total_bytes = 0u64;
         let mut last_log = std::time::Instant::now();
 
-        while running.load(Ordering::SeqCst) {
-            match file.read(&mut buffer) {
-                Ok(0) => {
-                    println!("\x1b[1;33m[usb-transport]\x1b[0m Video pipe closed. Exiting USB bulk writer.");
+        while running.load(Ordering::SeqCst) && !stop_flag.load(Ordering::SeqCst) {
+            let mut pfd = libc::pollfd {
+                fd: pipe_read_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            let poll_res = unsafe { libc::poll(&mut pfd, 1, 100) };
+            if poll_res < 0 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                eprintln!("\x1b[1;31m[usb-transport]\x1b[0m Poll error on video pipe: {}. Exiting.", err);
+                break;
+            } else if poll_res == 0 {
+                // Timeout (100ms) - continue loop to check running/stop_flag
+                continue;
+            }
+
+            if (pfd.revents & libc::POLLIN) != 0 {
+                let n = unsafe { libc::read(pipe_read_fd, buffer.as_mut_ptr() as *mut libc::c_void, buffer.len()) };
+                if n <= 0 {
+                    if n == 0 {
+                        println!("\x1b[1;33m[usb-transport]\x1b[0m Video pipe closed (EOF). Exiting USB bulk writer.");
+                    } else {
+                        let err = std::io::Error::last_os_error();
+                        eprintln!("\x1b[1;31m[usb-transport]\x1b[0m Pipe read error: {}. Exiting.", err);
+                    }
                     break;
                 }
-                Ok(n) => {
-                    let mut offset = 0;
-                    let mut retries = 0;
-                    while offset < n && running.load(Ordering::SeqCst) {
-                        let slice = &buffer[offset..n];
-                        match handle.write_bulk(ep_out, slice, Duration::from_millis(500)) {
-                            Ok(written) => {
-                                offset += written;
-                                total_bytes += written as u64;
-                                retries = 0;
+                let n = n as usize;
+                let mut offset = 0;
+                let mut retries = 0;
+                while offset < n && running.load(Ordering::SeqCst) && !stop_flag.load(Ordering::SeqCst) {
+                    let slice = &buffer[offset..n];
+                    match handle.write_bulk(ep_out, slice, Duration::from_millis(500)) {
+                        Ok(written) => {
+                            offset += written;
+                            total_bytes += written as u64;
+                            retries = 0;
+                        }
+                        Err(rusb::Error::Pipe) => {
+                            eprintln!("\x1b[1;33m[usb-transport]\x1b[0m Endpoint halted (stall), clearing halt...");
+                            let _ = handle.clear_halt(ep_out);
+                            retries += 1;
+                            if retries > 3 {
+                                break; // Drop remaining to unblock video pipe
                             }
-                            Err(rusb::Error::Pipe) => {
-                                eprintln!("\x1b[1;33m[usb-transport]\x1b[0m Endpoint halted (stall), clearing halt...");
-                                let _ = handle.clear_halt(ep_out);
-                                retries += 1;
-                                if retries > 3 {
-                                    break; // Drop remaining to unblock video pipe
-                                }
-                                thread::sleep(Duration::from_millis(5));
+                            thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(rusb::Error::Timeout) => {
+                            retries += 1;
+                            if retries > 2 {
+                                break;
                             }
-                            Err(rusb::Error::Timeout) => {
-                                retries += 1;
-                                if retries > 2 {
-                                    // Drop remaining part of this frame chunk to prevent pipe deadlock
-                                    break;
-                                }
-                                thread::sleep(Duration::from_millis(5));
-                            }
-                            Err(e) => {
-                                eprintln!("\x1b[1;31m[usb-transport]\x1b[0m USB write error: {}. Exiting writer thread.", e);
-                                return;
-                            }
+                            thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(e) => {
+                            eprintln!("\x1b[1;31m[usb-transport]\x1b[0m USB write error: {}. Exiting writer thread.", e);
+                            return;
                         }
                     }
-
-                    // Critical USB Bulk Protocol Rule: If transfer is exact multiple of 512, send ZLP
-                    if n % 512 == 0 && offset == n {
-                        let _ = handle.write_bulk(ep_out, &[], Duration::from_millis(50));
-                    }
-
-                    if last_log.elapsed() >= Duration::from_secs(5) {
-                        let mb = (total_bytes as f64) / (1024.0 * 1024.0);
-                        println!(
-                            "\x1b[1;34m[usb-transport]\x1b[0m Total transmitted via USB Bulk: {:.2} MB (Zero-Network)",
-                            mb
-                        );
-                        use std::io::Write;
-                        let _ = std::io::stdout().flush();
-                        last_log = std::time::Instant::now();
-                    }
                 }
-                Err(e) => {
-                    eprintln!("\x1b[1;31m[usb-transport]\x1b[0m Pipe read error: {}. Exiting.", e);
-                    break;
+
+                // Critical USB Bulk Protocol Rule: If transfer is exact multiple of 512, send ZLP
+                if n % 512 == 0 && offset == n {
+                    let _ = handle.write_bulk(ep_out, &[], Duration::from_millis(50));
                 }
+
+                if last_log.elapsed() >= Duration::from_secs(5) {
+                    let mb = (total_bytes as f64) / (1024.0 * 1024.0);
+                    println!(
+                        "\x1b[1;34m[usb-transport]\x1b[0m Total transmitted via USB Bulk: {:.2} MB (Zero-Network)",
+                        mb
+                    );
+                    use std::io::Write;
+                    let _ = std::io::stdout().flush();
+                    last_log = std::time::Instant::now();
+                }
+            } else if (pfd.revents & (libc::POLLHUP | libc::POLLERR)) != 0 {
+                println!("\x1b[1;33m[usb-transport]\x1b[0m Pipe hangup detected (POLLHUP). Exiting USB bulk writer.");
+                break;
             }
         }
 
+        // Wake up any pending read on receiver with a zero-length packet (ZLP)
+        let _ = handle.write_bulk(ep_out, &[], Duration::from_millis(50));
         let _ = handle.release_interface(iface_num);
         println!("\x1b[1;32m[usb-transport]\x1b[0m USB Bulk transport released cleanly.");
     })

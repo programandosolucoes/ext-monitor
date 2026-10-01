@@ -105,11 +105,12 @@ impl PipelineBuilder {
 
         let keepalive_ms = (1000 / self.fps).max(16);
         cmd.arg("pipewiresrc");
+        cmd.arg("client-name=ext-video-sender");
         if self.node_id > 0 {
             cmd.arg(format!("path={}", self.node_id));
         } else {
             cmd.arg("autoconnect=false")
-                .arg("stream-properties=props,node.name=ext-hdmi-sender");
+                .arg("stream-properties=props,node.name=ext-video-sender");
         }
         cmd.arg("do-timestamp=true")
             .arg("min-buffers=2")
@@ -209,6 +210,14 @@ impl PipelineBuilder {
                 .arg("fdsink")
                 .arg(format!("fd={}", fd))
                 .arg("sync=false");
+
+            use std::os::unix::process::CommandExt;
+            unsafe {
+                cmd.pre_exec(move || {
+                    libc::fcntl(fd, libc::F_SETFD, 0);
+                    Ok(())
+                });
+            }
         } else {
             cmd.arg("h264parse")
                 .arg("!")

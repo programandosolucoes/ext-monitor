@@ -143,8 +143,8 @@ impl PipelineManager {
             let _ = child.wait();
         }
 
-        let mut native_guard = self.native_decoder.lock().unwrap();
-        if let Some(mut dec) = native_guard.take() {
+        let dec = self.native_decoder.lock().unwrap().take();
+        if let Some(mut dec) = dec {
             dec.stop();
         }
 

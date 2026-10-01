@@ -2900,6 +2900,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             if (btnCln) btnCln.classList.toggle('active', action === 'clone');
             if (btnStop) btnStop.classList.toggle('active', action === 'stop');
 
+            const activeTrans = currentTransport.includes('usb') ? 'usb_bulk' : 'network';
+
             if (action === 'stop') {
                 if (badge) { badge.textContent = t('extBadgeOff'); badge.className = 'card-badge badge-amber'; }
                 showToast(t('toastExtStopped') || '⏹ Extension disabled (Standby)');
@@ -2908,12 +2910,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             } else if (action === 'clone') {
                 if (badge) { badge.textContent = t('extBadgeClone'); badge.className = 'card-badge badge-cyan'; }
                 showToast(t('toastExtCloned') || '💻 Mirroring notebook display (eDP-1)...');
-                sendHostControl({ action: 'start', mode: 'clone' });
+                sendHostControl({ action: 'start', mode: 'clone', transport: activeTrans });
                 fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             } else {
                 if (badge) { badge.textContent = t('extBadgeActive'); badge.className = 'card-badge badge-green'; }
                 showToast(t('toastExtExtended') || '🖥️ Extending desktop to TV (HDMI-1)...');
-                sendHostControl({ action: 'start', mode: 'extend' });
+                sendHostControl({ action: 'start', mode: 'extend', transport: activeTrans });
                 fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             }
         }
@@ -3474,6 +3476,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
                         // Update Active Transport Connection buttons
                         const activeTrans = data.active_transport || am.id;
+                        if (data.active_transport) { currentTransport = data.active_transport; }
                         document.querySelectorAll('#activeTransportGrid .btn-toggle').forEach(b => {
                             const isCurrent = (activeTrans.includes('mode1') && b.id === 'btnTransport_mode1') ||
                                               (activeTrans.includes('mode2') && b.id === 'btnTransport_mode2') ||
