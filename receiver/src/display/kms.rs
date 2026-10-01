@@ -233,7 +233,7 @@ impl KmsPlaneSink {
             .custom_flags(libc::O_CLOEXEC)
             .open(path)?;
         let fd = file.as_raw_fd();
-        unsafe { libc::ioctl(fd, DRM_IOCTL_SET_MASTER, 0); }
+        unsafe { libc::ioctl(fd, DRM_IOCTL_SET_MASTER as _, 0); }
 
         // Enable Universal Planes so KMS exposes primary display planes
         let mut cap = DrmSetClientCap {
@@ -241,7 +241,7 @@ impl KmsPlaneSink {
             value: 1,
         };
         unsafe {
-            let _ = libc::ioctl(fd, DRM_IOCTL_SET_CLIENT_CAP, &mut cap);
+            let _ = libc::ioctl(fd, DRM_IOCTL_SET_CLIENT_CAP as _, &mut cap);
         }
 
         let (_connector, encoder_id) = find_connector(fd)?;
@@ -281,7 +281,7 @@ impl KmsPlaneSink {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "buffer index"));
         }
         let mut prime = DrmPrimeHandle { handle: 0, flags: 0, fd: dmabuf_fd };
-        if unsafe { libc::ioctl(self.fd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &mut prime) } != 0 || prime.handle == 0 {
+        if unsafe { libc::ioctl(self.fd, DRM_IOCTL_PRIME_FD_TO_HANDLE as _, &mut prime) } != 0 || prime.handle == 0 {
             return Err(io::Error::last_os_error());
         }
         let handle = prime.handle;
@@ -310,10 +310,10 @@ impl KmsPlaneSink {
             cmd.pitches = [self.stride, uv, uv, 0];
             cmd.offsets = [0, y_size, y_size.saturating_add(u_size), 0];
         }
-        if unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_ADDFB2, &mut cmd) } != 0 || cmd.fb_id == 0 {
+        if unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_ADDFB2 as _, &mut cmd) } != 0 || cmd.fb_id == 0 {
             let err = io::Error::last_os_error();
             let mut close = DrmGemClose { handle, pad: 0 };
-            unsafe { libc::ioctl(self.fd, DRM_IOCTL_GEM_CLOSE, &mut close); }
+            unsafe { libc::ioctl(self.fd, DRM_IOCTL_GEM_CLOSE as _, &mut close); }
             return Err(err);
         }
         if self.imported.len() <= index {
@@ -343,7 +343,7 @@ impl KmsPlaneSink {
             src_h: self.height << 16,
             src_w: self.width << 16,
         };
-        if unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_SETPLANE, &mut req) } == 0 {
+        if unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_SETPLANE as _, &mut req) } == 0 {
             return Ok(true);
         }
         let err = io::Error::last_os_error();
@@ -353,9 +353,9 @@ impl KmsPlaneSink {
         if err.raw_os_error() == Some(libc::EACCES) {
             // DRM master lost - reacquire master and retry SETPLANE once
             unsafe {
-                libc::ioctl(self.fd, DRM_IOCTL_SET_MASTER, 0);
+                libc::ioctl(self.fd, DRM_IOCTL_SET_MASTER as _, 0);
             }
-            if unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_SETPLANE, &mut req) } == 0 {
+            if unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_SETPLANE as _, &mut req) } == 0 {
                 return Ok(true);
             }
         }
@@ -379,16 +379,16 @@ impl Drop for KmsPlaneSink {
             src_h: 0,
             src_w: 0,
         };
-        unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_SETPLANE, &mut clear); }
+        unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_SETPLANE as _, &mut clear); }
         for slot in self.imported.drain(..) {
             if let Some(imp) = slot {
                 let mut id = imp.fb_id;
-                unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_RMFB, &mut id); }
+                unsafe { libc::ioctl(self.fd, DRM_IOCTL_MODE_RMFB as _, &mut id); }
                 let mut gem = DrmGemClose { handle: imp.handle, pad: 0 };
-                unsafe { libc::ioctl(self.fd, DRM_IOCTL_GEM_CLOSE, &mut gem); }
+                unsafe { libc::ioctl(self.fd, DRM_IOCTL_GEM_CLOSE as _, &mut gem); }
             }
         }
-        unsafe { libc::ioctl(self.fd, DRM_IOCTL_DROP_MASTER, 0); }
+        unsafe { libc::ioctl(self.fd, DRM_IOCTL_DROP_MASTER as _, 0); }
     }
 }
 
@@ -402,7 +402,7 @@ struct CardResources {
 
 fn get_card_resources(fd: RawFd) -> io::Result<CardResources> {
     let mut res = unsafe { std::mem::zeroed::<DrmModeCardRes>() };
-    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES, &mut res) } != 0 {
+    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES as _, &mut res) } != 0 {
         return Err(io::Error::last_os_error());
     }
     let mut fbs = vec![0u32; res.count_fbs as usize];
@@ -413,7 +413,7 @@ fn get_card_resources(fd: RawFd) -> io::Result<CardResources> {
     res.crtc_id_ptr = crtcs.as_mut_ptr() as u64;
     res.connector_id_ptr = connectors.as_mut_ptr() as u64;
     res.encoder_id_ptr = encoders.as_mut_ptr() as u64;
-    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES, &mut res) } != 0 {
+    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES as _, &mut res) } != 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(CardResources { fbs, crtcs, connectors, encoders })
@@ -425,7 +425,7 @@ fn find_connector(fd: RawFd) -> io::Result<(u32, u32)> {
     for &id in &card.connectors {
         let mut conn = unsafe { std::mem::zeroed::<DrmModeGetConnector>() };
         conn.connector_id = id;
-        if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &mut conn) } != 0 {
+        if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR as _, &mut conn) } != 0 {
             continue;
         }
 
@@ -437,7 +437,7 @@ fn find_connector(fd: RawFd) -> io::Result<(u32, u32)> {
         conn.props_ptr = props.as_mut_ptr() as u64;
         conn.prop_values_ptr = prop_values.as_mut_ptr() as u64;
         conn.encoders_ptr = encoders.as_mut_ptr() as u64;
-        if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &mut conn) } != 0 {
+        if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR as _, &mut conn) } != 0 {
             continue;
         }
 
@@ -469,7 +469,7 @@ fn find_crtc(fd: RawFd, encoder_id: u32) -> io::Result<u32> {
         possible_crtcs: 0,
         possible_clones: 0,
     };
-    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETENCODER, &mut enc) } != 0 {
+    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETENCODER as _, &mut enc) } != 0 {
         return Err(io::Error::last_os_error());
     }
     if enc.crtc_id != 0 {
@@ -490,7 +490,7 @@ fn find_crtc(fd: RawFd, encoder_id: u32) -> io::Result<u32> {
 fn crtc_size(fd: RawFd, crtc_id: u32, fallback_w: u32, fallback_h: u32) -> (u32, u32) {
     let mut crtc = unsafe { std::mem::zeroed::<DrmModeCrtc>() };
     crtc.crtc_id = crtc_id;
-    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETCRTC, &mut crtc) } == 0
+    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETCRTC as _, &mut crtc) } == 0
         && crtc.mode_valid != 0
         && crtc.mode.hdisplay > 0
         && crtc.mode.vdisplay > 0
@@ -503,12 +503,12 @@ fn crtc_size(fd: RawFd, crtc_id: u32, fallback_w: u32, fallback_h: u32) -> (u32,
 fn find_plane(fd: RawFd, crtc_id: u32, fourcc: u32) -> io::Result<u32> {
     let crtc_index = crtc_bit(fd, crtc_id)?;
     let mut res = DrmModeGetPlaneRes { plane_id_ptr: 0, count_planes: 0 };
-    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETPLANERESOURCES, &mut res) } != 0 {
+    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETPLANERESOURCES as _, &mut res) } != 0 {
         return Err(io::Error::last_os_error());
     }
     let mut ids = vec![0u32; res.count_planes as usize];
     res.plane_id_ptr = ids.as_mut_ptr() as u64;
-    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETPLANERESOURCES, &mut res) } != 0 {
+    if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETPLANERESOURCES as _, &mut res) } != 0 {
         return Err(io::Error::last_os_error());
     }
     for &plane_id in &ids {
@@ -521,7 +521,7 @@ fn find_plane(fd: RawFd, crtc_id: u32, fourcc: u32) -> io::Result<u32> {
             count_format_types: 0,
             format_type_ptr: 0,
         };
-        if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETPLANE, &mut plane) } != 0 {
+        if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETPLANE as _, &mut plane) } != 0 {
             continue;
         }
         if plane.possible_crtcs & (1 << crtc_index) == 0 {
@@ -531,7 +531,7 @@ fn find_plane(fd: RawFd, crtc_id: u32, fourcc: u32) -> io::Result<u32> {
         let mut formats = vec![0u32; n];
         plane.count_format_types = n as u32;
         plane.format_type_ptr = formats.as_mut_ptr() as u64;
-        if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETPLANE, &mut plane) } != 0 {
+        if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETPLANE as _, &mut plane) } != 0 {
             continue;
         }
         if formats.iter().any(|&f| f == fourcc) {

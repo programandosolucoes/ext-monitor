@@ -788,7 +788,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     <span class="card-badge badge-purple" data-i18n="servicesBadge">Hardware Listeners</span>
                 </div>
                 <div class="btn-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
-                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan); cursor: pointer;" onclick="if(!event.target.closest('.switch')) setActiveTransport('mode1_udp')">
+                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) setActiveTransport('mode1_udp')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">🐧 Mode 1: Linux Wayland</div>
                             <label class="switch" title="Toggle Mode 1">
@@ -797,9 +797,12 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             </label>
                         </div>
                         <div class="dl-desc" data-i18n="m1Desc">Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (&lt; 15ms).</div>
-                        <span id="badgeMode1" class="stat-badge badge-cyan" style="align-self: flex-start;" data-i18n="badgeMode1On">Enabled (UDP 5000)</span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; margin-top: 0.8rem;">
+                            <span id="badgeMode1" class="stat-badge badge-cyan" data-i18n="badgeMode1On">Enabled (UDP 5000)</span>
+                            <button class="btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm);" onclick="setActiveTransport('mode1_udp'); event.stopPropagation();" data-i18n="btnSelectMode1">▶ Ativar Rede UDP</button>
+                        </div>
                     </div>
-                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald); cursor: pointer;" onclick="if(!event.target.closest('.switch')) setActiveTransport('mode2_miracast')">
+                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) setActiveTransport('mode2_miracast')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">🪟 Mode 2: Windows Miracast</div>
                             <label class="switch" title="Toggle Mode 2">
@@ -808,9 +811,12 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             </label>
                         </div>
                         <div class="dl-desc" data-i18n="m2Desc">Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.</div>
-                        <span id="badgeMode2" class="stat-badge badge-green" style="align-self: flex-start;" data-i18n="badgeMode2On">Enabled (TCP 7236)</span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; margin-top: 0.8rem;">
+                            <span id="badgeMode2" class="stat-badge badge-green" data-i18n="badgeMode2On">Enabled (TCP 7236)</span>
+                            <button class="btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm); background: var(--accent-emerald); border-color: var(--accent-emerald);" onclick="setActiveTransport('mode2_miracast'); event.stopPropagation();" data-i18n="btnSelectMode2">▶ Ativar Miracast (Win+K)</button>
+                        </div>
                     </div>
-                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple); cursor: pointer;" onclick="if(!event.target.closest('.switch')) setActiveTransport('mode3_usb_bulk')">
+                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) setActiveTransport('mode3_usb_bulk')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">⚡ Mode 3: USB Bulk Direct</div>
                             <label class="switch" title="Toggle Mode 3">
@@ -819,7 +825,10 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             </label>
                         </div>
                         <div class="dl-desc" data-i18n="m3Desc">Direct 480 Mbps raw hardware pipe via USB FunctionFS without network stack overhead (&lt; 1ms).</div>
-                        <span id="badgeMode3" class="stat-badge badge-purple" style="align-self: flex-start;" data-i18n="badgeMode3On">Enabled (USB Bulk)</span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; margin-top: 0.8rem;">
+                            <span id="badgeMode3" class="stat-badge badge-purple" data-i18n="badgeMode3On">Enabled (USB Bulk)</span>
+                            <button class="btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm); background: var(--accent-purple); border-color: var(--accent-purple);" onclick="setActiveTransport('mode3_usb_bulk'); event.stopPropagation();" data-i18n="btnSelectMode3">▶ Ativar USB Bulk</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -848,6 +857,32 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     <div class="btn-grid">
                         <button class="btn-toggle active" id="btnHostStart" onclick="sendHostControl({ action: 'start' })" style="border-color: #00e676; color: #00e676;" data-i18n="btnHostStart">▶ Start / Restart Stream</button>
                         <button class="btn-toggle" id="btnHostStop" onclick="sendHostControl({ action: 'stop' })" style="border-color: #ff5252; color: #ff5252;" data-i18n="btnHostStop">⏹ Stop Stream</button>
+                    </div>
+                </div>
+
+                <!-- Active Screen Transport / Transmission Protocol -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="hostTransportLabel">Active Transport / Transmission Mode</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipHostTransport">Switch transmission protocol on the fly: USB Bulk Direct (&lt; 1ms raw pipe), Network UDP (port 5000), or Windows Miracast (Win+K RTSP).</span>
+                        </span>
+                        <span class="control-value" id="valHostTransport">USB Bulk Direct (Mode 3)</span>
+                    </div>
+                    <div class="btn-grid" id="hostTransportGrid">
+                        <button class="btn-toggle active" id="btnHostTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
+                            <div style="font-weight: 700;">⚡ Mode 3: USB Bulk Direct</div>
+                            <div style="font-size: 0.76rem; opacity: 0.8;">480 Mbps FunctionFS • &lt; 1ms</div>
+                        </button>
+                        <button class="btn-toggle" id="btnHostTransport_mode1" onclick="setActiveTransport('mode1_udp')">
+                            <div style="font-weight: 700;">🐧 Mode 1: Network UDP</div>
+                            <div style="font-size: 0.76rem; opacity: 0.8;">UDP Port 5000 • &lt; 15ms</div>
+                        </button>
+                        <button class="btn-toggle" id="btnHostTransport_mode2" onclick="setActiveTransport('mode2_miracast')">
+                            <div style="font-weight: 700;">🪟 Mode 2: Miracast</div>
+                            <div style="font-size: 0.76rem; opacity: 0.8;">Windows Win+K • TCP 7236</div>
+                        </button>
                     </div>
                 </div>
 
@@ -1872,6 +1907,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 hostStatusLabel: "Transmission Status & Actions",
                 btnHostStart: "▶ Start / Restart Stream",
                 btnHostStop: "⏹ Stop Stream",
+                hostTransportLabel: "Active Transport / Transmission Mode",
+                tipHostTransport: "Switch transmission protocol on the fly: USB Bulk Direct (< 1ms raw pipe), Network UDP (port 5000), or Windows Miracast (Win+K RTSP).",
+                btnSelectMode1: "▶ Switch to Network UDP",
+                btnSelectMode2: "▶ Switch to Miracast (Win+K)",
+                btnSelectMode3: "▶ Switch to USB Bulk",
                 hostModeLabel: "Monitor Display Mode",
                 tipHostMode: "HDMI-1: Virtual extended second screen on TV. eDP-1: Clones notebook primary screen.",
                 btnModeExtend: "🖥️ Extended (HDMI-1 TV)",
@@ -2152,6 +2192,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 hostStatusLabel: "Status da Transmissão & Ações",
                 btnHostStart: "▶ Iniciar / Reiniciar Stream",
                 btnHostStop: "⏹ Parar Stream",
+                hostTransportLabel: "Transporte Ativo / Modo de Transmissão",
+                tipHostTransport: "Alterne o protocolo de transmissão em tempo real: USB Bulk Direto (latência < 1ms), Rede UDP (porta 5000) ou Windows Miracast (Win+K RTSP).",
+                btnSelectMode1: "▶ Ativar Rede UDP",
+                btnSelectMode2: "▶ Ativar Miracast (Win+K)",
+                btnSelectMode3: "▶ Ativar USB Bulk",
                 hostModeLabel: "Modo de Exibição do Monitor",
                 tipHostMode: "HDMI-1: Segunda tela virtual estendida na TV. eDP-1: Clona a tela principal do notebook.",
                 btnModeExtend: "🖥️ Estendido (HDMI-1 TV)",
@@ -2971,9 +3016,15 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         function setActiveTransport(transport) {
             currentTransport = transport;
             const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
-            document.querySelectorAll('#activeTransportGrid .btn-toggle').forEach(b => {
-                b.classList.toggle('active', b.id === 'btnTransport_' + shortKey);
+            document.querySelectorAll('#activeTransportGrid .btn-toggle, #hostTransportGrid .btn-toggle').forEach(b => {
+                const isCurrent = b.id === 'btnTransport_' + shortKey || b.id === 'btnHostTransport_' + shortKey;
+                b.classList.toggle('active', isCurrent);
             });
+            const valHostTransport = document.getElementById('valHostTransport');
+            if (valHostTransport) {
+                valHostTransport.textContent = transport.includes('mode3') ? 'USB Bulk Direct (Mode 3)' :
+                    (transport.includes('mode2') ? 'Windows Miracast (Mode 2)' : 'Network UDP (Mode 1)');
+            }
 
             const btnExt = document.getElementById('btnActionExtend');
             const btnCln = document.getElementById('btnActionClone');
@@ -3649,15 +3700,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                             highlightActiveCard(null);
                         }
 
-                        // Update Active Transport Connection buttons
+                        // Update Active Transport Connection buttons across both tabs
                         const activeTrans = data.active_transport || am.id;
                         if (data.active_transport) { currentTransport = data.active_transport; }
-                        document.querySelectorAll('#activeTransportGrid .btn-toggle').forEach(b => {
-                            const isCurrent = (activeTrans.includes('mode1') && b.id === 'btnTransport_mode1') ||
-                                              (activeTrans.includes('mode2') && b.id === 'btnTransport_mode2') ||
-                                              (activeTrans.includes('mode3') && b.id === 'btnTransport_mode3');
+                        document.querySelectorAll('#activeTransportGrid .btn-toggle, #hostTransportGrid .btn-toggle').forEach(b => {
+                            const isCurrent = (activeTrans.includes('mode1') && (b.id === 'btnTransport_mode1' || b.id === 'btnHostTransport_mode1')) ||
+                                              (activeTrans.includes('mode2') && (b.id === 'btnTransport_mode2' || b.id === 'btnHostTransport_mode2')) ||
+                                              (activeTrans.includes('mode3') && (b.id === 'btnTransport_mode3' || b.id === 'btnHostTransport_mode3'));
                             b.classList.toggle('active', isCurrent);
                         });
+                        const valHostTransport = document.getElementById('valHostTransport');
+                        if (valHostTransport) {
+                            valHostTransport.textContent = activeTrans.includes('mode3') ? 'USB Bulk Direct (Mode 3)' :
+                                (activeTrans.includes('mode2') ? 'Windows Miracast (Mode 2)' : 'Network UDP (Mode 1)');
+                        }
 
                         // Update Display Extension Action buttons (Extend / Clone / Stop)
                         const isPaused = data.stream_state === 'paused' || am.id === 'standby';

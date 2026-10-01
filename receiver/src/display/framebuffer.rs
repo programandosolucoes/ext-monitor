@@ -34,7 +34,7 @@ impl FramebufferSink {
         // 1. Force framebuffer unblank
         const FBIOBLANK: libc::c_ulong = 0x4611;
         unsafe {
-            libc::ioctl(fb_fd, FBIOBLANK, 0 as libc::c_int);
+            libc::ioctl(fb_fd, FBIOBLANK as _, 0 as libc::c_int);
         }
 
         // 2. Memory map /dev/fb0 for direct DMA-like memory blits (RGB565 = 2 bytes per pixel)
@@ -71,7 +71,7 @@ impl FramebufferSink {
                 const KDSETMODE: libc::c_ulong = 0x4B3A;
                 const KD_GRAPHICS: libc::c_ulong = 0x01;
                 unsafe {
-                    libc::ioctl(tty1.as_raw_fd(), KDSETMODE, KD_GRAPHICS);
+                    libc::ioctl(tty1.as_raw_fd(), KDSETMODE as _, KD_GRAPHICS);
                 }
             }
             self.graphics_mode = true;

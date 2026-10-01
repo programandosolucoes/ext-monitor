@@ -345,6 +345,8 @@ fn handle_http_client(
                             Some("mode3_usb_bulk".to_string())
                         } else if body_str.contains("\"transport\":\"network\"") || body_str.contains("\"transport\":\"udp\"") {
                             Some("mode1_udp".to_string())
+                        } else if body_str.contains("\"transport\":\"miracast\"") || body_str.contains("\"transport\":\"mode2\"") || body_str.contains("\"mode2\"") {
+                            Some("mode2_miracast".to_string())
                         } else {
                             None
                         };
@@ -355,8 +357,14 @@ fn handle_http_client(
                                 if rt == "mode3_usb_bulk" {
                                     cfg.mode3 = true;
                                     cfg.mode1 = false;
+                                    cfg.mode2 = false;
+                                } else if rt == "mode2_miracast" {
+                                    cfg.mode2 = true;
+                                    cfg.mode1 = false;
+                                    cfg.mode3 = false;
                                 } else {
                                     cfg.mode1 = true;
+                                    cfg.mode2 = false;
                                     cfg.mode3 = false;
                                 }
                             }
@@ -370,6 +378,9 @@ fn handle_http_client(
                         } else if trans == "mode1_udp" {
                             let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
                             let _ = pipe.resume(default_kind);
+                        } else if trans == "mode2_miracast" {
+                            pipe.stop();
+                            crate::display::SplashEngine::show_miracast();
                         }
                     });
                 }

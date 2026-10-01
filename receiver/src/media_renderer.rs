@@ -636,14 +636,14 @@ fn blit_to_fb0(buffer: &[u8]) {
         let fd = file.as_raw_fd();
         const FBIOBLANK: libc::c_ulong = 0x4611;
         unsafe {
-            libc::ioctl(fd, FBIOBLANK, 0 as libc::c_int);
+            libc::ioctl(fd, FBIOBLANK as _, 0 as libc::c_int);
         }
 
         if let Ok(tty1) = OpenOptions::new().read(true).write(true).open("/dev/tty1") {
             const KDSETMODE: libc::c_ulong = 0x4B3A;
             const KD_GRAPHICS: libc::c_ulong = 0x01;
             unsafe {
-                libc::ioctl(tty1.as_raw_fd(), KDSETMODE, KD_GRAPHICS);
+                libc::ioctl(tty1.as_raw_fd(), KDSETMODE as _, KD_GRAPHICS);
             }
         }
 

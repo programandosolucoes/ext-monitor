@@ -165,11 +165,11 @@ fn blit_to_framebuffer(buffer: &[u8]) {
 
     let mut vinfo = FbVarScreeninfo::default();
     unsafe {
-        let _ = libc::ioctl(fd, FBIOBLANK, 0 as libc::c_int);
-        if libc::ioctl(fd, FBIOGET_VSCREENINFO, &mut vinfo) == 0 {
+        let _ = libc::ioctl(fd, FBIOBLANK as _, 0 as libc::c_int);
+        if libc::ioctl(fd, FBIOGET_VSCREENINFO as _, &mut vinfo) == 0 {
             vinfo.activate = 0; // FB_ACTIVATE_NOW
-            let _ = libc::ioctl(fd, FBIOPUT_VSCREENINFO, &mut vinfo);
-            let _ = libc::ioctl(fd, FBIOPAN_DISPLAY, &mut vinfo);
+            let _ = libc::ioctl(fd, FBIOPUT_VSCREENINFO as _, &mut vinfo);
+            let _ = libc::ioctl(fd, FBIOPAN_DISPLAY as _, &mut vinfo);
         }
     }
 
@@ -177,7 +177,7 @@ fn blit_to_framebuffer(buffer: &[u8]) {
         const KDSETMODE: libc::c_ulong = 0x4B3A;
         const KD_GRAPHICS: libc::c_ulong = 0x01;
         unsafe {
-            libc::ioctl(tty1.as_raw_fd(), KDSETMODE, KD_GRAPHICS);
+            libc::ioctl(tty1.as_raw_fd(), KDSETMODE as _, KD_GRAPHICS);
         }
     }
 
@@ -188,7 +188,7 @@ fn blit_to_framebuffer(buffer: &[u8]) {
     }
     let _ = file.flush();
     unsafe {
-        let _ = libc::ioctl(fd, FBIOPAN_DISPLAY, &mut vinfo);
+        let _ = libc::ioctl(fd, FBIOPAN_DISPLAY as _, &mut vinfo);
     }
 }
 
