@@ -14,11 +14,20 @@
 
 This compendium gathers the reverse-engineering documentation, architectural decisions, and low-level specifications that made it possible to transform a $10 embedded computer (single-core ARM1176 1.0 GHz Raspberry Pi Zero) into a professional 60 FPS secondary monitor with sub-15ms latency.
 
-All critical engineering milestones—from FAT16 sector alignment on Broadcom silicon to VideoCore IV zero-copy DRM/KMS scanout, Wayland power suspend resilience, 4-language onboarding splash, live EDID telemetry, direct kernel DRM/KMS scanout capture, bidirectional Rust host daemon, hybrid network/Bluetooth audio, IoT Media Renderer ecosystem, and single-HDMI FFT multiplexing—are formally documented across the 20 technical blueprints below:
+### The Foundation (Original Blueprints 01 to 20):
+All critical engineering milestones of the baseline appliance—from FAT16 sector alignment on Broadcom silicon to VideoCore IV zero-copy DRM/KMS scanout, Wayland power suspend resilience, 4-language onboarding splash, live EDID telemetry, direct kernel DRM/KMS scanout capture, bidirectional Rust host daemon, hybrid network/Bluetooth audio, IoT Media Renderer ecosystem, and single-HDMI FFT multiplexing—are formally documented across the initial 20 foundational blueprints.
+
+### The Expansion Suite (Blueprints 21 to 25):
+Following the completion of the baseline appliance, the engineering scope expanded to integrate **native zero-driver wireless projection (Wi-Fi Display / Miracast / MS-MICE)** for Windows 10/11 (`Win + K`) and Linux desktops. This expansion introduced 5 advanced blueprints covering:
+* **BP 21:** MS-MICE binary signaling, reverse RTSP WFD negotiation, and dynamic SPS dimension parsing.
+* **BP 22:** NV12 16-line macroblock stride alignment on KMS, eliminating the top green bar and dropping demux latency to 2ms.
+* **BP 23:** Automated sysfs host GPU hardware ranking (AMD Mendocino/RDNA, Intel QuickSync, NVIDIA NVENC) and UI launch tooltips.
+* **BP 24:** Native 720p60 CEA index 6 enforcement (Level 3.1) and deterministic PES-demarcated MPEG-TS Access Unit demuxing.
+* **BP 25:** Unified multi-service standby stop, active RTSP client socket teardown, host transmitter termination (`SIGTERM`/`SIGKILL`), and persistent HDMI ready splash.
 
 ---
 
-## 2. Directory of the 23 Engineering Blueprints
+## 2. Directory of the 25 Engineering Blueprints
 
 | # | Technical Blueprint | Document File | Engineering Focus |
 | :---: | :--- | :--- | :--- |

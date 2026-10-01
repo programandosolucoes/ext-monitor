@@ -12,13 +12,20 @@
 
 ## 1. Visão Geral da Suíte de Documentos
 
-Esta pasta reúne a documentação de engenharia reversa, decisões de arquitetura e especificações de baixo nível que tornaram possível transformar um dispositivo de computação de US$ 10 (Raspberry Pi Zero de núcleo único a 1.0 GHz) em um monitor secundário profissional de 60 FPS com latência inferior a 15 milissegundos.
+### A Fundação (Blueprints Originais 01 a 20):
+Todos os desafios fundamentais do appliance base — desde o alinhamento de setores FAT16 no silício BCM2835 até o scanout zero-copy DRM/KMS no VideoCore IV, a recuperação autônoma de suspensão de energia no Linux Wayland, o motor visual quadrilíngue de splash, a telemetria EDID de monitores reais, a captura direta de hardware DRM/KMS scanout, o controle web bidirecional em Rust, o áudio híbrido IP/Bluetooth, o ecossistema IoT Media Renderer e o multiplexador HDMI com FFT em tempo real — estão formalizados nos 20 blueprints fundamentais iniciais.
 
-Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silício BCM2835 até o scanout zero-copy DRM/KMS no VideoCore IV, a recuperação autônoma de suspensão de energia no Linux Wayland, o motor visual quadrilíngue de splash, a telemetria EDID de monitores reais, a captura direta de hardware DRM/KMS scanout, o controle web bidirecional em Rust, o áudio híbrido IP/Bluetooth, o ecossistema IoT Media Renderer e o multiplexador HDMI com FFT em tempo real — estão formalizados nos 20 blueprints técnicos a seguir:
+### A Suíte de Expansão (Blueprints 21 a 25):
+Após a conclusão do appliance base, o escopo de engenharia foi expandido para integrar **projeção sem fio nativa sem drivers (Wi-Fi Display / Miracast / MS-MICE)** para Windows 10/11 (`Win + K`) e desktops Linux. Essa expansão introduziu 5 blueprints avançados cobrindo:
+* **BP 21:** Sinalização binária MS-MICE, negociação reversa RTSP WFD e parser dinâmico de dimensões SPS.
+* **BP 22:** Alinhamento de macrobloco de 16 linhas NV12 no KMS, eliminando a faixa verde superior e reduzindo a latência do demuxer para 2ms.
+* **BP 23:** Detecção determinística e ranking automatizado de GPUs do host (AMD Mendocino/RDNA, Intel QuickSync, NVIDIA NVENC) via sysfs com tooltips na UI.
+* **BP 24:** Imposição nativa do formato CEA índice 6 (1280x720p60 Nível 3.1) e demuxer MPEG-TS determinista demarcado por PES.
+* **BP 25:** Parada unificada de standby multi-serviço, teardown de sockets TCP RTSP ativos, encerramento de transmissores do host (`SIGTERM`/`SIGKILL`) e tela de splash Ready persistente no HDMI.
 
 ---
 
-## 2. Mapa dos 21 Blueprints de Engenharia
+## 2. Mapa dos 25 Blueprints de Engenharia
 
 | # | Blueprint Técnico | Arquivo | Foco de Engenharia |
 | :---: | :--- | :--- | :--- |

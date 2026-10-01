@@ -235,9 +235,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
 * **[English Operation Manual (docs/OPERATION-MANUAL.md)](docs/OPERATION-MANUAL.md):** Complete operational manual in English covering all scripts, modes, PipeWire audio, CLI flags, telemetry, and zero-reboot switching.
 * **[Manual de Operação em Português (docs/MANUAL-DE-OPERACAO.md)](docs/MANUAL-DE-OPERACAO.md):** Guia operacional exaustivo em português.
-* **[The Book of Ext-Monitor: 20 Engineering Blueprints (docs/LIVRO-EXT-MONITOR.md)](docs/LIVRO-EXT-MONITOR.md):** Comprehensive 20-chapter technical book detailing the reverse engineering, hardware architecture, and math behind the appliance.
+* **[The Book of Ext-Monitor: 20 Engineering Blueprints (docs/LIVRO-EXT-MONITOR.md)](docs/LIVRO-EXT-MONITOR.md):** Comprehensive 20-chapter technical book detailing the foundational reverse engineering, hardware architecture, and silicon math behind the appliance.
+* **[Master Blueprints Directory (docs/blueprints/README.md)](docs/blueprints/README.md):** Complete master index of all 25 engineering blueprints with bilingual support.
 
-### Index of Engineering Blueprints (100% English Suite)
+### The Foundation (Original Blueprints 01 to 20)
+The initial 20 engineering blueprints document the core silicon architecture and baseline appliance engine: Broadcom BCM2835 FAT16 geometry, V4L2 M2M hardware decoding, zero-copy KMS DRM scanout, dual PipeWire watchdogs for S3 sleep recovery, native Rust host agent, and single-HDMI audio/visualizer multiplexing.
 
 1. **[Blueprint 01: 32MB Appliance Image & BCM2835 Geometry](docs/blueprints/en/01-32mb-image-bcm2835-geometry.md):** Boot ROM boundaries, sector alignment, and 2KB FAT16 formatting.
 2. **[Blueprint 02: End-to-End Architecture vs. GUD](docs/blueprints/en/02-architecture-tx-rx-and-gud-comparison.md):** Silicon-level comparison with GUD and V4L2 M2M offloading.
@@ -259,6 +261,15 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 18. **[Blueprint 18: Zero-Copy VA-API Pipeline, PipeWire HDMI Audio & Hot-Apply Engine](docs/blueprints/en/18-hybrid-audio-subsystem-network-opus-bluetooth-a2dp.md):** VA-API DMA-BUF capture, PipeWire audio routing, and live parameter modulation.
 19. **[Blueprint 19: IoT Media Renderer, Chromecast/UPnP/DLNA & Web Visualizer](docs/blueprints/en/19-iot-media-renderer-chromecast-upnp-hdmi-visualizer.md):** Media streaming appliance mode, background player, and HDMI audio visualizer.
 20. **[Blueprint 20: Single-HDMI Scanout Multiplexer, Realtime Hardware FFT & Zero-Reboot](docs/blueprints/en/20-single-hdmi-scanout-multiplexer-realtime-fft-i18n-zero-reboot.md):** 512-point Cooley-Tukey FFT, single-HDMI mutual exclusion, 4-language i18n, and zero-reboot teardown.
+
+### The Miracast & Expansion Suite (Blueprints 21 to 25)
+To support native zero-driver wireless projection across modern OSes without installing software, the architecture was expanded with 5 additional engineering blueprints covering Wi-Fi Display (Miracast / MS-MICE) on Windows 10/11 (`Win + K`) and Linux desktops:
+
+21. **[Blueprint 21: Miracast MS-MICE, Reverse RTSP WFD & Dynamic SPS Parsing](docs/blueprints/en/21-miracast-ms-mice-rtsp-wfd-dynamic-sps-and-gnome-network-displays.md):** MS-MICE binary signaling (TCP 7250), reverse RTSP WFD connection to Source (7236), UDP 5005 discovery migration, and GNOME 1080p bug resolution via pure-Rust dynamic SPS parser.
+22. **[Blueprint 22: NV12 Macroblock Stride Alignment & Realtime Miracast Optimizations](docs/blueprints/en/22-nv12-macroblock-stride-green-bar-fix-and-realtime-miracast-optimizations.md):** 16-line macroblock pitch math (1080->1088), 15,360-byte padding fix on KMS UV plane, PUSI zero-delay TS demuxing, 2ms polling, and AMD Radeon 610M VA-API hardware acceleration.
+23. **[Blueprint 23: Miracast GPU Hardware Acceleration & Automated Host Launcher](docs/blueprints/en/23-miracast-gpu-hardware-acceleration-and-host-launcher.md):** Direct sysfs GPU vendor detection (AMD, Intel, NVIDIA), automated hardware ranking launcher daemon, atomic debounce, and Web UI GPU command box.
+24. **[Blueprint 24: Native 720p60 Miracast WFD & Deterministic Demux](docs/blueprints/en/24-native-720p60-miracast-wfd-pes-au-deterministic-demux.md):** Enforcing CEA index 6 (1280x720p60) WFD formats, Level 3.1 profile, deterministic PES-demarcated MPEG-TS demuxer, and TS continuity counter verification.
+25. **[Blueprint 25: Unified Multi-Service Standby Stop & Transmitter Teardown](docs/blueprints/en/25-unified-standby-stop-multi-service-transmitter-teardown.md):** Atomic standby stop across all 3 streaming modes (UDP, Miracast, USB Bulk), active RTSP TCP stream teardown, host transmitter termination (`SIGTERM`/`SIGKILL`), and persistent HDMI ready splash.
 
 ---
 

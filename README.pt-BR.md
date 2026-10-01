@@ -116,10 +116,11 @@ ext-sender status
 
 * **[Manual de Operação em Português (docs/MANUAL-DE-OPERACAO.md)](docs/MANUAL-DE-OPERACAO.md):** Guia operacional exaustivo cobrindo todos os modos, roteamento PipeWire, telemetria e arquitetura zero-reboot.
 * **[English Operation Manual (docs/OPERATION-MANUAL.md)](docs/OPERATION-MANUAL.md):** Manual completo de operação em inglês.
-* **[O Livro do Ext-Monitor: 20 Blueprints de Engenharia (docs/LIVRO-EXT-MONITOR.md)](docs/LIVRO-EXT-MONITOR.md):** Livro técnico consolidado em 20 capítulos detalhando engenharia reversa de silício, geometria matemática e arquitetura do appliance.
-* **[Índice dos Blueprints Técnicos (docs/blueprints/README.pt-BR.md)](docs/blueprints/README.pt-BR.md):** Catálogo detalhado dos 20 blueprints de engenharia.
+* **[O Livro do Ext-Monitor: 20 Blueprints de Engenharia (docs/LIVRO-EXT-MONITOR.md)](docs/LIVRO-EXT-MONITOR.md):** Livro técnico consolidado em 20 capítulos detalhando engenharia reversa de silício, geometria matemática e arquitetura fundamental do appliance.
+* **[Catálogo Completo dos 25 Blueprints (docs/blueprints/README.pt-BR.md)](docs/blueprints/README.pt-BR.md):** Índice mestre detalhado com todos os 25 blueprints de engenharia em português e inglês.
 
-### Índice das 20 Blueprints de Engenharia (Suíte em Português)
+### A Fundação (Blueprints Originais 01 a 20)
+Os 20 blueprints fundamentais documentam a arquitetura de silício e o motor essencial do appliance: geometria FAT16 no Broadcom BCM2835, decodificação acelerada V4L2 M2M, scanout zero-copy no VideoCore IV via DRM/KMS, watchdogs duplos para recuperação de suspensão S3, agente host bidirecional em Rust e multiplexação HDMI com visualizador de áudio FFT.
 
 1. **[Blueprint 01: Imagem de 32MB e Geometria do BCM2835](docs/blueprints/pt/01-imagem-32mb-e-geometria-bcm2835.md):** Limite de 65.525 clusters da ROM Broadcom, alinhamento no setor 1 e FAT16 de 2KB.
 2. **[Blueprint 02: Arquitetura Fim-a-Fim e Comparativo com GUD](docs/blueprints/pt/02-arquitetura-transmissor-receptor-e-comparativo-gud.md):** Por que o GUD falha (100% CPU) e como o H.264 V4L2 M2M atinge 60 FPS com 0.8% de CPU.
@@ -141,6 +142,15 @@ ext-sender status
 18. **[Blueprint 18: Áudio Híbrido: Rede IP Opus e Bluetooth A2DP](docs/blueprints/pt/18-audio-hibrido-rede-opus-e-bluetooth-a2dp.md):** Isolamento de fone de ouvido pessoal vs som da TV HDMI e pareamento Bluetooth 4.1 no Pi Zero W.
 19. **[Blueprint 19: Appliance IoT Media Renderer: Cast e Visualizador HDMI](docs/blueprints/pt/19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md):** Dongle multimídia inteligente: Google Cast (CastV2), DIAL (YouTube), UPnP/DLNA e visualizador gráfico HDMI.
 20. **[Blueprint 20: Multiplexador HDMI de Porta Única e Zero-Reboot](docs/blueprints/pt/20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md):** Exclusão mútua na porta HDMI física, FFT de 512 pontos com Hann, i18n simétrico e ciclo de vida zero-reboot.
+
+### A Suíte de Expansão Miracast (Blueprints 21 a 25)
+Para viabilizar projeção de tela sem fio nativa e sem necessidade de instalar drivers ou aplicativos adicionais, o escopo foi expandido com 5 novos blueprints dedicados ao ecossistema Wi-Fi Display (Miracast / MS-MICE) no Windows 10/11 (`Win + K`) e desktops Linux:
+
+21. **[Blueprint 21: Miracast MS-MICE, Conexão Reversa RTSP WFD e SPS Dinâmico](docs/blueprints/pt/21-miracast-ms-mice-rtsp-wfd-sps-dinamico-e-gnome-network-displays.md):** Sinalização binária MS-MICE (TCP 7250), reversão RTSP WFD para o Source (7236), migração para UDP 5005 e parser puro em Rust de SPS dinâmico.
+22. **[Blueprint 22: Alinhamento NV12 no KMS, Fim da Faixa Verde e Otimizações Realtime](docs/blueprints/pt/22-correcao-faixa-verde-nv12-stride-alinhamento-e-otimizacoes-realtime-miracast.md):** Correção matemática de stride de 16 linhas (1080->1088), remoção de padding de 15.360 bytes no plano UV do KMS, demuxer MPEG-TS zero-delay via PUSI e aceleração VA-API AMD Radeon 610M.
+23. **[Blueprint 23: Aceleração por Hardware GPU no Miracast e Launcher do Host](docs/blueprints/pt/23-aceleracao-hardware-gpu-miracast-e-launcher-host.md):** Detecção direta via sysfs de GPUs (AMD, Intel, NVIDIA), daemon de ranking de encoders, debounce atômico e caixa interativa de comandos no painel Web.
+24. **[Blueprint 24: Resolução Nativa 720p60 WFD, Nível 3.1 e Demuxer PES AU Determinista](docs/blueprints/pt/24-resolucao-nativa-720p60-miracast-wfd-demux-pes-au-determinista.md):** Imposição do CEA índice 6 (1280x720p60), Nível 3.1 H.264, demuxer MPEG-TS determinista por PES/RTP Marker e validação de continuidade TS.
+25. **[Blueprint 25: Parada Unificada de Serviços (Standby), Teardown RTSP e Encerramento de Transmissores](docs/blueprints/pt/25-parada-unificada-standby-multi-servico-teardown-transmissor.md):** Parada limpa dos 3 modos (Modo 1 UDP, Modo 2 Miracast, Modo 3 USB Bulk), encerramento forçado de conexões RTSP ativas, finalização de transmissores no host (`SIGTERM`/`SIGKILL`) e exibição contínua da tela Ready via KMS no HDMI.
 
 ---
 
