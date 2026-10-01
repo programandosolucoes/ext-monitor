@@ -260,6 +260,9 @@ fn handle_http_client(
                     });
 
                 if let Some(transport) = inferred_transport.as_deref() {
+                    if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+                        *lock = None;
+                    }
                     println!("\x1b[1;36m[web-server]\x1b[0m Direct Active Transport switch requested: {}", transport);
                     match transport {
                         "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
@@ -527,6 +530,26 @@ fn handle_http_client(
             });
         }
         ("GET", "/api/screenshot") => {
+            crate::decoder::v4l2_m2m::SCREENSHOT_REQUESTED.store(true, Ordering::SeqCst);
+            for _ in 0..100 {
+                if !crate::decoder::v4l2_m2m::SCREENSHOT_REQUESTED.load(Ordering::SeqCst) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if let Ok(lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+                if let Some((ref data, w, h)) = *lock {
+                    let header = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nX-Frame-Width: {}\r\nX-Frame-Height: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        w, h, data.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(data);
+                    let _ = stream.flush();
+                    return;
+                }
+            }
+
             if let Ok(mut fb) = std::fs::File::open("/dev/fb0") {
                 let mut data = vec![0u8; 1280 * 720 * 2];
                 if fb.read_exact(&mut data).is_ok() {
@@ -677,6 +700,9 @@ fn handle_http_client(
         }
         ("POST", "/api/mode") => {
             println!("\x1b[1;33m[web-server]\x1b[0m Received mode switch request via Web UI.");
+            if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+                *lock = None;
+            }
             if let Some(idx) = req_str.find("\r\n\r\n") {
                 let body = &req_str[idx + 4..];
                 if body.contains("usb-bulk") || body.contains("bulk") || body.contains("\"mode\":3") || body.contains("\"mode\":\"3\"") {

@@ -46,7 +46,7 @@ pub fn run_build(opts: &BuildOptions) -> Result<(), String> {
             "ext-receiver",
             "--release",
             "--target",
-            "arm-unknown-linux-gnueabihf",
+            "arm-unknown-linux-musleabihf",
         ])
         .current_dir(&opts.project_root)
         .status()
@@ -58,7 +58,7 @@ pub fn run_build(opts: &BuildOptions) -> Result<(), String> {
 
     let receiver_bin = opts
         .project_root
-        .join("target/arm-unknown-linux-gnueabihf/release/ext-receiver");
+        .join("target/arm-unknown-linux-musleabihf/release/ext-receiver");
     if !receiver_bin.exists() {
         return Err(format!("Binário não encontrado: {:?}", receiver_bin));
     }

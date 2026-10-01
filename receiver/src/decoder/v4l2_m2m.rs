@@ -12,7 +12,12 @@ use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+pub static SCREENSHOT_REQUESTED: AtomicBool = AtomicBool::new(false);
+pub static LATEST_SCREENSHOT_FRAME: Mutex<Option<(Vec<u8>, u32, u32)>> = Mutex::new(None);
 
 pub struct V4l2DecoderSession {
     _video_file: File,
@@ -502,6 +507,33 @@ impl V4l2DecoderSession {
             let old = self.held.pop_front().unwrap();
             self.requeue_capture(old);
         }
+        if SCREENSHOT_REQUESTED.load(Ordering::Relaxed) {
+            let cap_idx = idx as usize;
+            if cap_idx < self.cap_ptrs.len() {
+                let plane_len = self.cap_lens[cap_idx];
+                let slice = unsafe { std::slice::from_raw_parts(self.cap_ptrs[cap_idx], plane_len) };
+                let mut rgb = vec![0u8; (self.width * self.height * 2) as usize];
+                if self.negotiated_cap_fmt == V4L2_PIX_FMT_NV12 || self.negotiated_cap_fmt == V4L2_PIX_FMT_NV12M {
+                    crate::decoder::color_convert::nv12_to_rgb565_strided(
+                        slice,
+                        &mut rgb,
+                        self.width,
+                        self.height,
+                        self.stride,
+                        self.buffer_height,
+                    );
+                } else if self.negotiated_cap_fmt == V4L2_PIX_FMT_YUV420 || self.negotiated_cap_fmt == V4L2_PIX_FMT_YUV420M {
+                    crate::decoder::color_convert::yuv420_to_rgb565(slice, &mut rgb, self.width, self.height);
+                } else if self.negotiated_cap_fmt == V4L2_PIX_FMT_RGB565 {
+                    let len = rgb.len().min(slice.len());
+                    rgb[..len].copy_from_slice(&slice[..len]);
+                }
+                if let Ok(mut lock) = LATEST_SCREENSHOT_FRAME.lock() {
+                    *lock = Some((rgb, self.width as u32, self.height as u32));
+                }
+                SCREENSHOT_REQUESTED.store(false, Ordering::Relaxed);
+            }
+        }
         self.note_displayed();
     }
 
@@ -529,6 +561,20 @@ impl V4l2DecoderSession {
             on_frame(&self.rgb565_buf);
         } else {
             on_frame(slice);
+        }
+        if SCREENSHOT_REQUESTED.load(Ordering::Relaxed) {
+            let mut rgb = vec![0u8; (self.width * self.height * 2) as usize];
+            if self.negotiated_cap_fmt == V4L2_PIX_FMT_RGB565 {
+                let len = rgb.len().min(slice.len());
+                rgb[..len].copy_from_slice(&slice[..len]);
+            } else {
+                let len = rgb.len().min(self.rgb565_buf.len());
+                rgb[..len].copy_from_slice(&self.rgb565_buf[..len]);
+            }
+            if let Ok(mut lock) = LATEST_SCREENSHOT_FRAME.lock() {
+                *lock = Some((rgb, self.width as u32, self.height as u32));
+            }
+            SCREENSHOT_REQUESTED.store(false, Ordering::Relaxed);
         }
         self.note_displayed();
     }

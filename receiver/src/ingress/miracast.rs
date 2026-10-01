@@ -134,6 +134,9 @@ impl MiracastIngress {
         let mut total_packets = 0u64;
 
         // Show Miracast Splash immediately when ingress worker initializes
+        if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+            *lock = None;
+        }
         crate::display::SplashEngine::show_miracast();
 
         while running.load(Ordering::SeqCst) {
@@ -175,6 +178,9 @@ impl MiracastIngress {
                 // If stream was active and now idle for > 2 seconds: return to splash screen
                 if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(2) {
                     println!("\x1b[1;33m[miracast-ingress]\x1b[0m Miracast stream idle / disconnected -> Returning to Miracast Splash Screen.");
+                    if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+                        *lock = None;
+                    }
                     crate::display::SplashEngine::show_miracast();
                     splash_active = true;
                 }
@@ -226,6 +232,9 @@ impl MiracastIngress {
             }
         }
 
+        if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+            *lock = None;
+        }
         crate::display::SplashEngine::show_miracast();
         println!("\x1b[1;33m[miracast-ingress]\x1b[0m Miracast ingress worker stopped.");
     }
