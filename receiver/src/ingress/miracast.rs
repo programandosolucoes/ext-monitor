@@ -134,7 +134,7 @@ impl MiracastIngress {
         let mut total_packets = 0u64;
 
         while running.load(Ordering::SeqCst) {
-            let ret = unsafe { libc::poll(&mut pfd, 1, 15) };
+            let ret = unsafe { libc::poll(&mut pfd, 1, 2) };
             if ret < 0 {
                 let err = io::Error::last_os_error();
                 if err.kind() == io::ErrorKind::Interrupted {
@@ -144,7 +144,8 @@ impl MiracastIngress {
             }
             if ret == 0 {
                 demuxer.flush(&mut completed_frames);
-                for frame in completed_frames.drain(..) {
+                let total_frames = completed_frames.len();
+                for (idx, frame) in completed_frames.drain(..).enumerate() {
                     if let Some((w, h)) = parse_sps_dimensions(&frame) {
                         if (w, h) != current_dims {
                             println!(
@@ -157,9 +158,13 @@ impl MiracastIngress {
                     }
 
                     if let Some(ref mut dec) = decoder {
-                        dec.decode_chunk(&frame, |frame_rgb565| {
-                            display.render_frame(frame_rgb565);
-                        });
+                        if idx + 1 < total_frames {
+                            dec.decode_chunk_fast(&frame);
+                        } else {
+                            dec.decode_chunk(&frame, |frame_rgb565| {
+                                display.render_frame(frame_rgb565);
+                            });
+                        }
                     }
                 }
 
@@ -203,7 +208,8 @@ impl MiracastIngress {
                 }
             }
 
-            for frame in completed_frames.drain(..) {
+            let total_frames = completed_frames.len();
+            for (idx, frame) in completed_frames.drain(..).enumerate() {
                 if let Some((w, h)) = parse_sps_dimensions(&frame) {
                     if (w, h) != current_dims {
                         println!(
@@ -216,9 +222,13 @@ impl MiracastIngress {
                 }
 
                 if let Some(ref mut dec) = decoder {
-                    dec.decode_chunk(&frame, |frame_rgb565| {
-                        display.render_frame(frame_rgb565);
-                    });
+                    if idx + 1 < total_frames {
+                        dec.decode_chunk_fast(&frame);
+                    } else {
+                        dec.decode_chunk(&frame, |frame_rgb565| {
+                            display.render_frame(frame_rgb565);
+                        });
+                    }
                 }
             }
         }

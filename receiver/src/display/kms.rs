@@ -194,6 +194,7 @@ pub struct KmsPlaneSink {
     fourcc: u32,
     width: u32,
     height: u32,
+    buffer_height: u32,
     stride: u32,
     imported: Vec<Option<Imported>>,
 }
@@ -206,13 +207,14 @@ const _: () = assert!(std::mem::size_of::<DrmModeModeinfo>() == 68);
 
 impl KmsPlaneSink {
     /// Opens a DRM card and picks a plane that can scan out `fourcc` (NV12 or YU12).
-    pub fn open(fourcc: u32, width: u32, height: u32, stride: u32) -> io::Result<Self> {
+    pub fn open(fourcc: u32, width: u32, height: u32, stride: u32, buffer_height: u32) -> io::Result<Self> {
         if fourcc != NV12 && fourcc != YU12 {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "plane format"));
         }
+        let buf_h = buffer_height.max(height);
         let mut last = io::Error::new(io::ErrorKind::NotFound, "no drm card");
         for path in ["/dev/dri/card0", "/dev/dri/card1"] {
-            match Self::open_card(path, fourcc, width, height, stride.max(width)) {
+            match Self::open_card(path, fourcc, width, height, stride.max(width), buf_h) {
                 Ok(sink) => return Ok(sink),
                 Err(e) => {
                     if std::path::Path::new(path).exists() {
@@ -226,7 +228,7 @@ impl KmsPlaneSink {
         Err(last)
     }
 
-    fn open_card(path: &str, fourcc: u32, width: u32, height: u32, stride: u32) -> io::Result<Self> {
+    fn open_card(path: &str, fourcc: u32, width: u32, height: u32, stride: u32, buffer_height: u32) -> io::Result<Self> {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -250,12 +252,14 @@ impl KmsPlaneSink {
         let plane_id = find_plane(fd, crtc_id, fourcc)?;
 
         println!(
-            "\x1b[1;32m[kms]\x1b[0m Plane {} on CRTC {} via {} ({}x{} -> {}x{}, {}).",
+            "\x1b[1;32m[kms]\x1b[0m Plane {} on CRTC {} via {} ({}x{} [buf {}x{}] -> {}x{}, {}).",
             plane_id,
             crtc_id,
             path,
             width,
             height,
+            stride,
+            buffer_height,
             crtc_w,
             crtc_h,
             if fourcc == NV12 { "NV12" } else { "YU12" }
@@ -270,6 +274,7 @@ impl KmsPlaneSink {
             fourcc,
             width,
             height,
+            buffer_height,
             stride,
             imported: Vec::new(),
         })
@@ -287,8 +292,8 @@ impl KmsPlaneSink {
         let handle = prime.handle;
         let mut cmd = DrmModeFbCmd2 {
             fb_id: 0,
-            width: self.width,
-            height: self.height,
+            width: self.stride,
+            height: self.buffer_height,
             pixel_format: self.fourcc,
             flags: 0,
             handles: [0; 4],
@@ -301,11 +306,11 @@ impl KmsPlaneSink {
             cmd.handles[1] = handle;
             cmd.pitches[0] = self.stride;
             cmd.pitches[1] = self.stride;
-            cmd.offsets[1] = self.stride.saturating_mul(self.height);
+            cmd.offsets[1] = self.stride.saturating_mul(self.buffer_height);
         } else {
             let uv = self.stride / 2;
-            let y_size = self.stride.saturating_mul(self.height);
-            let u_size = uv.saturating_mul(self.height / 2);
+            let y_size = self.stride.saturating_mul(self.buffer_height);
+            let u_size = uv.saturating_mul(self.buffer_height / 2);
             cmd.handles = [handle, handle, handle, 0];
             cmd.pitches = [self.stride, uv, uv, 0];
             cmd.offsets = [0, y_size, y_size.saturating_add(u_size), 0];

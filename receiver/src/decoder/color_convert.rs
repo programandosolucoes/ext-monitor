@@ -88,21 +88,38 @@ pub fn yuv420_to_rgb565(yuv: &[u8], out: &mut [u8], width: usize, height: usize)
 }
 
 /// Converts a semi-planar NV12 buffer (Y plane + interleaved UV) to RGB565 into `out`.
+#[allow(dead_code)]
 #[inline]
 pub fn nv12_to_rgb565(nv12: &[u8], out: &mut [u8], width: usize, height: usize) {
-    let y_size = width * height;
-    let uv_size = width * (height / 2);
-    if nv12.len() < y_size + uv_size || out.len() < y_size * 2 {
+    nv12_to_rgb565_strided(nv12, out, width, height, width, height);
+}
+
+/// Converts a strided semi-planar NV12 buffer (with buffer_height alignment) to RGB565 into `out`.
+#[inline]
+pub fn nv12_to_rgb565_strided(
+    nv12: &[u8],
+    out: &mut [u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+    buffer_height: usize,
+) {
+    let y_stride = stride.max(width);
+    let uv_stride = y_stride;
+    let uv_offset = y_stride * buffer_height.max(height);
+    let uv_needed = uv_offset + uv_stride * (height / 2);
+
+    if nv12.len() < uv_needed || out.len() < width * height * 2 {
         return;
     }
 
-    let y_plane = &nv12[0..y_size];
-    let uv_plane = &nv12[y_size..y_size + uv_size];
+    let y_plane = &nv12[0..y_stride * height];
+    let uv_plane = &nv12[uv_offset..];
 
     for y in (0..height).step_by(2) {
-        let y0_row = y * width;
-        let y1_row = (y + 1) * width;
-        let uv_row = (y / 2) * width;
+        let y0_row = y * y_stride;
+        let y1_row = (y + 1) * y_stride;
+        let uv_row = (y / 2) * uv_stride;
 
         for x in (0..width).step_by(2) {
             let uv_idx = uv_row + x;
@@ -141,8 +158,8 @@ pub fn nv12_to_rgb565(nv12: &[u8], out: &mut [u8], width: usize, height: usize) 
             let b11 = (y11 + c_u_b).clamp(0, 255) as u16;
             let p11 = ((r11 >> 3) << 11) | ((g11 >> 2) << 5) | (b11 >> 3);
 
-            let out0_idx = (y0_row + x) * 2;
-            let out1_idx = (y1_row + x) * 2;
+            let out0_idx = (y * width + x) * 2;
+            let out1_idx = ((y + 1) * width + x) * 2;
 
             let b00_bytes = p00.to_le_bytes();
             let b01_bytes = p01.to_le_bytes();

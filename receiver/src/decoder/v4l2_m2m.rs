@@ -28,6 +28,8 @@ pub struct V4l2DecoderSession {
     rgb565_buf: Vec<u8>,
     width: usize,
     height: usize,
+    buffer_height: usize,
+    stride: usize,
     /// Direct DRM plane. When set, decoded buffers are scanned out like kmssink.
     kms: Option<KmsPlaneSink>,
     /// Capture buffers currently on the plane. The oldest is returned to the decoder first.
@@ -124,6 +126,7 @@ impl V4l2DecoderSession {
 
         let mut negotiated_fmt = 0u32;
         let mut cap_stride = width;
+        let mut cap_height = height;
         for &(fmt_code, fmt_name, expected_size) in &candidate_fmts {
             let mut cap_fmt = V4l2Format {
                 buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
@@ -138,11 +141,13 @@ impl V4l2DecoderSession {
             if unsafe { libc::ioctl(video_fd, VIDIOC_S_FMT as _, &mut cap_fmt) } == 0 && cap_pix.num_planes <= 1 {
                 negotiated_fmt = cap_pix.pixelformat;
                 cap_stride = cap_pix.plane_fmt[0].bytesperline.max(width);
+                cap_height = cap_pix.height.max(height);
                 println!(
-                    "\x1b[1;32m[v4l2-m2m]\x1b[0m Negotiated CAPTURE format: {} (FourCC: '{}', stride: {}, sizeimage: {})",
+                    "\x1b[1;32m[v4l2-m2m]\x1b[0m Negotiated CAPTURE format: {} (FourCC: '{}', stride: {}, height: {}, sizeimage: {})",
                     fmt_name,
                     String::from_utf8_lossy(&negotiated_fmt.to_le_bytes()),
                     cap_stride,
+                    cap_height,
                     cap_pix.plane_fmt[0].sizeimage
                 );
                 break;
@@ -290,7 +295,7 @@ impl V4l2DecoderSession {
             }
         }
 
-        let kms = attach_kms_plane(video_fd, req_cap.count, negotiated_fmt, width, height, cap_stride);
+        let kms = attach_kms_plane(video_fd, req_cap.count, negotiated_fmt, width, height, cap_stride, cap_height);
 
         // 5. STREAMON on both queues
         let mut out_type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -316,9 +321,16 @@ impl V4l2DecoderSession {
             rgb565_buf: vec![0u8; (width * height * 2) as usize],
             width: width as usize,
             height: height as usize,
+            buffer_height: cap_height as usize,
+            stride: cap_stride as usize,
             kms,
             held: VecDeque::new(),
         })
+    }
+
+    /// Feeds an encoded chunk/AU quickly without blitting or presentation overhead
+    pub fn decode_chunk_fast(&mut self, chunk: &[u8]) {
+        self.decode_chunk(chunk, |_| {});
     }
 
     /// Feeds an encoded chunk/AU and drains decoded frames, ensuring the CAPTURE queue never starves the OUTPUT queue
@@ -506,7 +518,14 @@ impl V4l2DecoderSession {
             crate::decoder::color_convert::yuv420_to_rgb565(slice, &mut self.rgb565_buf, self.width, self.height);
             on_frame(&self.rgb565_buf);
         } else if self.negotiated_cap_fmt == V4L2_PIX_FMT_NV12 || self.negotiated_cap_fmt == V4L2_PIX_FMT_NV12M {
-            crate::decoder::color_convert::nv12_to_rgb565(slice, &mut self.rgb565_buf, self.width, self.height);
+            crate::decoder::color_convert::nv12_to_rgb565_strided(
+                slice,
+                &mut self.rgb565_buf,
+                self.width,
+                self.height,
+                self.stride,
+                self.buffer_height,
+            );
             on_frame(&self.rgb565_buf);
         } else {
             on_frame(slice);
@@ -606,12 +625,20 @@ impl V4l2DecoderSession {
     }
 }
 
-fn attach_kms_plane(video_fd: RawFd, count: u32, fourcc: u32, width: u32, height: u32, stride: u32) -> Option<KmsPlaneSink> {
+fn attach_kms_plane(
+    video_fd: RawFd,
+    count: u32,
+    fourcc: u32,
+    width: u32,
+    height: u32,
+    stride: u32,
+    buffer_height: u32,
+) -> Option<KmsPlaneSink> {
     if fourcc != V4L2_PIX_FMT_NV12 && fourcc != V4L2_PIX_FMT_YUV420 {
         println!("\x1b[1;33m[kms]\x1b[0m Capture format is not NV12/YU12. Using the framebuffer.");
         return None;
     }
-    let mut kms = match KmsPlaneSink::open(fourcc, width, height, stride) {
+    let mut kms = match KmsPlaneSink::open(fourcc, width, height, stride, buffer_height) {
         Ok(k) => k,
         Err(e) => {
             println!("\x1b[1;33m[kms]\x1b[0m No scanout plane ({e}). Using the framebuffer.");

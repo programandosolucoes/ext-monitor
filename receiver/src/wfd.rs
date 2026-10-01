@@ -31,13 +31,14 @@ pub const WFD_RTP_PORT: u16 = 5002;
 /// H.264 video formats natively supported by Broadcom VideoCore IV:
 /// - 00: Native Res Index
 /// - 00: Preferred Display Mode
-/// - 02: H.264 Profiles (Constrained Baseline + Main Profile)
-/// - 02: H.264 Levels (Level 3.1 / 4.0 / 4.1 / 4.2)
+/// - 01: H.264 Profile (01 = Constrained Baseline Profile for zero-latency, no B-frames)
+/// - 08: H.264 Level (Level 4.0 / 4.1 for 1080p60)
 /// - 0001deff: CEA Resolutions Bitmap (1080p60, 1080p30, 720p60, 480p)
 /// - 157cff5f: VESA Resolutions Bitmap (1920x1080, 1600x900, 1366x768, 1280x720, 1024x768)
 /// - 00000fff: HH Resolutions Bitmap
+/// - 01: Low-latency slice mode (sub-frame rendering)
 pub const WFD_VIDEO_FORMATS: &str =
-    "00 00 02 02 0001deff 157cff5f 00000fff 00 0000 0000 00 none none";
+    "00 00 01 08 0001deff 157cff5f 00000fff 00 0000 0000 01 none none";
 
 /// Starts the Wi-Fi Display RTSP server and MS-MICE listener on background threads
 pub fn start_wfd_server(
@@ -446,8 +447,8 @@ impl WfdSession {
                         }
                         "wfd_client_rtpports" | "wfd_client_rtp_ports" => {
                             resp_params.push(format!(
-                                "{}: RTP/AVP/UDP;unicast {} 0 mode=play",
-                                param, WFD_RTP_PORT
+                                "{}: RTP/AVP/UDP;unicast {} {} mode=play",
+                                param, WFD_RTP_PORT, WFD_RTP_PORT + 1
                             ));
                         }
                         "wfd_uibc_capability" => {
