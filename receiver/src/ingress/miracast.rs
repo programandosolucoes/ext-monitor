@@ -130,11 +130,14 @@ impl MiracastIngress {
         );
 
         let mut last_packet_time = std::time::Instant::now();
-        let mut splash_active = false;
+        let mut splash_active = true;
         let mut total_packets = 0u64;
 
+        // Show Miracast Splash immediately when ingress worker initializes
+        crate::display::SplashEngine::show_miracast();
+
         while running.load(Ordering::SeqCst) {
-            let ret = unsafe { libc::poll(&mut pfd, 1, 2) };
+            let ret = unsafe { libc::poll(&mut pfd, 1, 15) };
             if ret < 0 {
                 let err = io::Error::last_os_error();
                 if err.kind() == io::ErrorKind::Interrupted {
@@ -144,8 +147,7 @@ impl MiracastIngress {
             }
             if ret == 0 {
                 demuxer.flush(&mut completed_frames);
-                let total_frames = completed_frames.len();
-                for (idx, frame) in completed_frames.drain(..).enumerate() {
+                for frame in completed_frames.drain(..) {
                     if let Some((w, h)) = parse_sps_dimensions(&frame) {
                         if (w, h) != current_dims {
                             println!(
@@ -158,13 +160,9 @@ impl MiracastIngress {
                     }
 
                     if let Some(ref mut dec) = decoder {
-                        if idx + 1 < total_frames {
-                            dec.decode_chunk_fast(&frame);
-                        } else {
-                            dec.decode_chunk(&frame, |frame_rgb565| {
-                                display.render_frame(frame_rgb565);
-                            });
-                        }
+                        dec.decode_chunk(&frame, |frame_rgb565| {
+                            display.render_frame(frame_rgb565);
+                        });
                     }
                 }
 
@@ -208,8 +206,7 @@ impl MiracastIngress {
                 }
             }
 
-            let total_frames = completed_frames.len();
-            for (idx, frame) in completed_frames.drain(..).enumerate() {
+            for frame in completed_frames.drain(..) {
                 if let Some((w, h)) = parse_sps_dimensions(&frame) {
                     if (w, h) != current_dims {
                         println!(
@@ -222,13 +219,9 @@ impl MiracastIngress {
                 }
 
                 if let Some(ref mut dec) = decoder {
-                    if idx + 1 < total_frames {
-                        dec.decode_chunk_fast(&frame);
-                    } else {
-                        dec.decode_chunk(&frame, |frame_rgb565| {
-                            display.render_frame(frame_rgb565);
-                        });
-                    }
+                    dec.decode_chunk(&frame, |frame_rgb565| {
+                        display.render_frame(frame_rgb565);
+                    });
                 }
             }
         }

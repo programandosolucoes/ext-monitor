@@ -36,9 +36,9 @@ pub const WFD_RTP_PORT: u16 = 5002;
 /// - 0001deff: CEA Resolutions Bitmap (1080p60, 1080p30, 720p60, 480p)
 /// - 157cff5f: VESA Resolutions Bitmap (1920x1080, 1600x900, 1366x768, 1280x720, 1024x768)
 /// - 00000fff: HH Resolutions Bitmap
-/// - 01: Low-latency slice mode (sub-frame rendering)
+/// - 00: Standard atomic full-frame mode (no slice tearing)
 pub const WFD_VIDEO_FORMATS: &str =
-    "00 00 01 08 0001deff 157cff5f 00000fff 00 0000 0000 01 none none";
+    "00 00 01 08 0001deff 157cff5f 00000fff 00 0000 0000 00 none none";
 
 /// Starts the Wi-Fi Display RTSP server and MS-MICE listener on background threads
 pub fn start_wfd_server(

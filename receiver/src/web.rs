@@ -696,8 +696,11 @@ fn handle_http_client(
                     println!("\x1b[1;32m[web-server]\x1b[0m Switching to Mode 2 (Windows Miracast WFD)...");
                     if let Ok(mut cfg) = CONFIG.lock() {
                         cfg.mode3 = false;
+                        cfg.mode1 = false;
                         cfg.mode2 = true;
+                        cfg.active_transport = "mode2_miracast".to_string();
                     }
+                    crate::display::SplashEngine::show_miracast();
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
                         pipe.stop();

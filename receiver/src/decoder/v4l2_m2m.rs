@@ -159,9 +159,9 @@ impl V4l2DecoderSession {
             return None;
         }
 
-        // 3. REQBUFS & MMAP OUTPUT (8 buffers for smooth pipeline depth)
+        // 3. REQBUFS & MMAP OUTPUT (16 buffers for smooth burst handling during screen updates)
         let mut req_out = V4l2RequestBuffers {
-            count: 8,
+            count: 16,
             buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
             memory: V4L2_MEMORY_MMAP,
             ..Default::default()
@@ -348,7 +348,7 @@ impl V4l2DecoderSession {
             Some(i) => i,
             None => {
                 let mut acquired = None;
-                for _ in 0..100 {
+                for _ in 0..400 {
                     self.drain_decoded_frames(&mut on_frame);
                     self.reclaim_output_buffers();
                     if let Some(i) = self.free_out_indices.pop() {

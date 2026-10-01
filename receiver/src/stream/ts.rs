@@ -106,9 +106,6 @@ impl TsDemuxer {
                     let pes_header_data_len = payload[8] as usize;
                     let es_offset = 9 + pes_header_data_len;
                     if es_offset < payload.len() {
-                        // A new PES packet with PUSI=1 indicates that the previous frame is complete.
-                        // Flushing immediately cuts 1 frame (~16-33ms) of buffering latency.
-                        self.assembler.flush(frames_out);
                         self.assembler.push(&payload[es_offset..], frames_out);
                     }
                 }
