@@ -1,14 +1,17 @@
 //! Miracast (Wi-Fi Display / WFD 1.0) Pure-Rust Protocol Implementation
 //!
 //! Submodules:
+//! - `client`: Pure-Rust Miracast Session Orchestrator with Multi-Architecture GPU Acceleration.
 //! - `mpegts`: Pure-Rust MPEG-TS / PES packetizer and RTP type 33 encapsulation.
 //! - `wfd_client`: Pure-Rust RTSP 1.0 Wi-Fi Display (WFD 1.0 / MS-MICE) Source State Machine.
 //! - `discovery`: Pure-Rust mDNS, SSDP, and Direct-USB Network Discovery Engine.
 
+pub mod client;
 pub mod discovery;
 pub mod mpegts;
 pub mod wfd_client;
 
-pub use discovery::{DiscoveredSink, interactive_select_sink, scan_sinks};
-
-
+pub use client::{MiracastConfig, MiracastSession};
+pub use discovery::{interactive_select_sink, scan_sinks, DiscoveredSink};
+pub use mpegts::MpegTsMuxer;
+pub use wfd_client::WfdClient;

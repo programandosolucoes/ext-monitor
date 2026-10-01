@@ -222,7 +222,7 @@ git commit -m "feat(miracast): implement pure-rust mdns and ssdp discovery scann
 - Consumes: `WfdClient`, `MpegTsMuxer`, existing `PipeWireCapturer` / `encoder::H264Encoder`.
 - Produces: `MiracastSession::start(target_ip: &str, target_port: u16, running: Arc<AtomicBool>) -> Result<(), io::Error>`, `MiracastSession::stop(&self)`.
 
-- [ ] **Step 1: Implement session loop**
+- [x] **Step 1: Implement session loop**
 
 In `sender/src/miracast/client.rs`:
 - Coordinates the WFD RTSP handshake with `WfdClient`.
@@ -230,12 +230,12 @@ In `sender/src/miracast/client.rs`:
 - Spawns video encoding and multiplexing thread: reads frames from existing encoder, sends to `MpegTsMuxer`, sends RTP datagrams to `target_ip:sink_rtp_port`.
 - Monitors `running` atomic boolean. Upon cancellation, calls `wfd_client.teardown()` and closes sockets.
 
-- [ ] **Step 2: Verify compilation**
+- [x] **Step 2: Verify compilation**
 
 Run: `cargo check -p ext-sender`
 Expected: Compiles with no warnings or errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add sender/src/miracast/client.rs sender/src/miracast/mod.rs
