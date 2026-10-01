@@ -185,7 +185,7 @@ fi
 (
     while true; do
         if [ -c /dev/ttyGS0 ]; then
-            setsid cttyhack /bin/sh </dev/ttyGS0 >/dev/ttyGS0 2>&1 || /bin/sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1
+            /sbin/getty -L -n -l /bin/sh 115200 ttyGS0 vt100 || /bin/sh </dev/ttyGS0 >/dev/ttyGS0 2>&1
         fi
         sleep 1
     done
@@ -243,7 +243,7 @@ if [ -x /usr/local/bin/ext-receiver ]; then
             fi
             sleep 2
         done
-    ) 2>&1 | tee -a /var/log/ext-receiver.log >> /dev/ttyGS0 2>/dev/null &
+    ) >> /var/log/ext-receiver.log 2>&1 &
 fi
 
 echo "[+] Appliance initialization complete in < 2 seconds."

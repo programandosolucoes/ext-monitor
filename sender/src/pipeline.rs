@@ -759,7 +759,7 @@ mod tests {
             skip_to_first: true,
             key_int_max: 30,
             usb_pipe_fd: Some(15),
-            engine: StreamEngine::GStreamer,
+            engine: StreamEngine::NativeRust,
             capture: CaptureEngine::Mutter,
             kms_info: None,
             audio: true,

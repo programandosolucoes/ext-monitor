@@ -34,16 +34,8 @@ pub enum PipelineBackend {
 
 impl PipelineBackend {
     pub fn detect() -> Self {
-        // 100% Pure Rust Native V4L2 M2M Kernel Decoder is DEFAULT
-        if NativeV4l2Decoder::is_supported() {
-            PipelineBackend::NativeV4L2
-        } else if Command::new("gst-launch-1.0").arg("--version").output().is_ok() {
-            PipelineBackend::GStreamer
-        } else if Command::new("ffplay").arg("-version").output().is_ok() {
-            PipelineBackend::FFmpeg
-        } else {
-            PipelineBackend::NativeV4L2
-        }
+        // 100% Pure Rust Native Linux V4L2 M2M Kernel Decoder is ALWAYS DEFAULT
+        PipelineBackend::NativeV4L2
     }
 
     pub fn from_str(s: &str) -> Self {

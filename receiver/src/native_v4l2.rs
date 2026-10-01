@@ -92,13 +92,7 @@ impl NativeV4l2Decoder {
             }
         }
         if let Some(handle) = self.worker_handle.take() {
-            if handle.is_finished() {
-                let _ = handle.join();
-            } else {
-                thread::spawn(move || {
-                    let _ = handle.join();
-                });
-            }
+            let _ = handle.join();
         }
         println!("\x1b[1;33m[native-v4l2]\x1b[0m Hardware Decoder stopped cleanly.");
     }
