@@ -6,7 +6,7 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
-use crate::config::{CaptureEngine, ColorProfile, TransportKind};
+use crate::config::{CaptureEngine, ColorProfile, ScaleMode, TransportKind};
 use std::net::UdpSocket;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +24,8 @@ pub enum ControlAction {
     SetCapture(CaptureEngine),
     SetMonitor(String),
     SetTransport(TransportKind),
+    SetScale(ScaleMode),
+    SetCas(bool),
     TriggerHud,
     HideHud,
 }
@@ -151,6 +153,14 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
             };
             actions.push(ControlAction::SetTransport(tk));
         }
+
+        if let Some(scale_str) = v.get("scale").and_then(|x| x.as_str()) {
+            actions.push(ControlAction::SetScale(ScaleMode::from_str(scale_str)));
+        }
+
+        if let Some(cas_val) = v.get("cas").and_then(|x| x.as_bool()) {
+            actions.push(ControlAction::SetCas(cas_val));
+        }
     }
 
     actions
@@ -209,5 +219,18 @@ mod tests {
         let actions = parse_control_payload(json);
         assert!(actions.contains(&ControlAction::SetColorProfile(ColorProfile::Grayscale)));
         assert!(actions.contains(&ControlAction::SetCapture(CaptureEngine::Kms)));
+    }
+
+    #[test]
+    fn test_parse_control_scale_and_cas() {
+        let json = br#"{"scale":"off","cas":true}"#;
+        let actions = parse_control_payload(json);
+        assert!(actions.contains(&ControlAction::SetScale(ScaleMode::Off)));
+        assert!(actions.contains(&ControlAction::SetCas(true)));
+
+        let json2 = br#"{"scale":"720p","cas":false}"#;
+        let actions2 = parse_control_payload(json2);
+        assert!(actions2.contains(&ControlAction::SetScale(ScaleMode::Native720p)));
+        assert!(actions2.contains(&ControlAction::SetCas(false)));
     }
 }

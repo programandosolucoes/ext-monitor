@@ -1233,6 +1233,66 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- Scaling Mode & Resolution (Unified Dropdown + Silicon Scaler Toggle) -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="scaleLabel">Resolution & Display Scaling</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipScale">Select display resolution. 1:1 Native modes render crisp vector fonts without blur. Upscaling modes utilize VideoCore IV silicon HVS or GPU FSR to fill widescreen monitors.</span>
+                        </span>
+                        <span class="control-value" id="valScale">1280x720 (1:1 Native - Sharp)</span>
+                    </div>
+
+                    <!-- Silicon Scaler (HVS / FSR) Toggle Checkbox -->
+                    <div style="margin-bottom: 0.6rem; display: flex; align-items: center; justify-content: space-between; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.15); border-radius: var(--radius-sm); padding: 0.5rem 0.8rem;">
+                        <label for="chkSiliconScaler" style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.86rem; color: var(--text-primary); user-select: none;">
+                            <input type="checkbox" id="chkSiliconScaler" checked onchange="toggleSiliconScaler(this.checked)" style="accent-color: var(--accent-cyan); width: 17px; height: 17px; cursor: pointer;">
+                            <span data-i18n="lblSiliconScaler">Silicon Hardware Scaler (VideoCore IV HVS & FSR)</span>
+                        </label>
+                        <span id="badgeSiliconStatus" class="card-badge badge-green" style="font-size: 0.72rem;" data-i18n="badgeSiliconActive">HVS Active</span>
+                    </div>
+
+                    <!-- Unified Resolution Dropdown -->
+                    <div style="position: relative;">
+                        <select id="resSelect" onchange="onResolutionSelectChange(this.value)" style="width: 100%; background: #0e1626; color: #f0f6fc; border: 1px solid rgba(0, 229, 255, 0.35); border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; font-size: 0.9rem; outline: none; cursor: pointer;">
+                            <optgroup label="Native 1:1 Direct Modes (Crisp / No Blur)" id="optgroupNative" data-i18n-label="optgroupNative">
+                                <option value="720p" selected>1280x720 @ 60Hz (1:1 Native - Recommended / Sharpest)</option>
+                                <option value="1024x768">1024x768 @ 60Hz (1:1 Native 4:3)</option>
+                                <option value="800x600">800x600 @ 60Hz (1:1 Native Eco)</option>
+                                <option value="off">Off (1:1 Direct Hardware Passthrough)</option>
+                            </optgroup>
+                            <optgroup label="Super-Resolution Upscaling (Silicon HVS / FSR)" id="optgroupUpscale" data-i18n-label="optgroupUpscale">
+                                <option value="1600x900">1600x900 @ 60Hz (Widescreen Stretch)</option>
+                                <option value="1920x1080">1920x1080 @ 60Hz (Full HD Virtual Canvas)</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <!-- Quick Preset Buttons -->
+                    <div class="btn-grid" id="scaleGrid" style="margin-top: 0.6rem;">
+                        <button class="btn-toggle active" data-scale="720p" onclick="setScale('720p')" data-i18n="btnScale720p">🎯 720p Native (1:1)</button>
+                        <button class="btn-toggle" data-scale="1600x900" id="btnScale900" onclick="setScale('1600x900')" data-i18n="btnScale1600x900">📐 900p Upscale</button>
+                        <button class="btn-toggle" data-scale="off" onclick="setScale('off')" data-i18n="btnScaleOff">⚡ Passthrough</button>
+                    </div>
+                </div>
+
+                <!-- CAS Sharpening (Contrast Adaptive Sharpening) -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="casLabel">Contrast Adaptive Sharpening (CAS)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipCas">Restores full PC color range (0-255) and deep contrast, eliminating washed-out video encoding artifacts.</span>
+                        </span>
+                        <span class="control-value" id="valCas">CAS Enabled (Full Contrast)</span>
+                    </div>
+                    <div class="btn-grid" id="casGrid">
+                        <button class="btn-toggle active" data-cas="true" onclick="setCas(true)" data-i18n="btnCasTrue">✨ CAS Enabled (Crisp Text / Full Black)</button>
+                        <button class="btn-toggle" data-cas="false" onclick="setCas(false)" data-i18n="btnCasFalse">Standard (TV Limited Range)</button>
+                    </div>
+                </div>
+
                 <!-- Commit & Hardware Actions -->
                 <div class="action-row" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 1.2rem;">
                     <button id="btnApply" class="btn-primary" onclick="applyConfiguration()" data-i18n="btnApply">💾 Apply Settings</button>
@@ -1641,6 +1701,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         let currentKeyIntMax = 30;
         let currentCapture = 'kms';
         let currentMonitor = 'HDMI-1';
+        let currentScale = '720p';
+        let currentCas = true;
         let isPaused = false;
 
         // Internationalization Dictionary
@@ -1856,6 +1918,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnGnomeMutter: "🐧 GNOME Mutter (PipeWire Screencast)",
                 monitorTargetLabel: "Recording / Capture Display",
                 tipMonitorTarget: "Choose the video output to capture. HDMI-1 for extended second screen on TV/monitor, eDP-1 to clone notebook screen.",
+                scaleLabel: "Resolution & Display Scaling",
+                tipScale: "Select display resolution. 1:1 Native modes render crisp vector fonts without blur. Upscaling modes utilize VideoCore IV silicon HVS or GPU FSR to fill widescreen monitors.",
+                lblSiliconScaler: "Silicon Hardware Scaler (VideoCore IV HVS & FSR)",
+                badgeSiliconActive: "HVS Active",
+                badgeSiliconOff: "Native Only",
+                optgroupNative: "Native 1:1 Direct Modes (Crisp / No Blur)",
+                optgroupUpscale: "Super-Resolution Upscaling (Silicon HVS / FSR)",
+                btnScale720p: "🎯 720p Native (1:1)",
+                btnScale1600x900: "📐 900p Upscale",
+                btnScaleOff: "⚡ Passthrough",
+                casLabel: "Contrast Adaptive Sharpening (CAS)",
+                tipCas: "Restores full PC color range (0-255) and deep contrast, eliminating washed-out video encoding artifacts.",
+                btnCasTrue: "✨ CAS Enabled (Crisp Text / Full Black)",
+                btnCasFalse: "Standard (TV Limited Range)",
                 statStreamActive: "Active",
                 statStreamPaused: "Paused",
                 waitingStream: "Awaiting Stream (Splash Screen Ready)",
@@ -2122,6 +2198,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnGnomeMutter: "🐧 GNOME Mutter (PipeWire Screencast)",
                 monitorTargetLabel: "Monitor de Gravação / Captura",
                 tipMonitorTarget: "Escolha a saída de vídeo para capturar. HDMI-1 para segunda tela estendida na TV/monitor, eDP-1 para clonar a tela do notebook.",
+                scaleLabel: "Resolução e Escala de Exibição",
+                tipScale: "Selecione a resolução de exibição. Modos 1:1 Nativos entregam fontes vetoriais cristalinas sem desfoque. Modos de Super-Resolução utilizam o HVS em silício do VideoCore IV ou FSR para preencher telas panorâmicas.",
+                lblSiliconScaler: "Scaler de Silício em Hardware (VideoCore IV HVS & FSR)",
+                badgeSiliconActive: "HVS Ativo",
+                badgeSiliconOff: "Apenas 1:1",
+                optgroupNative: "Modos Nativos 1:1 Diretos (Nítidos / Sem Blur)",
+                optgroupUpscale: "Super-Resolução / Upscaling (Silício HVS / FSR)",
+                btnScale720p: "🎯 720p Nativo (1:1)",
+                btnScale1600x900: "📐 900p Upscale",
+                btnScaleOff: "⚡ Passthrough",
+                casLabel: "Nitidez Adaptativa por Contraste (CAS)",
+                tipCas: "Restaura o alcance total de cores do PC (0-255) e contraste profundo, eliminando o aspecto 'lavado' do encoder.",
+                btnCasTrue: "✨ CAS Ativado (Texto Nítido / Preto Puro)",
+                btnCasFalse: "Padrão (Alcance TV Limitado)",
                 statStreamActive: "Ativo",
                 statStreamPaused: "Pausado",
                 waitingStream: "Aguardando Stream (Splash Ativa)",
@@ -2388,6 +2478,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnGnomeMutter: "🐧 GNOME Mutter (PipeWire Screencast)",
                 monitorTargetLabel: "Monitor di Registrazione / Cattura",
                 tipMonitorTarget: "Scegli l'uscita video da catturare. HDMI-1 per secondo schermo esteso su TV/monitor, eDP-1 per clonare lo schermo del notebook.",
+                scaleLabel: "Risoluzione e Ridimensionamento Display",
+                tipScale: "Seleziona la risoluzione di visualizzazione. I modi 1:1 Nativi offrono caratteri vettoriali nitidi senza sfocature. I modi Super-Risoluzione usano l'HVS hardware del VideoCore IV o FSR per schermi widescreen.",
+                lblSiliconScaler: "Scaler Hardware in Silicio (VideoCore IV HVS & FSR)",
+                badgeSiliconActive: "HVS Attivo",
+                badgeSiliconOff: "Solo 1:1",
+                optgroupNative: "Modi Nativi 1:1 Diretti (Nitidi / Senza Sfocatura)",
+                optgroupUpscale: "Super-Risoluzione / Upscaling (Silicio HVS / FSR)",
+                btnScale720p: "🎯 720p Nativo (1:1)",
+                btnScale1600x900: "📐 900p Upscale",
+                btnScaleOff: "⚡ Passthrough",
+                casLabel: "Nitidezza Adattiva al Contrasto (CAS)",
+                tipCas: "Ripristina la gamma dinamica completa del PC (0-255) e contrasto profondo.",
+                btnCasTrue: "✨ CAS Attivo (Testo Nitido / Nero Profondo)",
+                btnCasFalse: "Standard (Gamma TV Limitata)",
                 statStreamActive: "Attivo",
                 statStreamPaused: "In Pausa",
                 waitingStream: "In Attesa di Stream (Splash Attiva)",
@@ -2654,6 +2758,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnGnomeMutter: "🐧 GNOME Mutter (PipeWire 投屏)",
                 monitorTargetLabel: "捕获目标显示器",
                 tipMonitorTarget: "选择要捕获的视频输出。HDMI-1 用于在电视上扩展副屏，eDP-1 用于复制笔记本主屏。",
+                scaleLabel: "显示分辨率与画面缩放",
+                tipScale: "选择显示分辨率。原生 1:1 模式提供最清晰的矢量文字渲染且无模糊。超分辨率模式利用 VideoCore IV 硅芯片硬件 HVS 或 GPU FSR 拉伸填满宽屏显示器。",
+                lblSiliconScaler: "硬件硅芯片缩放器 (VideoCore IV HVS & FSR)",
+                badgeSiliconActive: "HVS 已启用",
+                badgeSiliconOff: "仅原生 1:1",
+                optgroupNative: "原生 1:1 直读模式 (超锐利 / 无模糊)",
+                optgroupUpscale: "超分辨率缩放 (硅芯片 HVS / FSR)",
+                btnScale720p: "🎯 原生 720p (1:1)",
+                btnScale1600x900: "📐 900p 超分拉伸",
+                btnScaleOff: "⚡ 直通模式",
+                casLabel: "对比度自适应锐化 (CAS)",
+                tipCas: "恢复 PC 全范围动态色彩 (0-255) 与纯正黑阶，消除偏白洗白伪影。",
+                btnCasTrue: "✨ 启用 CAS (清晰文字 / 纯黑阶)",
+                btnCasFalse: "标准 (TV 压缩色彩范围)",
                 statStreamActive: "推流中",
                 statStreamPaused: "已暂停",
                 waitingStream: "等待推流 (引导屏已就绪)",
@@ -3000,6 +3118,59 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             localStorage.setItem('ext_monitor', mon);
         }
 
+        function toggleSiliconScaler(enabled) {
+            const grp = document.getElementById('optgroupUpscale');
+            const badge = document.getElementById('badgeSiliconStatus');
+            const btn900 = document.getElementById('btnScale900');
+            if (grp) grp.style.display = enabled ? '' : 'none';
+            if (btn900) btn900.style.display = enabled ? '' : 'none';
+            if (badge) {
+                badge.textContent = enabled ? t('badgeSiliconActive') : t('badgeSiliconOff');
+                badge.className = 'card-badge ' + (enabled ? 'badge-green' : 'badge-amber');
+            }
+            localStorage.setItem('ext_silicon_scaler', enabled);
+            if (!enabled && (currentScale === '1600x900' || currentScale === '1920x1080')) {
+                setScale('720p');
+            }
+            showToast(enabled ? '✓ Silicon Hardware Scaler (HVS) Enabled' : '✕ Silicon Scaler Disabled (Native 1:1 Only)');
+        }
+
+        function onResolutionSelectChange(val) {
+            setScale(val);
+        }
+
+        function setScale(scale) {
+            currentScale = scale;
+            const sel = document.getElementById('resSelect');
+            if (sel && sel.value !== scale) sel.value = scale;
+            document.querySelectorAll('#scaleGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', b.dataset.scale === scale);
+            });
+            const labels = {
+                '720p': '1280x720 (1:1 Native - Sharp)',
+                '1024x768': '1024x768 (1:1 Native)',
+                '800x600': '800x600 (1:1 Eco)',
+                '1600x900': '1600x900 (HVS Upscale)',
+                '1920x1080': '1920x1080 (FSR/HVS 1080p)',
+                'off': 'Off (1:1 Passthrough)'
+            };
+            document.getElementById('valScale').textContent = labels[scale] || scale;
+            localStorage.setItem('ext_scale', scale);
+            sendHostControl({ scale: scale });
+            showToast('⚡ Resolution / Scale: ' + (labels[scale] || scale));
+        }
+
+        function setCas(enabled) {
+            currentCas = enabled;
+            document.querySelectorAll('#casGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', (b.dataset.cas === 'true') === enabled);
+            });
+            document.getElementById('valCas').textContent = enabled ? 'CAS Enabled (Full Contrast)' : 'Standard (TV Limited Range)';
+            localStorage.setItem('ext_cas', enabled);
+            sendHostControl({ cas: enabled });
+            showToast('✨ CAS Sharpening: ' + (enabled ? 'ON' : 'OFF'));
+        }
+
         // Hot-Apply Configuration
         function applyConfiguration() {
             localStorage.setItem('ext_color', currentColor);
@@ -3010,6 +3181,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             localStorage.setItem('ext_key_int_max', currentKeyIntMax);
             localStorage.setItem('ext_capture', currentCapture);
             localStorage.setItem('ext_monitor', currentMonitor);
+            localStorage.setItem('ext_scale', currentScale);
+            localStorage.setItem('ext_cas', currentCas);
             showToast('Applying configuration via UDP 5001...');
             fetch('/api/config', {
                 method: 'POST',
@@ -3022,7 +3195,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                     skip_to_first: currentSkipToFirst,
                     key_int_max: currentKeyIntMax,
                     capture: currentCapture,
-                    monitor: currentMonitor
+                    monitor: currentMonitor,
+                    scale: currentScale,
+                    cas: currentCas
                 })
             })
             .then(res => res.json())
@@ -3792,6 +3967,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         const savedM3 = localStorage.getItem('ext_mode3');
         if (savedM3 !== null) setModeToggleUI('mode3', savedM3 === 'true');
+
+        const savedScale = localStorage.getItem('ext_scale');
+        if (savedScale) setScale(savedScale);
+
+        const savedCas = localStorage.getItem('ext_cas');
+        if (savedCas !== null) setCas(savedCas === 'true');
+
+        const savedSilicon = localStorage.getItem('ext_silicon_scaler');
+        if (savedSilicon !== null) {
+            const isEnabled = savedSilicon === 'true';
+            const chk = document.getElementById('chkSiliconScaler');
+            if (chk) chk.checked = isEnabled;
+            toggleSiliconScaler(isEnabled);
+        }
 
         // Initialize 30 FPS Hardware Audio Spectrum Canvas
         initAudioVisualizerCanvas();

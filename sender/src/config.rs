@@ -26,6 +26,31 @@ impl ColorProfile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScaleMode {
+    Native720p,    // 1:1 Pixel Mapping (1280x720) - Zero downscaling blur, recommended for 720p receiver
+    Scale1600x900, // 1600x900 canvas scaled to 720p stream
+    Off,           // Passthrough without forced dimensions
+}
+
+impl ScaleMode {
+    pub fn name(&self) -> &'static str {
+        match self {
+            ScaleMode::Native720p => "Native 720p (1:1 Direct - Anti-Blur)",
+            ScaleMode::Scale1600x900 => "1600x900 (GPU Scaled to 720p)",
+            ScaleMode::Off => "Native Passthrough (Scale Off)",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "off" | "none" | "no-scale" | "disabled" | "false" => ScaleMode::Off,
+            "1600x900" | "900p" | "scale" | "upscale" => ScaleMode::Scale1600x900,
+            _ => ScaleMode::Native720p,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureEngine {
     Mutter, // GNOME Mutter ScreenCast via D-Bus & PipeWire
     Kms,    // Kernel DRM/KMS Direct Hardware Scanout via DMA-BUF
@@ -121,6 +146,10 @@ pub struct SenderConfig {
     pub capture: CaptureEngine,
     pub audio: bool,
     pub audio_port: u16,
+    pub scale: ScaleMode,
+    pub cas: bool,
+    pub contrast: f32,
+    pub saturation: f32,
 }
 
 impl SenderConfig {
@@ -481,6 +510,36 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             StreamEngine::NativeRust
         };
 
+        let scale = if args.iter().any(|a| a == "--no-scale" || a == "--scale=off" || a == "--scale=none" || a == "--scale=false") {
+            ScaleMode::Off
+        } else if args.iter().any(|a| a == "--scale=1600x900" || a == "--scale=900p" || a == "--scale=on" || a == "--scale=upscale") {
+            ScaleMode::Scale1600x900
+        } else if let Some(val) = args.iter().find_map(|a| a.strip_prefix("--scale=")) {
+            ScaleMode::from_str(val)
+        } else {
+            ScaleMode::Native720p
+        };
+
+        let cas = if args.iter().any(|a| a == "--no-cas" || a == "--cas=off" || a == "--cas=false" || a == "--no-sharpen") {
+            false
+        } else if args.iter().any(|a| a == "--cas" || a == "--cas=on" || a == "--cas=true" || a == "--sharpen" || a == "--sharp") {
+            true
+        } else {
+            false
+        };
+
+        let contrast = args
+            .iter()
+            .find_map(|a| a.strip_prefix("--contrast="))
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(if cas { 1.16 } else { 1.0 });
+
+        let saturation = args
+            .iter()
+            .find_map(|a| a.strip_prefix("--saturation="))
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(if cas { 1.08 } else { 1.0 });
+
         Ok(Some(Self {
             target_ip,
             target_port,
@@ -498,6 +557,10 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             capture,
             audio,
             audio_port,
+            scale,
+            cas,
+            contrast,
+            saturation,
         }))
     }
 }
@@ -527,6 +590,36 @@ mod tests {
         let args = vec!["ext-sender".to_string(), "--direct".to_string(), "--capture=mutter".to_string()];
         let cfg = SenderConfig::parse(&args).unwrap().unwrap();
         assert_eq!(cfg.capture, CaptureEngine::Mutter);
+    }
+
+    #[test]
+    fn test_scale_and_cas_options() {
+        // Default: Native720p, CAS off, contrast 1.0, saturation 1.0
+        let args = vec!["ext-sender".to_string(), "--direct".to_string()];
+        let cfg = SenderConfig::parse(&args).unwrap().unwrap();
+        assert_eq!(cfg.scale, ScaleMode::Native720p);
+        assert!(!cfg.cas);
+        assert_eq!(cfg.contrast, 1.0);
+        assert_eq!(cfg.saturation, 1.0);
+
+        // Explicit --no-scale and --cas with custom contrast
+        let args2 = vec![
+            "ext-sender".to_string(),
+            "--direct".to_string(),
+            "--no-scale".to_string(),
+            "--cas".to_string(),
+            "--contrast=1.20".to_string(),
+        ];
+        let cfg2 = SenderConfig::parse(&args2).unwrap().unwrap();
+        assert_eq!(cfg2.scale, ScaleMode::Off);
+        assert!(cfg2.cas);
+        assert_eq!(cfg2.contrast, 1.20);
+        assert_eq!(cfg2.saturation, 1.08);
+
+        // Explicit 1600x900 scaling
+        let args3 = vec!["ext-sender".to_string(), "--direct".to_string(), "--scale=1600x900".to_string()];
+        let cfg3 = SenderConfig::parse(&args3).unwrap().unwrap();
+        assert_eq!(cfg3.scale, ScaleMode::Scale1600x900);
     }
 }
 

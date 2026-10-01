@@ -116,7 +116,10 @@ fn print_help_en() {
     println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m     Color profile (24-bit TrueColor, 256-color QP 30-44, Monochrome Grayscale)");
     println!("  \x1b[1;32m--no-audio\x1b[0m                  Disable PipeWire HDMI stereo audio forwarding");
     println!("  \x1b[1;32m--audio-port=<port>\x1b[0m         UDP port for audio streaming (default: 5002)");
-    println!("  \x1b[1;32m--hud\x1b[0m                       Enable diagnostic on-screen telemetry overlay (auto-hides in 60s)");
+    println!("  \x1b[1;32m--scale=<720p|1600x900|off>\x1b[0m  Scaling mode: 720p (1:1 native sharp), 1600x900 (downscaled), or off");
+    println!("  \x1b[1;32m--cas, --sharpen\x1b[0m            Enable Contrast Adaptive Sharpening (anti-washed out, deep contrast)");
+    println!("  \x1b[1;32m--no-scale\x1b[0m                  Disable resolution scaling (shortcut for --scale=off)");
+    println!("  \x1b[1;32m--no-cas\x1b[0m                    Disable CAS sharpening filter");
     println!("  \x1b[1;32m--help, -h\x1b[0m                  Display this help message");
     println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m        Select help language (English, Portuguese, Italian, Chinese)\n");
 
@@ -185,7 +188,10 @@ fn print_help_pt() {
     println!("  \x1b[1;32m--color=<full|256|gray>\x1b[0m     Perfil de cor (TrueColor 24-bit, 256 cores QP 30-44, Monocromático)");
     println!("  \x1b[1;32m--no-audio\x1b[0m                  Desativa o encaminhamento de áudio estéreo HDMI");
     println!("  \x1b[1;32m--audio-port=<porta>\x1b[0m        Porta UDP para transmissão de áudio (padrão: 5002)");
-    println!("  \x1b[1;32m--hud\x1b[0m                       Ativa o painel de telemetria na tela (auto-oculta em 60s)");
+    println!("  \x1b[1;32m--scale=<720p|1600x900|off>\x1b[0m  Modo de escala: 720p (1:1 nativo nítido), 1600x900 (downscale), ou off");
+    println!("  \x1b[1;32m--cas, --sharpen\x1b[0m            Ativa o Realce Adaptativo de Contraste CAS (elimina imagem lavada)");
+    println!("  \x1b[1;32m--no-scale\x1b[0m                  Desativa redimensionamento (atalho para --scale=off)");
+    println!("  \x1b[1;32m--no-cas\x1b[0m                    Desativa o filtro CAS de nitidez");
     println!("  \x1b[1;32m--help, -h\x1b[0m                  Exibe esta mensagem de ajuda");
     println!("  \x1b[1;32m--lang=<en|pt|it|zh>\x1b[0m        Seleciona o idioma (Inglês, Português, Italiano, Chinês)\n");
 

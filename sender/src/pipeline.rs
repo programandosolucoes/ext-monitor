@@ -6,7 +6,7 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
-use crate::config::{CaptureEngine, ColorProfile, EncoderApi, StreamEngine};
+use crate::config::{CaptureEngine, ColorProfile, EncoderApi, ScaleMode, StreamEngine};
 use crate::kms::KmsOutputInfo;
 use crate::native_streamer;
 use std::io::{self, BufRead, BufReader, Read};
@@ -78,6 +78,10 @@ pub struct PipelineBuilder {
     pub audio: bool,
     #[allow(dead_code)]
     pub audio_port: u16,
+    pub scale: ScaleMode,
+    pub cas: bool,
+    pub contrast: f32,
+    pub saturation: f32,
 }
 
 impl PipelineBuilder {
@@ -287,13 +291,25 @@ impl PipelineBuilder {
             EncoderApi::Vaapi => {
                 if self.color_profile == ColorProfile::Grayscale {
                     cmd.arg("videobalance").arg("saturation=0.0").arg("!");
+                } else if self.cas || (self.contrast - 1.0).abs() > 0.001 || (self.saturation - 1.0).abs() > 0.001 {
+                    cmd.arg("videobalance")
+                        .arg(format!("contrast={:.2}", self.contrast))
+                        .arg(format!("saturation={:.2}", self.saturation))
+                        .arg("!");
                 }
 
-                cmd.arg("vapostproc")
-                    .arg("!")
-                    .arg("video/x-raw(memory:VAMemory),width=1280,height=720")
-                    .arg("!")
-                    .arg("vah264enc")
+                cmd.arg("vapostproc").arg("!");
+
+                match self.scale {
+                    ScaleMode::Off => {
+                        cmd.arg("video/x-raw(memory:VAMemory)").arg("!");
+                    }
+                    _ => {
+                        cmd.arg("video/x-raw(memory:VAMemory),width=1280,height=720").arg("!");
+                    }
+                }
+
+                cmd.arg("vah264enc")
                     .arg(format!("bitrate={}", self.bitrate))
                     .arg("rate-control=vbr");
 
@@ -323,13 +339,26 @@ impl PipelineBuilder {
                     .arg("!");
             }
             EncoderApi::Nvenc => {
-                cmd.arg("videoscale")
-                    .arg("!")
-                    .arg("videoconvert")
-                    .arg("!")
-                    .arg("video/x-raw,format=NV12,width=1280,height=720")
-                    .arg("!")
-                    .arg("nvh264enc")
+                if self.cas || (self.contrast - 1.0).abs() > 0.001 || (self.saturation - 1.0).abs() > 0.001 {
+                    cmd.arg("videobalance")
+                        .arg(format!("contrast={:.2}", self.contrast))
+                        .arg(format!("saturation={:.2}", self.saturation))
+                        .arg("!");
+                }
+                match self.scale {
+                    ScaleMode::Off => {
+                        cmd.arg("videoconvert").arg("!").arg("video/x-raw,format=NV12").arg("!");
+                    }
+                    _ => {
+                        cmd.arg("videoscale")
+                            .arg("!")
+                            .arg("videoconvert")
+                            .arg("!")
+                            .arg("video/x-raw,format=NV12,width=1280,height=720")
+                            .arg("!");
+                    }
+                }
+                cmd.arg("nvh264enc")
                     .arg(format!("bitrate={}", self.bitrate))
                     .arg("preset=low-latency-hq")
                     .arg("rc-mode=cbr-ld-hq")
@@ -339,13 +368,26 @@ impl PipelineBuilder {
                     .arg("!");
             }
             EncoderApi::Qsv => {
-                cmd.arg("videoscale")
-                    .arg("!")
-                    .arg("videoconvert")
-                    .arg("!")
-                    .arg("video/x-raw,format=NV12,width=1280,height=720")
-                    .arg("!")
-                    .arg("qsvh264enc")
+                if self.cas || (self.contrast - 1.0).abs() > 0.001 || (self.saturation - 1.0).abs() > 0.001 {
+                    cmd.arg("videobalance")
+                        .arg(format!("contrast={:.2}", self.contrast))
+                        .arg(format!("saturation={:.2}", self.saturation))
+                        .arg("!");
+                }
+                match self.scale {
+                    ScaleMode::Off => {
+                        cmd.arg("videoconvert").arg("!").arg("video/x-raw,format=NV12").arg("!");
+                    }
+                    _ => {
+                        cmd.arg("videoscale")
+                            .arg("!")
+                            .arg("videoconvert")
+                            .arg("!")
+                            .arg("video/x-raw,format=NV12,width=1280,height=720")
+                            .arg("!");
+                    }
+                }
+                cmd.arg("qsvh264enc")
                     .arg(format!("bitrate={}", self.bitrate))
                     .arg("rate-control=cbr")
                     .arg("target-usage=veryfast")
@@ -354,13 +396,26 @@ impl PipelineBuilder {
                     .arg("!");
             }
             EncoderApi::Software => {
-                cmd.arg("videoscale")
-                    .arg("!")
-                    .arg("videoconvert")
-                    .arg("!")
-                    .arg("video/x-raw,format=I420,width=1280,height=720")
-                    .arg("!")
-                    .arg("x264enc")
+                if self.cas || (self.contrast - 1.0).abs() > 0.001 || (self.saturation - 1.0).abs() > 0.001 {
+                    cmd.arg("videobalance")
+                        .arg(format!("contrast={:.2}", self.contrast))
+                        .arg(format!("saturation={:.2}", self.saturation))
+                        .arg("!");
+                }
+                match self.scale {
+                    ScaleMode::Off => {
+                        cmd.arg("videoconvert").arg("!").arg("video/x-raw,format=I420").arg("!");
+                    }
+                    _ => {
+                        cmd.arg("videoscale")
+                            .arg("!")
+                            .arg("videoconvert")
+                            .arg("!")
+                            .arg("video/x-raw,format=I420,width=1280,height=720")
+                            .arg("!");
+                    }
+                }
+                cmd.arg("x264enc")
                     .arg(format!("bitrate={}", self.bitrate))
                     .arg("tune=zerolatency")
                     .arg("speed-preset=ultrafast")
@@ -764,6 +819,10 @@ mod tests {
             kms_info: None,
             audio: true,
             audio_port: 5004,
+            scale: ScaleMode::Native720p,
+            cas: false,
+            contrast: 1.0,
+            saturation: 1.0,
         };
 
         // USB sink verification

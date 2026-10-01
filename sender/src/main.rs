@@ -200,6 +200,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;34m[*] Encoder API:\x1b[0m {:?}", cfg.encoder);
     println!("\x1b[1;34m[*] Stream Engine:\x1b[0m {}", cfg.engine.name());
     println!("\x1b[1;34m[*] Capture Engine:\x1b[0m {}", cfg.capture.name());
+    println!("\x1b[1;34m[*] Scale Mode:\x1b[0m {}", cfg.scale.name());
+    println!(
+        "\x1b[1;34m[*] CAS Sharpening:\x1b[0m {} (Contrast: {:.2}, Saturation: {:.2})",
+        if cfg.cas { "Enabled" } else { "Disabled" },
+        cfg.contrast,
+        cfg.saturation
+    );
     let audio_running = Arc::new(AtomicBool::new(cfg.audio));
     if cfg.audio {
         println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Enabled (UDP RTP Opus {}:{}, Realtime Spectrum: 5006)", cfg.target_ip, cfg.audio_port);
@@ -213,7 +220,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "eDP-1".to_string()
     } else {
         pipewire::ensure_kernel_hdmi_connected();
-        pipewire::ensure_gnome_displays();
+        pipewire::ensure_gnome_displays(cfg.scale);
         "HDMI-1".to_string()
     };
 
@@ -295,6 +302,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             kms_info: kms_info.clone(),
             audio: cfg.audio,
             audio_port: cfg.audio_port,
+            scale: cfg.scale,
+            cas: cfg.cas,
+            contrast: cfg.contrast,
+            saturation: cfg.saturation,
         };
 
         let mut child: Option<StreamerHandle> = if !is_paused {
@@ -479,6 +490,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             pipeline_builder.target_port = port;
                         }
                         restart_pipeline = true;
+                    }
+                    ControlAction::SetScale(new_scale) => {
+                        if new_scale != cfg.scale {
+                            println!("\x1b[1;35m[*] Web Command: Troca de Escala {:?} -> {:?}\x1b[0m", cfg.scale, new_scale);
+                            cfg.scale = new_scale;
+                            pipeline_builder.scale = new_scale;
+                            pipewire::ensure_gnome_displays(new_scale);
+                            restart_pipeline = true;
+                        }
+                    }
+                    ControlAction::SetCas(new_cas) => {
+                        if new_cas != cfg.cas {
+                            println!("\x1b[1;35m[*] Web Command: Realce de Nitidez CAS {} -> {}\x1b[0m", cfg.cas, new_cas);
+                            cfg.cas = new_cas;
+                            pipeline_builder.cas = new_cas;
+                            cfg.contrast = if new_cas { 1.16 } else { 1.0 };
+                            cfg.saturation = if new_cas { 1.08 } else { 1.0 };
+                            pipeline_builder.contrast = cfg.contrast;
+                            pipeline_builder.saturation = cfg.saturation;
+                            restart_pipeline = true;
+                        }
                     }
                 }
             }

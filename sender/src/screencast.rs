@@ -24,9 +24,8 @@ impl MutterScreenCastSession {
     pub fn create_and_start(monitor: &str) -> Result<Self, Box<dyn Error>> {
         let conn = Connection::session()?;
 
-        // 1. Create Mutter ScreenCast Session with remote-desktop enabled
-        let mut session_props: HashMap<&str, Value> = HashMap::new();
-        session_props.insert("remote-desktop", Value::from(true));
+        // 1. Create Mutter ScreenCast Session
+        let session_props: HashMap<&str, Value> = HashMap::new();
         let session_reply = conn.call_method(
             Some("org.gnome.Mutter.ScreenCast"),
             "/org/gnome/Mutter/ScreenCast",

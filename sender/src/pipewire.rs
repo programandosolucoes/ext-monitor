@@ -34,9 +34,9 @@ pub fn ensure_kernel_hdmi_connected() {
 }
 
 /// Applies GNOME extended display layout (side-by-side 1280x720@60)
-pub fn ensure_gnome_displays() {
+pub fn ensure_gnome_displays(scale: crate::config::ScaleMode) {
     let check = Command::new("gdbus")
-        .args(&[
+        .args([
             "call",
             "--session",
             "--dest",
@@ -48,6 +48,11 @@ pub fn ensure_gnome_displays() {
         ])
         .output();
 
+    let target_mode = match scale {
+        crate::config::ScaleMode::Scale1600x900 => "1600x900@59.946",
+        _ => "1280x720@59.855",
+    };
+
     let (serial, is_configured) = if let Ok(out) = check {
         let stdout = String::from_utf8_lossy(&out.stdout);
         let serial = if let Some(start) = stdout.find("(uint32 ") {
@@ -57,21 +62,21 @@ pub fn ensure_gnome_displays() {
             1
         };
 
-        let is_logical = stdout.contains("('HDMI-1'") && stdout.contains("(1920, 0");
+        let is_logical = stdout.contains("('HDMI-1'") && stdout.contains(target_mode);
         (serial, is_logical)
     } else {
         (1, false)
     };
 
     if is_configured {
-        println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1 in extended mode (side-by-side).\x1b[0m");
+        println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1 in extended mode ({}).\x1b[0m", target_mode);
         return;
     }
 
-    println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side 1600x900, serial={})...\x1b[0m", serial);
+    println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side {}, serial={})...\x1b[0m", target_mode, serial);
     let apply_cmd = format!(
-        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '1600x900@59.946', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
-        serial
+        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '{}', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+        serial, target_mode
     );
     let _ = Command::new("bash").arg("-c").arg(&apply_cmd).status();
     thread::sleep(Duration::from_millis(500));
