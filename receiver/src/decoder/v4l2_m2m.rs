@@ -105,7 +105,7 @@ impl V4l2DecoderSession {
         out_pix.height = height;
         out_pix.pixelformat = V4L2_PIX_FMT_H264;
         out_pix.num_planes = 1;
-        out_pix.plane_fmt[0].sizeimage = 512 * 1024;
+        out_pix.plane_fmt[0].sizeimage = 1024 * 1024;
         if unsafe { libc::ioctl(video_fd, VIDIOC_S_FMT as _, &mut out_fmt) } != 0 {
             let err = std::io::Error::last_os_error();
             eprintln!("\x1b[1;31m[v4l2-m2m]\x1b[0m Failed to set OUTPUT format on /dev/video10: {}", err);
@@ -519,8 +519,8 @@ impl V4l2DecoderSession {
         if self.frames_decoded % 120 == 1 {
             let via = if self.kms.is_some() { "KMS plane" } else { "framebuffer" };
             println!(
-                "\x1b[1;32m[v4l2-m2m]\x1b[0m Hardware VPU decoded & displayed {} frames via {} (1280x720)",
-                self.frames_decoded, via
+                "\x1b[1;32m[v4l2-m2m]\x1b[0m Hardware VPU decoded & displayed {} frames via {} ({}x{})",
+                self.frames_decoded, via, self.width, self.height
             );
         }
     }

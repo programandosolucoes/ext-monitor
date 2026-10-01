@@ -9,7 +9,7 @@
 
 use crate::decoder::V4l2DecoderSession;
 use crate::display::FramebufferSink;
-use crate::stream::TsDemuxer;
+use crate::stream::{TsDemuxer, parse_sps_dimensions};
 use std::io;
 use std::net::UdpSocket;
 use std::os::unix::io::{AsRawFd, FromRawFd};
@@ -110,11 +110,12 @@ impl MiracastIngress {
             }
         };
 
-        let mut decoder = match V4l2DecoderSession::new(1280, 720) {
-            Some(s) => s,
+        let mut current_dims = (1920u32, 1080u32);
+        let mut decoder = match V4l2DecoderSession::new(current_dims.0, current_dims.1) {
+            Some(s) => Some(s),
             None => {
                 eprintln!(
-                    "\x1b[1;31m[miracast-ingress]\x1b[0m Failed to initialize V4L2 M2M decoder session."
+                    "\x1b[1;31m[miracast-ingress]\x1b[0m Failed to initialize V4L2 M2M decoder session for 1920x1080."
                 );
                 return;
             }
@@ -124,7 +125,7 @@ impl MiracastIngress {
         let mut completed_frames: Vec<Vec<u8>> = Vec::with_capacity(16);
 
         println!(
-            "\x1b[1;32m[miracast-ingress]\x1b[0m Listening for MPEG-TS stream on UDP port {} -> HDMI Display active.",
+            "\x1b[1;32m[miracast-ingress]\x1b[0m Listening for MPEG-TS stream on UDP port {} (Default: 1920x1080 + Dynamic SPS) -> HDMI Display active.",
             port
         );
 
@@ -144,14 +145,29 @@ impl MiracastIngress {
             if ret == 0 {
                 demuxer.flush(&mut completed_frames);
                 for frame in completed_frames.drain(..) {
-                    decoder.decode_chunk(&frame, |frame_rgb565| {
+                    if let Some((w, h)) = parse_sps_dimensions(&frame) {
+                        if (w, h) != current_dims {
+                            println!(
+                                "\x1b[1;32m[miracast-ingress]\x1b[0m Video format dynamically detected from SPS: {}x{} (reconfiguring V4L2 decoder)...",
+                                w, h
+                            );
+                            current_dims = (w, h);
+                            decoder = V4l2DecoderSession::new(w, h);
+                        }
+                    }
+
+                    if let Some(ref mut dec) = decoder {
+                        dec.decode_chunk(&frame, |frame_rgb565| {
+                            display.render_frame(frame_rgb565);
+                        });
+                    }
+                }
+
+                if let Some(ref mut dec) = decoder {
+                    dec.drain_decoded_frames(|frame_rgb565| {
                         display.render_frame(frame_rgb565);
                     });
                 }
-
-                decoder.drain_decoded_frames(|frame_rgb565| {
-                    display.render_frame(frame_rgb565);
-                });
 
                 // If stream was active and now idle for > 2 seconds: return to splash screen
                 if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(2) {
@@ -188,9 +204,22 @@ impl MiracastIngress {
             }
 
             for frame in completed_frames.drain(..) {
-                decoder.decode_chunk(&frame, |frame_rgb565| {
-                    display.render_frame(frame_rgb565);
-                });
+                if let Some((w, h)) = parse_sps_dimensions(&frame) {
+                    if (w, h) != current_dims {
+                        println!(
+                            "\x1b[1;32m[miracast-ingress]\x1b[0m Video format dynamically detected from SPS: {}x{} (reconfiguring V4L2 decoder)...",
+                            w, h
+                        );
+                        current_dims = (w, h);
+                        decoder = V4l2DecoderSession::new(w, h);
+                    }
+                }
+
+                if let Some(ref mut dec) = decoder {
+                    dec.decode_chunk(&frame, |frame_rgb565| {
+                        display.render_frame(frame_rgb565);
+                    });
+                }
             }
         }
 
