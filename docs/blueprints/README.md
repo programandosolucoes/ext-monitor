@@ -18,7 +18,7 @@ All critical engineering milestones—from FAT16 sector alignment on Broadcom si
 
 ---
 
-## 2. Directory of the 21 Engineering Blueprints
+## 2. Directory of the 23 Engineering Blueprints
 
 | # | Technical Blueprint | Document File | Engineering Focus |
 | :---: | :--- | :--- | :--- |
@@ -44,6 +44,7 @@ All critical engineering milestones—from FAT16 sector alignment on Broadcom si
 | **20** | **Single-HDMI Multiplexer & Zero-Reboot** | [`20-single-hdmi-scanout-multiplexer-realtime-fft-i18n-zero-reboot.md`](en/20-single-hdmi-scanout-multiplexer-realtime-fft-i18n-zero-reboot.md) | Mutual exclusion on single physical HDMI port, 512-point Cooley-Tukey FFT, 4-language i18n, and zero-reboot teardown. |
 | **21** | **Miracast MS-MICE, Reverse RTSP WFD & 1080p SPS** | [`21-miracast-ms-mice-rtsp-wfd-dynamic-sps-and-gnome-network-displays.md`](en/21-miracast-ms-mice-rtsp-wfd-dynamic-sps-and-gnome-network-displays.md) | MS-MICE binary signaling (TCP 7250), reverse RTSP WFD connection to Source (7236), UDP 5005 discovery migration, and GNOME 1080p bug resolution via pure-Rust dynamic SPS parser. |
 | **22** | **NV12 Stride Alignment & Realtime Miracast** | [`22-nv12-macroblock-stride-green-bar-fix-and-realtime-miracast-optimizations.md`](en/22-nv12-macroblock-stride-green-bar-fix-and-realtime-miracast-optimizations.md) | 16-line macroblock pitch math (1080->1088), 15,360-byte padding fix on KMS UV plane, PUSI zero-delay TS demuxing, 2ms polling, and AMD Radeon 610M VA-API hardware acceleration. |
+| **23** | **Miracast GPU Hardware Acceleration & Host Launcher** | [`23-miracast-gpu-hardware-acceleration-and-host-launcher.md`](en/23-miracast-gpu-hardware-acceleration-and-host-launcher.md) | Direct sysfs GPU vendor detection (AMD, Intel, NVIDIA), automated hardware ranking launcher daemon, atomic debounce, and Web UI GPU command box. |
 
 ---
 

@@ -232,6 +232,24 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
             color: var(--accent-cyan);
             box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
         }
+        .btn-chip {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-secondary);
+            border-radius: 4px;
+            padding: 0.12rem 0.4rem;
+            font-size: 0.68rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn-chip:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+        .btn-chip.active {
+            background: rgba(0, 255, 102, 0.2);
+            border-color: var(--accent-emerald);
+            color: var(--accent-emerald);
+            font-weight: 700;
+        }
         .slider-wrap { padding: 0.4rem 0; }
         .range-slider {
             width: 100%;
@@ -830,11 +848,36 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span id="badgeMode2" class="stat-badge badge-green" data-i18n="badgeMode2On">Enabled (TCP 7236)</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Windows Display</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Windows & Linux</span>
                             </div>
-                            <button class="btn-toggle" id="btnMode2Connect" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm); border-color: var(--accent-emerald); color: var(--accent-emerald);" onclick="activateModeWithTopology('mode2_miracast', 'miracast'); event.stopPropagation();" data-i18n="btnSelectMode2">
-                                🪟 Conectar Miracast (Win+K)
+                            <button class="btn-toggle tip-wrap" id="btnMode2Connect" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm); border-color: var(--accent-emerald); color: var(--accent-emerald);" onclick="activateModeWithTopology('mode2_miracast', 'miracast'); event.stopPropagation();" title="Exec=env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays" data-i18n="btnSelectMode2">
+                                🪟 Conectar Miracast (Win+K / Linux GPU)
                             </button>
+                            <div class="gpu-miracast-box" style="padding: 0.5rem 0.6rem; background: rgba(0, 255, 102, 0.05); border: 1px solid rgba(0, 255, 102, 0.25); border-radius: var(--radius-sm); font-size: 0.74rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                    <span class="tip-wrap" style="cursor: help;">
+                                        <span style="font-weight: 700; color: var(--accent-emerald); font-size: 0.76rem;">🚀 GPU Host (AMD / Intel / NVIDIA)</span>
+                                        <span class="tip-icon" style="margin-left: 4px;">?</span>
+                                        <span class="tip-box" style="width: 320px; font-family: monospace; font-size: 0.73rem; text-align: left; line-height: 1.4; left: 0;">
+                                            <strong>🚀 Comandos de Aceleração por GPU:</strong><br>
+                                            • <strong>AMD:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays</code><br>
+                                            • <strong>Intel:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,qsvh264enc:MAX gnome-network-displays</code><br>
+                                            • <strong>NVIDIA:</strong> <code>env GST_PLUGIN_FEATURE_RANK=nvh264enc:MAX,vaapih264enc:MAX gnome-network-displays</code><br>
+                                            • <strong>Auto:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,nvh264enc:MAX,qsvh264enc:MAX gnome-network-displays</code>
+                                        </span>
+                                    </span>
+                                    <button class="btn-micro" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; border-radius: 4px; border: 1px solid var(--accent-emerald); background: rgba(0,255,102,0.15); color: var(--accent-emerald); cursor: pointer;" onclick="copyGpuLaunchCommand(); event.stopPropagation();" title="Copiar comando">📋 Copiar</button>
+                                </div>
+                                <div style="font-family: monospace; font-size: 0.70rem; color: #a3e635; word-break: break-all; user-select: all; padding: 0.25rem 0.35rem; background: rgba(0,0,0,0.35); border-radius: 4px;" id="gpuLaunchCmdPreview">
+                                    env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays
+                                </div>
+                                <div style="display: flex; gap: 0.25rem; margin-top: 0.35rem;">
+                                    <button class="btn-chip active" id="chipGpuAmd" onclick="selectGpuCmd('amd'); event.stopPropagation();">AMD</button>
+                                    <button class="btn-chip" id="chipGpuIntel" onclick="selectGpuCmd('intel'); event.stopPropagation();">Intel</button>
+                                    <button class="btn-chip" id="chipGpuNvidia" onclick="selectGpuCmd('nvidia'); event.stopPropagation();">NVIDIA</button>
+                                    <button class="btn-chip" id="chipGpuAll" onclick="selectGpuCmd('all'); event.stopPropagation();">Auto</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode3_usb_bulk', currentTopology)">
@@ -910,9 +953,9 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             <div style="font-weight: 700;">🐧 Mode 1: Network UDP</div>
                             <div style="font-size: 0.76rem; opacity: 0.8;">UDP Port 5000 • &lt; 15ms</div>
                         </button>
-                        <button class="btn-toggle" id="btnHostTransport_mode2" onclick="setActiveTransport('mode2_miracast')">
+                        <button class="btn-toggle tip-wrap" id="btnHostTransport_mode2" onclick="setActiveTransport('mode2_miracast')" title="Exec=env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays">
                             <div style="font-weight: 700;">🪟 Mode 2: Miracast</div>
-                            <div style="font-size: 0.76rem; opacity: 0.8;">Windows Win+K • TCP 7236</div>
+                            <div style="font-size: 0.76rem; opacity: 0.8;">Windows Win+K • Linux GPU</div>
                         </button>
                     </div>
                 </div>
@@ -3098,13 +3141,54 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             updateModeAndTopologyButtons();
         }
 
+        const gpuCommands = {
+            amd: 'env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays',
+            intel: 'env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,qsvh264enc:MAX gnome-network-displays',
+            nvidia: 'env GST_PLUGIN_FEATURE_RANK=nvh264enc:MAX,vaapih264enc:MAX gnome-network-displays',
+            all: 'env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,nvh264enc:MAX,qsvh264enc:MAX gnome-network-displays'
+        };
+
+        function selectGpuCmd(vendor) {
+            const preview = document.getElementById('gpuLaunchCmdPreview');
+            if (preview && gpuCommands[vendor]) {
+                preview.textContent = gpuCommands[vendor];
+            }
+            ['chipGpuAmd', 'chipGpuIntel', 'chipGpuNvidia', 'chipGpuAll'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.classList.remove('active');
+            });
+            const activeBtn = document.getElementById('chipGpu' + vendor.charAt(0).toUpperCase() + vendor.slice(1));
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        function copyGpuLaunchCommand() {
+            const preview = document.getElementById('gpuLaunchCmdPreview');
+            if (preview) {
+                const text = preview.textContent.trim();
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('✓ Comando GPU copiado para a Área de Transferência!');
+                    }).catch(() => {
+                        showToast('Comando: ' + text);
+                    });
+                } else {
+                    showToast('Comando: ' + text);
+                }
+            }
+        }
+
         function setActiveTransport(transport) {
             currentTransport = transport;
             const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
 
             if (transport === 'mode2_miracast') {
-                showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • ' + (t('waitingStream') || 'Ready for Win + K / GNOME Displays'));
-                sendHostControl({ action: 'start', transport: 'miracast' });
+                showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • Abrindo GNOME Displays com GPU no Laptop...');
+                sendHostControl({ action: 'launch_miracast', transport: 'miracast' });
+                fetch('/api/mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'mode2_miracast' })
+                }).catch(() => {});
             } else {
                 showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (currentTopology === 'clone' ? 'Clonar' : 'Estender') + ')...');
                 const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';

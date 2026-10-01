@@ -12,7 +12,6 @@ use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 mod config;
@@ -21,6 +20,7 @@ mod discovery;
 mod encoder;
 mod i18n;
 mod kms;
+mod miracast_launcher;
 mod native_streamer;
 mod pipeline;
 mod pipewire;
@@ -483,6 +483,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             switch_engine_or_monitor = true;
                         }
                     }
+                    ControlAction::LaunchMiracast => {
+                        println!("\x1b[1;35m[*] Web Command: Lançar Miracast (GNOME Network Displays) com aceleração de GPU\x1b[0m");
+                        is_paused = true;
+                        cfg.transport = TransportKind::Miracast;
+                        close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                        pipeline_builder.usb_pipe_fd = None;
+                        restart_pipeline = true;
+
+                        std::thread::spawn(miracast_launcher::launch_gnome_network_displays);
+                    }
                     ControlAction::SetTransport(new_trans) => {
                         println!("\x1b[1;35m[*] Web Command: Troca de Transporte {:?} -> {:?}\x1b[0m", cfg.transport, new_trans);
                         match new_trans {
@@ -493,18 +503,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 pipeline_builder.usb_pipe_fd = None;
                                 restart_pipeline = true;
 
-                                // Auto-launch gnome-network-displays if not running
-                                std::thread::spawn(|| {
-                                    let is_running = Command::new("pidof")
-                                        .arg("gnome-network-displays")
-                                        .output()
-                                        .map(|o| o.status.success())
-                                        .unwrap_or(false);
-                                    if !is_running {
-                                        println!("\x1b[1;32m[+] Auto-launching gnome-network-displays for Miracast...\x1b[0m");
-                                        let _ = Command::new("gnome-network-displays").spawn();
-                                    }
-                                });
+                                // Auto-launch gnome-network-displays with GPU hardware acceleration
+                                std::thread::spawn(miracast_launcher::launch_gnome_network_displays);
                             }
                             TransportKind::UsbBulk => {
                                 is_paused = false;

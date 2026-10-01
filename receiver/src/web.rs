@@ -328,6 +328,12 @@ fn handle_http_client(
                 println!("\x1b[1;36m[web-server]\x1b[0m Encaminhando comando ao Host (192.168.7.1:5001): {}", body);
                 if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
                     let _ = sock.send_to(body.as_bytes(), "192.168.7.1:5001");
+                    if let Ok(peer) = stream.peer_addr() {
+                        let peer_ip = peer.ip().to_string();
+                        if peer_ip != "192.168.7.1" && peer_ip != "127.0.0.1" {
+                            let _ = sock.send_to(body.as_bytes(), format!("{}:5001", peer.ip()));
+                        }
+                    }
                 }
 
                 if body.contains("\"action\":\"stop\"") {
@@ -336,7 +342,7 @@ fn handle_http_client(
                         pipe.pause();
                         crate::display::SplashEngine::show_ready();
                     });
-                } else if body.contains("\"action\":\"start\"") {
+                } else if body.contains("\"action\":\"start\"") || body.contains("\"action\":\"launch_miracast\"") {
                     let pipe = pipeline_mgr.clone();
                     let run = running.clone();
                     let body_str = body.to_string();
@@ -345,7 +351,7 @@ fn handle_http_client(
                             Some("mode3_usb_bulk".to_string())
                         } else if body_str.contains("\"transport\":\"network\"") || body_str.contains("\"transport\":\"udp\"") {
                             Some("mode1_udp".to_string())
-                        } else if body_str.contains("\"transport\":\"miracast\"") || body_str.contains("\"transport\":\"mode2\"") || body_str.contains("\"mode2\"") {
+                        } else if body_str.contains("\"transport\":\"miracast\"") || body_str.contains("\"transport\":\"mode2\"") || body_str.contains("\"mode2\"") || body_str.contains("launch_miracast") {
                             Some("mode2_miracast".to_string())
                         } else {
                             None
