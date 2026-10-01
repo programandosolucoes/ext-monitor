@@ -1,1 +1,4 @@
-62b983f7c1e8f96f7eec56184b13f6f82e71a1155ad1c80cdd387f0781de338f  release/frozen-v0.3.0/ext-receiver
+62b983f7c1e8f96f7eec56184b13f6f82e71a1155ad1c80cdd387f0781de338f  ext-receiver
+168dd8c1c7394fa4fe29eca75faaa09c58a24d5b0be3a874e63baad81a2a5199  ext-sender
+952e5b460a0fa7b5adf1deae9a96b4afefd31b0af45a98b07e18dee35249c7a0  initramfs.cpio.gz
+3aebca1092b8094108de55902e70de6b6d99ad9928d0260f97e88f8ad149ea12  ext-monitor-pi0-appliance.img.gz
