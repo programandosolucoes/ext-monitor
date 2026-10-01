@@ -196,7 +196,11 @@ impl UsbBulkIngress {
             display.render_frame(frame_rgb565);
         });
 
-        crate::display::SplashEngine::show_ready();
+        if let Ok(cfg) = crate::web::CONFIG.lock() {
+            if cfg.mode3 {
+                crate::display::SplashEngine::show_ready();
+            }
+        }
         println!("\x1b[1;33m[usb-ingress]\x1b[0m Ingress worker stopped.");
     }
 }

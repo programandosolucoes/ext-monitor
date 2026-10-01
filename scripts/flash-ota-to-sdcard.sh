@@ -73,7 +73,7 @@ fi
 echo "[+] Checksum validado com sucesso!"
 
 echo "[*] Reiniciando Raspberry Pi Zero com o novo sistema..."
-curl -s -X POST http://192.168.7.2:8080/api/exec \
+curl -s --max-time 2 -X POST http://192.168.7.2:8080/api/exec \
      -H "Content-Type: text/plain" \
      -d "reboot -f" || true
 

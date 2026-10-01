@@ -167,7 +167,11 @@ impl UdpRtpIngress {
             }
         }
 
-        crate::display::SplashEngine::show_ready();
-        println!("\x1b[1;32m[udp-ingress]\x1b[0m UDP ingress worker stopped (Ready Splash exibido).");
+        if let Ok(cfg) = crate::web::CONFIG.lock() {
+            if cfg.mode1 {
+                crate::display::SplashEngine::show_ready();
+            }
+        }
+        println!("\x1b[1;32m[udp-ingress]\x1b[0m UDP ingress worker stopped.");
     }
 }

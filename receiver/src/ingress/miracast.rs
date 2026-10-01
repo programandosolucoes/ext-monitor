@@ -110,12 +110,12 @@ impl MiracastIngress {
             }
         };
 
-        let mut current_dims = (1920u32, 1080u32);
+        let mut current_dims = (1280u32, 720u32);
         let mut decoder = match V4l2DecoderSession::new(current_dims.0, current_dims.1) {
             Some(s) => Some(s),
             None => {
                 eprintln!(
-                    "\x1b[1;31m[miracast-ingress]\x1b[0m Failed to initialize V4L2 M2M decoder session for 1920x1080."
+                    "\x1b[1;31m[miracast-ingress]\x1b[0m Failed to initialize V4L2 M2M decoder session for 1280x720."
                 );
                 return;
             }
@@ -125,7 +125,7 @@ impl MiracastIngress {
         let mut completed_frames: Vec<Vec<u8>> = Vec::with_capacity(16);
 
         println!(
-            "\x1b[1;32m[miracast-ingress]\x1b[0m Listening for MPEG-TS stream on UDP port {} (Default: 1920x1080 + Dynamic SPS) -> HDMI Display active.",
+            "\x1b[1;32m[miracast-ingress]\x1b[0m Listening for MPEG-TS stream on UDP port {} (Native: 1280x720p60 + Dynamic SPS) -> HDMI Display active.",
             port
         );
 
@@ -140,7 +140,7 @@ impl MiracastIngress {
         crate::display::SplashEngine::show_miracast();
 
         while running.load(Ordering::SeqCst) {
-            let ret = unsafe { libc::poll(&mut pfd, 1, 15) };
+            let ret = unsafe { libc::poll(&mut pfd, 1, 5) };
             if ret < 0 {
                 let err = io::Error::last_os_error();
                 if err.kind() == io::ErrorKind::Interrupted {
