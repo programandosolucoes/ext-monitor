@@ -21,6 +21,7 @@ mod encoder;
 mod i18n;
 mod kms;
 mod miracast_launcher;
+pub mod miracast;
 mod native_streamer;
 mod pipeline;
 mod pipewire;

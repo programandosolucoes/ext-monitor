@@ -29,7 +29,7 @@
 - Consumes: Raw H.264 NALUs (`&[u8]`), boolean `is_keyframe`, timestamp `pts_90khz: u64`.
 - Produces: `MpegTsMuxer::new()`, `mux_h264_nalus(nalus: &[u8], is_keyframe: bool, pts_90khz: u64) -> Vec<[u8; 188]>`, `wrap_rtp(ts_packets: &[[u8; 188]]) -> Vec<Vec<u8>>`.
 
-- [ ] **Step 1: Write unit tests for MPEG-TS and RTP framing**
+- [x] **Step 1: Write unit tests for MPEG-TS and RTP framing**
 
 Add tests covering PAT, PMT, PES header generation, and 188-byte alignment verification:
 ```rust
@@ -61,12 +61,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p ext-sender mpegts`
 Expected: FAIL with module or type not found.
 
-- [ ] **Step 3: Implement minimal MpegTsMuxer**
+- [x] **Step 3: Implement minimal MpegTsMuxer**
 
 Create `sender/src/miracast/mpegts.rs` implementing:
 - PAT packet generator (PID `0x0000`, Program 1 -> PMT PID `0x1000`, CRC32).
@@ -75,12 +75,12 @@ Create `sender/src/miracast/mpegts.rs` implementing:
 - Continuity counter tracking (`cc & 0x0F`) per PID.
 - RTP encapsulation (RFC 2250 / RFC 3550, 12-byte RTP header, PT=33, 7 TS packets per datagram = 1316 bytes payload).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p ext-sender mpegts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sender/src/miracast/mpegts.rs sender/src/miracast/mod.rs
