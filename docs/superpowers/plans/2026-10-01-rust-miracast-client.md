@@ -167,7 +167,7 @@ git commit -m "feat(miracast): implement pure-rust rtsp wfd source state machine
 **Interfaces:**
 - Produces: `DiscoveredSink { name: String, ip: IpAddr, port: u16, kind: &'static str }`, `scan_sinks(timeout: Duration) -> Vec<DiscoveredSink>`, `interactive_select_sink() -> Option<DiscoveredSink>`.
 
-- [ ] **Step 1: Write unit tests for mDNS / SSDP query encoding**
+- [x] **Step 1: Write unit tests for mDNS / SSDP query encoding**
 
 ```rust
 #[cfg(test)]
@@ -184,12 +184,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p ext-sender discovery`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement discovery engine**
+- [x] **Step 3: Implement discovery engine**
 
 Implement in `sender/src/miracast/discovery.rs`:
 - Multicast mDNS probe on `224.0.0.251:5353`.
@@ -198,12 +198,12 @@ Implement in `sender/src/miracast/discovery.rs`:
 - Response parser extracting IP, port, and human-readable device name.
 - Interactive terminal selector rendering clean numbered list.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p ext-sender discovery`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sender/src/miracast/discovery.rs sender/src/miracast/mod.rs
