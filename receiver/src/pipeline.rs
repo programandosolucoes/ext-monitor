@@ -112,6 +112,7 @@ impl PipelineManager {
     pub fn pause(&self) {
         self.paused.store(true, Ordering::SeqCst);
         self.stop();
+        crate::wfd::terminate_active_sessions();
         println!("\x1b[1;33m[pipeline]\x1b[0m Pipeline paused by user.");
     }
 

@@ -235,7 +235,12 @@ impl MiracastIngress {
         if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
             *lock = None;
         }
-        crate::display::SplashEngine::show_miracast();
+        let is_paused_or_standby = crate::web::CONFIG.lock().map(|c| !c.mode1 && !c.mode2 && !c.mode3).unwrap_or(false);
+        if is_paused_or_standby {
+            crate::display::SplashEngine::show_ready();
+        } else {
+            crate::display::SplashEngine::show_miracast();
+        }
         println!("\x1b[1;33m[miracast-ingress]\x1b[0m Miracast ingress worker stopped.");
     }
 }

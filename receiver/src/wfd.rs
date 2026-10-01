@@ -40,6 +40,21 @@ pub const WFD_RTP_PORT: u16 = 5002;
 pub const WFD_VIDEO_FORMATS: &str =
     "30 00 01 02 00000069 00000000 00000000 00 0000 0000 00 none none";
 
+use std::net::Shutdown;
+use std::sync::Mutex;
+
+static ACTIVE_RTSP_STREAMS: Mutex<Vec<TcpStream>> = Mutex::new(Vec::new());
+
+/// Immediately terminates all active Miracast RTSP and MS-MICE client sessions
+pub fn terminate_active_sessions() {
+    println!("\x1b[1;33m[wfd-rust]\x1b[0m Forcing termination of all active Miracast RTSP/MICE sessions...");
+    if let Ok(mut list) = ACTIVE_RTSP_STREAMS.lock() {
+        for s in list.drain(..) {
+            let _ = s.shutdown(Shutdown::Both);
+        }
+    }
+}
+
 /// Starts the Wi-Fi Display RTSP server and MS-MICE listener on background threads
 pub fn start_wfd_server(
     running: Arc<AtomicBool>,
@@ -67,6 +82,12 @@ pub fn start_wfd_server(
                         "\x1b[1;32m[wfd-rust]\x1b[0m Incoming RTSP WFD connection from {}",
                         client_ip
                     );
+
+                    if let Ok(cloned) = stream.try_clone() {
+                        if let Ok(mut list) = ACTIVE_RTSP_STREAMS.lock() {
+                            list.push(cloned);
+                        }
+                    }
 
                     let pipe = pipeline_mgr.clone();
                     let run = running.clone();
@@ -120,6 +141,12 @@ fn start_mice_listener(running: Arc<AtomicBool>, pipeline_mgr: Arc<PipelineManag
                         "\x1b[1;32m[wfd-mice]\x1b[0m Incoming MS-MICE connection on port 7250 from {}",
                         client_ip
                     );
+
+                    if let Ok(cloned) = stream.try_clone() {
+                        if let Ok(mut list) = ACTIVE_RTSP_STREAMS.lock() {
+                            list.push(cloned);
+                        }
+                    }
 
                     let pipe = pipeline_mgr.clone();
                     let run = running.clone();

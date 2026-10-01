@@ -3257,20 +3257,28 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             const hostCln = document.getElementById('btnModeClone');
             const valHostMode = document.getElementById('valHostMode');
 
-            if (currentTransport === 'mode2_miracast') {
+            if (currentTopology === 'stop') {
                 if (btnExt) btnExt.classList.remove('active');
                 if (btnCln) btnCln.classList.remove('active');
                 if (btnStop) btnStop.classList.add('active');
-                if (badge) { badge.textContent = 'Miracast (Standby)'; badge.className = 'card-badge badge-cyan'; }
+                if (badge) {
+                    badge.textContent = t('extBadgeOff') || 'Standby (Desativado)';
+                    badge.className = 'card-badge badge-amber';
+                }
+            } else if (currentTransport === 'mode2_miracast') {
+                if (btnExt) btnExt.classList.remove('active');
+                if (btnCln) btnCln.classList.remove('active');
+                if (btnStop) btnStop.classList.remove('active');
+                if (badge) {
+                    badge.textContent = 'Miracast Ativo';
+                    badge.className = 'card-badge badge-green';
+                }
             } else {
                 if (btnExt) btnExt.classList.toggle('active', currentTopology === 'extend');
                 if (btnCln) btnCln.classList.toggle('active', currentTopology === 'clone');
-                if (btnStop) btnStop.classList.toggle('active', currentTopology === 'stop');
+                if (btnStop) btnStop.classList.remove('active');
                 if (badge) {
-                    if (currentTopology === 'stop') {
-                        badge.textContent = t('extBadgeOff');
-                        badge.className = 'card-badge badge-amber';
-                    } else if (currentTopology === 'clone') {
+                    if (currentTopology === 'clone') {
                         badge.textContent = t('extBadgeClone');
                         badge.className = 'card-badge badge-cyan';
                     } else {

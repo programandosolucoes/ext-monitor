@@ -374,14 +374,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         restart_pipeline = true;
                     }
                     ControlAction::StopStreaming => {
-                        println!("\x1b[1;33m[*] Web Command: Parar Transmissão recebido! Entrando em modo Standby...\x1b[0m");
+                        println!("\x1b[1;33m[*] Web Command: Parar Transmissão / Standby recebido! Encerrando todos os transmissores...\x1b[0m");
+                        crate::miracast_launcher::stop_gnome_network_displays();
                         if let Some(mut c) = child.take() {
                             let _ = c.kill();
                             let _ = c.wait();
                         }
+                        let _ = std::process::Command::new("pkill")
+                            .arg("-f")
+                            .arg("gst-launch-1.0.*192.168.7.2")
+                            .output();
                         close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                         pipeline_builder.usb_pipe_fd = None;
                         is_paused = true;
+                        println!("\x1b[1;32m[*] Todos os transmissores de vídeo do Host foram finalizados. Modo Standby ativo.\x1b[0m");
                     }
                     ControlAction::SetMode(m) => {
                         let target_mon = if m == "clone" { "eDP-1".to_string() } else { "HDMI-1".to_string() };

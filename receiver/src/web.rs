@@ -340,9 +340,18 @@ fn handle_http_client(
                 }
 
                 if body.contains("\"action\":\"stop\"") {
+                    if let Ok(mut cfg) = CONFIG.lock() {
+                        cfg.mode1 = false;
+                        cfg.mode2 = false;
+                        cfg.mode3 = false;
+                    }
                     let pipe = pipeline_mgr.clone();
                     thread::spawn(move || {
                         pipe.pause();
+                        crate::wfd::terminate_active_sessions();
+                        if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+                            *lock = None;
+                        }
                         crate::display::SplashEngine::show_ready();
                     });
                 } else if body.contains("\"action\":\"start\"") || body.contains("\"action\":\"launch_miracast\"") {
@@ -617,11 +626,20 @@ fn handle_http_client(
             send_response(&mut stream, "200 OK", "application/json", format!("{{\"status\":\"{}\"}}", status).as_bytes());
         }
         ("POST", "/api/stream/stop") => {
-            println!("\x1b[1;33m[web-server]\x1b[0m User requested stream STOP / STANDBY via Web UI.");
+            println!("\x1b[1;33m[web-server]\x1b[0m User requested stream STOP / STANDBY via Web UI. Stopping all 3 video services...");
+            if let Ok(mut cfg) = CONFIG.lock() {
+                cfg.mode1 = false;
+                cfg.mode2 = false;
+                cfg.mode3 = false;
+            }
             forward_config_to_sender("{\"action\":\"stop\"}");
             let pipe = pipeline_mgr.clone();
             thread::spawn(move || {
                 pipe.pause();
+                crate::wfd::terminate_active_sessions();
+                if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+                    *lock = None;
+                }
                 crate::display::SplashEngine::show_ready();
             });
             send_response(

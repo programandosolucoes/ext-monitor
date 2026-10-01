@@ -80,7 +80,7 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
         if let Some(action) = v.get("action").and_then(|x| x.as_str()) {
             match action {
                 "start" | "start_streaming" => actions.push(ControlAction::StartStreaming),
-                "stop" | "stop_streaming" => actions.push(ControlAction::StopStreaming),
+                "stop" | "stop_streaming" | "standby" | "disable" => actions.push(ControlAction::StopStreaming),
                 "launch_miracast" | "miracast" => actions.push(ControlAction::LaunchMiracast),
                 "trigger_hud" => actions.push(ControlAction::TriggerHud),
                 "hide_hud" | "kill_hud" => actions.push(ControlAction::HideHud),

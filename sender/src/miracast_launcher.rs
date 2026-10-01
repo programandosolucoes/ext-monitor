@@ -235,3 +235,19 @@ pub fn launch_gnome_network_displays() {
         }
     }
 }
+
+/// Terminates any running gnome-network-displays instances cleanly on Standby
+pub fn stop_gnome_network_displays() {
+    println!("\x1b[1;33m[miracast-launcher]\x1b[0m Finalizando instâncias de gnome-network-displays...");
+    let _ = Command::new("pkill")
+        .arg("-15")
+        .arg("-f")
+        .arg("gnome-network-displays")
+        .output();
+    let _ = Command::new("pkill")
+        .arg("-9")
+        .arg("-f")
+        .arg("gnome-network-displays")
+        .output();
+}
+
