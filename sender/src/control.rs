@@ -146,6 +146,7 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
         if let Some(trans_str) = v.get("transport").and_then(|x| x.as_str()) {
             let tk = match trans_str {
                 "usb_bulk" | "usb" | "bulk" => TransportKind::UsbBulk,
+                "miracast" | "wfd" => TransportKind::Miracast,
                 _ => TransportKind::Network {
                     ip: "192.168.7.2".to_string(),
                     port: 5000,

@@ -126,6 +126,7 @@ impl EncoderApi {
 pub enum TransportKind {
     Network { ip: String, port: u16 },
     UsbBulk,
+    Miracast,
 }
 
 #[derive(Debug, Clone)]

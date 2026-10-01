@@ -3103,8 +3103,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
 
             if (transport === 'mode2_miracast') {
-                showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • ' + (t('waitingStream') || 'Ready for Win + K'));
-                sendHostControl({ action: 'stop' });
+                showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • ' + (t('waitingStream') || 'Ready for Win + K / GNOME Displays'));
+                sendHostControl({ action: 'start', transport: 'miracast' });
             } else {
                 showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (currentTopology === 'clone' ? 'Clonar' : 'Estender') + ')...');
                 const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';

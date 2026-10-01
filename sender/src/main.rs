@@ -12,6 +12,7 @@ use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 mod config;
@@ -189,6 +190,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         TransportKind::Network { ref ip, port } => {
             println!("\x1b[1;34m[*] Transport Mode: Network IP (UDP RTP {}:{})\x1b[0m", ip, port);
+            None
+        }
+        TransportKind::Miracast => {
+            println!("\x1b[1;32m[*] Transport Mode: Miracast / Wi-Fi Display (Managed by GNOME / Windows)\x1b[0m");
             None
         }
     };
@@ -480,16 +485,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     ControlAction::SetTransport(new_trans) => {
                         println!("\x1b[1;35m[*] Web Command: Troca de Transporte {:?} -> {:?}\x1b[0m", cfg.transport, new_trans);
-                        // Explicit transport request always unpauses the stream!
-                        is_paused = false;
-                        cfg.transport = new_trans.clone();
-                        close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
-                        pipeline_builder.usb_pipe_fd = None;
-                        if let TransportKind::Network { ref ip, port } = new_trans {
-                            pipeline_builder.target_ip = ip.clone();
-                            pipeline_builder.target_port = port;
+                        match new_trans {
+                            TransportKind::Miracast => {
+                                is_paused = true;
+                                cfg.transport = TransportKind::Miracast;
+                                close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                                pipeline_builder.usb_pipe_fd = None;
+                                restart_pipeline = true;
+
+                                // Auto-launch gnome-network-displays if not running
+                                std::thread::spawn(|| {
+                                    let is_running = Command::new("pidof")
+                                        .arg("gnome-network-displays")
+                                        .output()
+                                        .map(|o| o.status.success())
+                                        .unwrap_or(false);
+                                    if !is_running {
+                                        println!("\x1b[1;32m[+] Auto-launching gnome-network-displays for Miracast...\x1b[0m");
+                                        let _ = Command::new("gnome-network-displays").spawn();
+                                    }
+                                });
+                            }
+                            TransportKind::UsbBulk => {
+                                is_paused = false;
+                                cfg.transport = TransportKind::UsbBulk;
+                                close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                                pipeline_builder.usb_pipe_fd = None;
+                                restart_pipeline = true;
+                            }
+                            TransportKind::Network { ref ip, port } => {
+                                is_paused = false;
+                                cfg.transport = new_trans.clone();
+                                close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                                pipeline_builder.usb_pipe_fd = None;
+                                pipeline_builder.target_ip = ip.clone();
+                                pipeline_builder.target_port = port;
+                                restart_pipeline = true;
+                            }
                         }
-                        restart_pipeline = true;
                     }
                     ControlAction::SetScale(new_scale) => {
                         if new_scale != cfg.scale {

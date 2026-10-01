@@ -45,7 +45,7 @@ pub fn start_wfd_server(
     pipeline_mgr: Arc<PipelineManager>,
 ) -> std::io::Result<()> {
     // 1. Start MS-MICE Signaling listener on TCP port 7250 (GNOME Network Displays & Windows Infrastructure)
-    start_mice_listener(running.clone());
+    start_mice_listener(running.clone(), pipeline_mgr.clone());
 
     // 2. Start WFD RTSP Session listener on TCP port 7236
     let listener = TcpListener::bind(format!("0.0.0.0:{}", WFD_RTSP_PORT))?;
@@ -71,7 +71,7 @@ pub fn start_wfd_server(
                     let run = running.clone();
 
                     thread::spawn(move || {
-                        let mut session = WfdSession::new(stream, client_ip, pipe);
+                        let mut session = WfdSession::new(stream, client_ip, WFD_RTSP_PORT, pipe);
                         session.run(run);
                     });
                 }
@@ -91,7 +91,7 @@ pub fn start_wfd_server(
 }
 
 /// Start background listener on TCP port 7250 for MS-MICE (Miracast over Infrastructure) signaling
-fn start_mice_listener(running: Arc<AtomicBool>) {
+fn start_mice_listener(running: Arc<AtomicBool>, pipeline_mgr: Arc<PipelineManager>) {
     thread::spawn(move || {
         let listener = match TcpListener::bind(format!("0.0.0.0:{}", WFD_MICE_PORT)) {
             Ok(l) => {
@@ -120,6 +120,7 @@ fn start_mice_listener(running: Arc<AtomicBool>) {
                         client_ip
                     );
 
+                    let pipe = pipeline_mgr.clone();
                     let run = running.clone();
                     thread::spawn(move || {
                         let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
@@ -140,23 +141,92 @@ fn start_mice_listener(running: Arc<AtomicBool>) {
                                     let req_str = String::from_utf8_lossy(req);
 
                                     // Detect SOURCE_READY (text or binary MS-MICE command 0x01)
-                                    if req_str.contains("SOURCE_READY")
-                                        || (!req.is_empty() && (req[0] == 0x01 || req[1] == 0x01))
-                                    {
+                                    let is_source_ready = if req.len() >= 4 {
+                                        (req[2] == 0x01 && req[3] == 0x01)
+                                            || (req[0] == 0x01 || req[1] == 0x01)
+                                            || req_str.contains("SOURCE_READY")
+                                    } else {
+                                        req_str.contains("SOURCE_READY")
+                                    };
+
+                                    if is_source_ready {
                                         println!(
                                             "\x1b[1;32m[wfd-mice]\x1b[0m Received SOURCE_READY from {} ({} bytes). Handshake accepted!",
                                             client_ip, n
                                         );
-                                        // Send acknowledgment if requested
-                                        if req_str.starts_with("SOURCE_READY")
-                                            || req_str.contains("\r\n")
-                                        {
+
+                                        // Parse RTSP port from TLV if present (type 0x02, len 2)
+                                        let mut rtsp_port = WFD_RTSP_PORT;
+                                        if req.len() >= 4 {
+                                            let mut idx = 4;
+                                            while idx + 3 <= req.len() {
+                                                let tag = req[idx];
+                                                let tlv_len = u16::from_be_bytes([req[idx + 1], req[idx + 2]]) as usize;
+                                                idx += 3;
+                                                if idx + tlv_len > req.len() {
+                                                    break;
+                                                }
+                                                if tag == 0x02 && tlv_len == 2 {
+                                                    rtsp_port = u16::from_be_bytes([req[idx], req[idx + 1]]);
+                                                    println!(
+                                                        "\x1b[1;32m[wfd-mice]\x1b[0m Extracted RTSP port {} from SOURCE_READY TLV",
+                                                        rtsp_port
+                                                    );
+                                                }
+                                                idx += tlv_len;
+                                            }
+                                        }
+
+                                        // Send acknowledgment
+                                        let ack = [0x00, 0x04, 0x01, 0x02];
+                                        let _ = stream.write_all(&ack);
+                                        if req_str.contains("SOURCE_READY") || req_str.contains("\r\n") {
                                             let _ = stream.write_all(b"OK\r\n\r\n");
-                                        } else {
-                                            let ack = [0x01, 0x00, 0x00, 0x00];
-                                            let _ = stream.write_all(&ack);
                                         }
                                         let _ = stream.flush();
+
+                                        // Connect back to Source's RTSP server
+                                        let p_mgr = pipe.clone();
+                                        let r_run = run.clone();
+                                        let target_ip = client_ip.clone();
+
+                                        thread::spawn(move || {
+                                            let target_addr = format!("{}:{}", target_ip, rtsp_port);
+                                            let mut connected_stream = None;
+                                            for attempt in 1..=5 {
+                                                println!(
+                                                    "\x1b[1;34m[wfd-mice]\x1b[0m Connecting back to Source RTSP at {} (attempt {}/5)...",
+                                                    target_addr, attempt
+                                                );
+                                                match TcpStream::connect(&target_addr) {
+                                                    Ok(s) => {
+                                                        connected_stream = Some(s);
+                                                        break;
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!(
+                                                            "\x1b[1;33m[wfd-mice]\x1b[0m Connect attempt {} failed: {}. Retrying in 100ms...",
+                                                            attempt, e
+                                                        );
+                                                        thread::sleep(Duration::from_millis(100));
+                                                    }
+                                                }
+                                            }
+
+                                            if let Some(s) = connected_stream {
+                                                println!(
+                                                    "\x1b[1;32m[wfd-mice]\x1b[0m Successfully connected to Source RTSP at {}. Running WFD session...",
+                                                    target_addr
+                                                );
+                                                let mut session = WfdSession::new(s, target_ip, rtsp_port, p_mgr);
+                                                session.run(r_run);
+                                            } else {
+                                                eprintln!(
+                                                    "\x1b[1;31m[wfd-mice]\x1b[0m Failed to connect back to Source RTSP at {} after 5 attempts.",
+                                                    target_addr
+                                                );
+                                            }
+                                        });
                                     } else {
                                         println!(
                                             "\x1b[1;34m[wfd-mice]\x1b[0m Received MICE packet from {} ({} bytes): {:?}",
@@ -194,26 +264,35 @@ fn start_mice_listener(running: Arc<AtomicBool>) {
     });
 }
 
-/// Active connection session with a Windows transmitter (Source)
+/// Active connection session with a Miracast transmitter (Source)
 struct WfdSession {
     stream: TcpStream,
     client_ip: String,
+    rtsp_port: u16,
     pipeline_mgr: Arc<PipelineManager>,
     sink_cseq: u32,
     session_id: String,
+    presentation_url: String,
     is_streaming: bool,
 }
 
 impl WfdSession {
-    fn new(stream: TcpStream, client_ip: String, pipeline_mgr: Arc<PipelineManager>) -> Self {
+    fn new(
+        stream: TcpStream,
+        client_ip: String,
+        rtsp_port: u16,
+        pipeline_mgr: Arc<PipelineManager>,
+    ) -> Self {
         let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
         Self {
             stream,
             client_ip,
+            rtsp_port,
             pipeline_mgr,
             sink_cseq: 1,
             session_id: "12345678".to_string(),
+            presentation_url: String::new(),
             is_streaming: false,
         }
     }
@@ -365,10 +444,10 @@ impl WfdSession {
                         "wfd_audio_codecs" => {
                             resp_params.push("wfd_audio_codecs: none".to_string());
                         }
-                        "wfd_client_rtpports" => {
+                        "wfd_client_rtpports" | "wfd_client_rtp_ports" => {
                             resp_params.push(format!(
-                                "wfd_client_rtpports: RTP/AVP/UDP;unicast {} 0 mode=play",
-                                WFD_RTP_PORT
+                                "{}: RTP/AVP/UDP;unicast {} 0 mode=play",
+                                param, WFD_RTP_PORT
                             ));
                         }
                         "wfd_uibc_capability" => {
@@ -383,6 +462,9 @@ impl WfdSession {
                         "wfd_idr_request_capability" => {
                             resp_params.push("wfd_idr_request_capability: 01".to_string());
                         }
+                        "wfd_display_edid" => {
+                            resp_params.push("wfd_display_edid: none".to_string());
+                        }
                         _ => {}
                     }
                 }
@@ -394,6 +476,20 @@ impl WfdSession {
                 // M4 / M5: Parameter confirmation & SETUP trigger
                 self.send_response(&cseq, "200 OK", &[], "")?;
 
+                for line in body.lines() {
+                    let line = line.trim();
+                    if line.starts_with("wfd_presentation_URL:") {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            self.presentation_url = parts[1].to_string();
+                            println!(
+                                "\x1b[1;34m[wfd-rust]\x1b[0m Captured presentation URL: {}",
+                                self.presentation_url
+                            );
+                        }
+                    }
+                }
+
                 if body.contains("wfd_trigger_method: SETUP")
                     || body.contains("wfd_trigger_method: setup")
                 {
@@ -401,8 +497,12 @@ impl WfdSession {
                         "\x1b[1;32m[wfd-rust]\x1b[0m Trigger SETUP detected. Sending M6 SETUP to client..."
                     );
                     thread::sleep(Duration::from_millis(30));
-                    let transport = format!("RTP/AVP/UDP;unicast;client_port={}", WFD_RTP_PORT);
-                    let target_uri = format!("rtsp://{}/wfd1.0/streamid=0", self.client_ip);
+                    let transport = format!("RTP/AVP/UDP;unicast;client_port={}-{}", WFD_RTP_PORT, WFD_RTP_PORT + 1);
+                    let target_uri = if !self.presentation_url.is_empty() {
+                        self.presentation_url.clone()
+                    } else {
+                        format!("rtsp://{}:{}/wfd1.0/streamid=0", self.client_ip, self.rtsp_port)
+                    };
                     self.send_request("SETUP", &target_uri, &[("Transport", &transport)], "")?;
                 }
             }
@@ -418,7 +518,11 @@ impl WfdSession {
                             self.session_id
                         );
                         thread::sleep(Duration::from_millis(30));
-                        let target_uri = format!("rtsp://{}/wfd1.0/streamid=0", self.client_ip);
+                        let target_uri = if !self.presentation_url.is_empty() {
+                            self.presentation_url.clone()
+                        } else {
+                            format!("rtsp://{}:{}/wfd1.0/streamid=0", self.client_ip, self.rtsp_port)
+                        };
                         let sid_ref = self.session_id.clone();
                         self.send_request("PLAY", &target_uri, &[("Session", &sid_ref)], "")?;
 
