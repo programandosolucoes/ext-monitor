@@ -81,31 +81,38 @@ pub fn start_ssdp_responder(running: Arc<AtomicBool>, http_port: u16) {
             while running.load(Ordering::Relaxed) {
                 if let Ok((len, src)) = socket.recv_from(&mut buf) {
                     let req = String::from_utf8_lossy(&buf[..len]);
-                    if req.starts_with("M-SEARCH") {
-                        if req.contains("MediaRenderer") || req.contains("dial-multiscreen-org") || req.contains("ssdp:all") || req.contains("upnp:rootdevice") {
-                            // Respond to DLNA or DIAL discovery
-                            let is_dial = req.contains("dial-multiscreen-org");
-                            let loc_path = if is_dial { "/dial/dd.xml" } else { "/upnp/desc.xml" };
-                            let st = if is_dial { "urn:dial-multiscreen-org:service:dial:1" } else { "urn:schemas-upnp-org:device:MediaRenderer:1" };
-
-                            let response = format!(
-                                "HTTP/1.1 200 OK\r\n\
-                                 CACHE-CONTROL: max-age=1800\r\n\
-                                 DATE: Tue, 29 Sep 2026 18:00:00 GMT\r\n\
-                                 EXT:\r\n\
-                                 LOCATION: http://192.168.7.2:{}{}\r\n\
-                                 SERVER: Linux/6.6 UPnP/1.0 Ext-Monitor/2.3\r\n\
-                                 ST: {}\r\n\
-                                 USN: uuid:ext-monitor-bcm2835-renderer::{}\r\n\r\n",
-                                http_port, loc_path, st, st
-                            );
-                            let _ = socket.send_to(response.as_bytes(), src);
-                        }
+                    if let Some((loc_path, st)) = parse_ssdp_msearch(&req) {
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\n\
+                             CACHE-CONTROL: max-age=1800\r\n\
+                             DATE: Tue, 29 Sep 2026 18:00:00 GMT\r\n\
+                             EXT:\r\n\
+                             LOCATION: http://192.168.7.2:{}{}\r\n\
+                             SERVER: Linux/6.6 UPnP/1.0 Ext-Monitor/2.3\r\n\
+                             ST: {}\r\n\
+                             USN: uuid:ext-monitor-bcm2835-renderer::{}\r\n\r\n",
+                            http_port, loc_path, st, st
+                        );
+                        let _ = socket.send_to(response.as_bytes(), src);
                     }
                 }
             }
         })
         .expect("Failed to spawn ssdp thread");
+}
+
+/// Parses an incoming SSDP M-SEARCH packet and returns the matching XML endpoint path and ST header
+pub fn parse_ssdp_msearch(req: &str) -> Option<(&'static str, &'static str)> {
+    if !req.starts_with("M-SEARCH") {
+        return None;
+    }
+    if req.contains("dial-multiscreen-org") {
+        Some(("/dial/dd.xml", "urn:dial-multiscreen-org:service:dial:1"))
+    } else if req.contains("MediaRenderer") || req.contains("ssdp:all") || req.contains("upnp:rootdevice") {
+        Some(("/upnp/desc.xml", "urn:schemas-upnp-org:device:MediaRenderer:1"))
+    } else {
+        None
+    }
 }
 
 /// Generates UPnP MediaRenderer XML description
@@ -644,5 +651,114 @@ fn blit_to_fb0(buffer: &[u8]) {
         let _ = file.seek(SeekFrom::Start(0));
         let _ = file.write_all(&buffer[..FB_SIZE]);
         let _ = file.flush();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rgb565_color_conversions() {
+        assert_eq!(rgb565(0, 0, 0), 0x0000); // Black
+        assert_eq!(rgb565(255, 255, 255), 0xFFFF); // White
+        assert_eq!(rgb565(255, 0, 0), 0xF800); // Red (5 bits)
+        assert_eq!(rgb565(0, 255, 0), 0x07E0); // Green (6 bits)
+        assert_eq!(rgb565(0, 0, 255), 0x001F); // Blue (5 bits)
+    }
+
+    #[test]
+    fn test_audio_spectrum_silence_and_active() {
+        // Active audio signal
+        let active_bands = [0.5f32; 24];
+        update_audio_spectrum(&active_bands, -20.0);
+        {
+            let spec = get_audio_spectrum();
+            let s = spec.lock().unwrap();
+            assert!(s.is_active);
+            assert_eq!(s.rms_db, -20.0);
+            assert_eq!(s.bands[0], 0.5);
+        }
+
+        // Silence signal below threshold (-55 dB)
+        let silence_bands = [0.0f32; 24];
+        update_audio_spectrum(&silence_bands, -65.0);
+        {
+            let spec = get_audio_spectrum();
+            let s = spec.lock().unwrap();
+            assert!(!s.is_active);
+            assert_eq!(s.rms_db, -60.0);
+            assert_eq!(s.bands[0], 0.0);
+        }
+    }
+
+    #[test]
+    fn test_glyph_pattern_dimensions() {
+        let glyph_a = get_glyph_5x7('A');
+        assert_eq!(glyph_a.len(), 5);
+        let glyph_0 = get_glyph_5x7('0');
+        assert_eq!(glyph_0.len(), 5);
+    }
+
+    #[test]
+    fn test_dial_youtube_google_home_descriptor() {
+        let xml = get_dial_dd_xml("192.168.7.2", 8080);
+        assert!(xml.contains("urn:dial-multiscreen-org:device:dial:1"));
+        assert!(xml.contains("Ext-Monitor YouTube TV (192.168.7.2)"));
+        assert!(xml.contains("urn:dial-multiscreen-org:service:dial:1"));
+        assert!(xml.contains("<controlURL>/apps</controlURL>"));
+        assert!(xml.contains("<SCPDURL>/dial/dial.xml</SCPDURL>"));
+    }
+
+    #[test]
+    fn test_upnp_media_renderer_descriptor() {
+        let xml = get_upnp_desc_xml("192.168.7.2", 8080);
+        assert!(xml.contains("urn:schemas-upnp-org:device:MediaRenderer:1"));
+        assert!(xml.contains("Ext-Monitor TV &amp; Sound (192.168.7.2)"));
+        assert!(xml.contains("urn:schemas-upnp-org:service:RenderingControl:1"));
+        assert!(xml.contains("urn:schemas-upnp-org:service:AVTransport:1"));
+        assert!(xml.contains("<modelName>Ext-Monitor IoT Appliance</modelName>"));
+    }
+
+    #[test]
+    fn test_ssdp_msearch_dial_and_upnp_detection() {
+        // DIAL (YouTube / Google Cast) query
+        let dial_req = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: urn:dial-multiscreen-org:service:dial:1\r\n\r\n";
+        let res = parse_ssdp_msearch(dial_req);
+        assert_eq!(res, Some(("/dial/dd.xml", "urn:dial-multiscreen-org:service:dial:1")));
+
+        // UPnP MediaRenderer query
+        let upnp_req = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n";
+        let res = parse_ssdp_msearch(upnp_req);
+        assert_eq!(res, Some(("/upnp/desc.xml", "urn:schemas-upnp-org:device:MediaRenderer:1")));
+
+        // Broad ssdp:all query
+        let all_req = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: ssdp:all\r\n\r\n";
+        let res = parse_ssdp_msearch(all_req);
+        assert_eq!(res, Some(("/upnp/desc.xml", "urn:schemas-upnp-org:device:MediaRenderer:1")));
+
+        // Non-SSDP or unrelated packet
+        let invalid_req = "GET /index.html HTTP/1.1\r\n\r\n";
+        assert_eq!(parse_ssdp_msearch(invalid_req), None);
+    }
+
+    #[test]
+    fn test_media_track_state_transitions() {
+        let track_arc = get_media_state();
+        {
+            let mut trk = track_arc.lock().unwrap();
+            trk.state = "playing".to_string();
+            trk.title = "Test Audio Track".to_string();
+            trk.artist = "Ext-Monitor Artist".to_string();
+            trk.volume = 85;
+        }
+
+        {
+            let trk = track_arc.lock().unwrap();
+            assert_eq!(trk.state, "playing");
+            assert_eq!(trk.title, "Test Audio Track");
+            assert_eq!(trk.artist, "Ext-Monitor Artist");
+            assert_eq!(trk.volume, 85);
+        }
     }
 }

@@ -604,40 +604,7 @@ pub fn spawn_audio_spectrum_monitor(
                         break;
                     }
 
-                    let mut real = [0.0f32; 512];
-                    let mut imag = [0.0f32; 512];
-                    let mut sum_sq = 0.0f64;
-
-                    for i in 0..512 {
-                        let l = i16::from_le_bytes([raw_buf[i * 4], raw_buf[i * 4 + 1]]) as f32 / 32768.0;
-                        let r = i16::from_le_bytes([raw_buf[i * 4 + 2], raw_buf[i * 4 + 3]]) as f32 / 32768.0;
-                        let mono = (l + r) * 0.5;
-                        // Hann window to prevent spectral leakage
-                        let w = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / 512.0).cos());
-                        real[i] = mono * w;
-                        sum_sq += (mono * mono) as f64;
-                    }
-
-                    let rms = (sum_sq / 512.0).sqrt() as f32;
-                    let rms_db = if rms > 1e-4 { 20.0 * rms.log10() } else { -90.0 };
-                    let rms_byte = ((rms_db + 60.0).clamp(0.0, 60.0) / 60.0 * 255.0) as u8;
-
-                    fft_512(&mut real, &mut imag);
-
-                    for (idx, &(start_k, end_k)) in BAND_RANGES.iter().enumerate() {
-                        let mut mag_sum = 0.0f32;
-                        let count = (end_k - start_k).max(1);
-                        for k in start_k..end_k {
-                            let mag = (real[k] * real[k] + imag[k] * imag[k]).sqrt();
-                            mag_sum += mag;
-                        }
-                        let avg_mag = mag_sum / count as f32;
-                        let normalized = (avg_mag * 4.0).clamp(0.0, 1.0);
-                        packet[idx] = (normalized * 255.0) as u8;
-                    }
-                    packet[24] = rms_byte;
-
-                    let is_silence = rms_db < -55.0 && packet[..24].iter().all(|&b| b < 6);
+                    let (_rms_db, is_silence) = compute_spectrum_packet(&raw_buf, &mut packet);
                     if is_silence {
                         silence_frames = silence_frames.saturating_add(1);
                     } else {
@@ -659,5 +626,158 @@ pub fn spawn_audio_spectrum_monitor(
             }
         })
         .expect("Failed to spawn audio spectrum thread")
+}
+
+/// Computes a 25-byte spectrum packet from raw 512-sample PCM buffer
+pub fn compute_spectrum_packet(raw_buf: &[u8; 2048], packet: &mut [u8; 25]) -> (f32, bool) {
+    let mut real = [0.0f32; 512];
+    let mut imag = [0.0f32; 512];
+    let mut sum_sq = 0.0f64;
+
+    for i in 0..512 {
+        let l = i16::from_le_bytes([raw_buf[i * 4], raw_buf[i * 4 + 1]]) as f32 / 32768.0;
+        let r = i16::from_le_bytes([raw_buf[i * 4 + 2], raw_buf[i * 4 + 3]]) as f32 / 32768.0;
+        let mono = (l + r) * 0.5;
+        // Hann window to prevent spectral leakage
+        let w = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / 512.0).cos());
+        real[i] = mono * w;
+        sum_sq += (mono * mono) as f64;
+    }
+
+    let rms = (sum_sq / 512.0).sqrt() as f32;
+    let rms_db = if rms > 1e-4 { 20.0 * rms.log10() } else { -90.0 };
+    let rms_byte = ((rms_db + 60.0).clamp(0.0, 60.0) / 60.0 * 255.0) as u8;
+
+    fft_512(&mut real, &mut imag);
+
+    for (idx, &(start_k, end_k)) in BAND_RANGES.iter().enumerate() {
+        let mut mag_sum = 0.0f32;
+        let count = (end_k - start_k).max(1);
+        for k in start_k..end_k {
+            let mag = (real[k] * real[k] + imag[k] * imag[k]).sqrt();
+            mag_sum += mag;
+        }
+        let avg_mag = mag_sum / count as f32;
+        let normalized = (avg_mag * 4.0).clamp(0.0, 1.0);
+        packet[idx] = (normalized * 255.0) as u8;
+    }
+    packet[24] = rms_byte;
+
+    let is_silence = rms_db < -55.0 && packet[..24].iter().all(|&b| b < 6);
+    (rms_db, is_silence)
+}
+
+impl PipelineBuilder {
+    pub fn build_sink_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+        if let Some(fd) = self.usb_pipe_fd {
+            args.push("h264parse".to_string());
+            args.push("config-interval=-1".to_string());
+            args.push("!".to_string());
+            args.push("queue".to_string());
+            args.push("max-size-buffers=1".to_string());
+            args.push("max-size-bytes=0".to_string());
+            args.push("max-size-time=0".to_string());
+            args.push("leaky=downstream".to_string());
+            args.push("!".to_string());
+            args.push("fdsink".to_string());
+            args.push(format!("fd={}", fd));
+            args.push("sync=false".to_string());
+        } else {
+            args.push("h264parse".to_string());
+            args.push("!".to_string());
+            args.push("queue".to_string());
+            args.push("max-size-buffers=1".to_string());
+            args.push("max-size-bytes=0".to_string());
+            args.push("max-size-time=0".to_string());
+            args.push("leaky=downstream".to_string());
+            args.push("!".to_string());
+            args.push("rtph264pay".to_string());
+            args.push("config-interval=1".to_string());
+            args.push("pt=96".to_string());
+            args.push("aggregate-mode=none".to_string());
+            args.push("!".to_string());
+            args.push("udpsink".to_string());
+            args.push(format!("host={}", self.target_ip));
+            args.push(format!("port={}", self.target_port));
+            args.push("buffer-size=262144".to_string());
+            args.push("sync=false".to_string());
+        }
+        args
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_spectrum_packet_silence() {
+        let raw_buf = [0u8; 2048];
+        let mut packet = [0u8; 25];
+        let (rms_db, is_silence) = compute_spectrum_packet(&raw_buf, &mut packet);
+        assert!(rms_db <= -55.0);
+        assert!(is_silence);
+        assert!(packet[..24].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn test_compute_spectrum_packet_sine_wave() {
+        let mut raw_buf = [0u8; 2048];
+        // Generate 1 kHz sine wave at 48kHz sample rate
+        for i in 0..512 {
+            let sample_f = (2.0 * std::f32::consts::PI * 1000.0 * (i as f32) / 48000.0).sin();
+            let sample_i = (sample_f * 20000.0) as i16;
+            let bytes = sample_i.to_le_bytes();
+            raw_buf[i * 4] = bytes[0];
+            raw_buf[i * 4 + 1] = bytes[1];
+            raw_buf[i * 4 + 2] = bytes[0];
+            raw_buf[i * 4 + 3] = bytes[1];
+        }
+
+        let mut packet = [0u8; 25];
+        let (rms_db, is_silence) = compute_spectrum_packet(&raw_buf, &mut packet);
+        assert!(rms_db > -25.0);
+        assert!(!is_silence);
+        // Band corresponding to 1kHz must have substantial energy
+        assert!(packet[..24].iter().any(|&b| b > 10));
+    }
+
+    #[test]
+    fn test_pipeline_builder_usb_vs_network_sink() {
+        let mut builder = PipelineBuilder {
+            node_id: 42,
+            target_ip: "192.168.7.2".to_string(),
+            target_port: 5000,
+            bitrate: 800,
+            encoder: EncoderApi::Vaapi,
+            fps: 30,
+            hud: false,
+            color_profile: ColorProfile::TrueColor,
+            drop_only: false,
+            skip_to_first: true,
+            key_int_max: 30,
+            usb_pipe_fd: Some(15),
+            engine: StreamEngine::GStreamer,
+            capture: CaptureEngine::Mutter,
+            kms_info: None,
+            audio: true,
+            audio_port: 5004,
+        };
+
+        // USB sink verification
+        let usb_args = builder.build_sink_args();
+        assert!(usb_args.iter().any(|arg| arg == "fdsink"));
+        assert!(usb_args.iter().any(|arg| arg == "fd=15"));
+        assert!(!usb_args.iter().any(|arg| arg == "udpsink"));
+
+        // Network UDP sink verification
+        builder.usb_pipe_fd = None;
+        let net_args = builder.build_sink_args();
+        assert!(net_args.iter().any(|arg| arg == "rtph264pay"));
+        assert!(net_args.iter().any(|arg| arg == "udpsink"));
+        assert!(net_args.iter().any(|arg| arg == "host=192.168.7.2"));
+        assert!(net_args.iter().any(|arg| arg == "port=5000"));
+    }
 }
 

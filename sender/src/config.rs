@@ -473,10 +473,12 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             CaptureEngine::Kms
         };
 
-        let engine = if args.iter().any(|a| a == "--engine=native" || a == "--native" || a == "--rust") {
-            StreamEngine::NativeRust
-        } else {
+        // Padrão de fábrica: 100% Native Rust In-Process GPU Pipeline (Zero processos externos)
+        // GStreamer só é ativado se explicitamente solicitado via CLI (--engine=gstreamer, --gstreamer ou --gst)
+        let engine = if args.iter().any(|a| a == "--engine=gstreamer" || a == "--gstreamer" || a == "--gst") {
             StreamEngine::GStreamer
+        } else {
+            StreamEngine::NativeRust
         };
 
         Ok(Some(Self {
@@ -499,3 +501,32 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_engine_is_native_rust_and_kms() {
+        let args = vec!["ext-sender".to_string(), "--direct".to_string()];
+        let cfg = SenderConfig::parse(&args).unwrap().unwrap();
+        assert_eq!(cfg.engine, StreamEngine::NativeRust);
+        assert_eq!(cfg.capture, CaptureEngine::Kms);
+        assert_eq!(cfg.transport, TransportKind::UsbBulk);
+    }
+
+    #[test]
+    fn test_gstreamer_opt_in() {
+        let args = vec!["ext-sender".to_string(), "--direct".to_string(), "--engine=gstreamer".to_string()];
+        let cfg = SenderConfig::parse(&args).unwrap().unwrap();
+        assert_eq!(cfg.engine, StreamEngine::GStreamer);
+    }
+
+    #[test]
+    fn test_mutter_capture_opt_in() {
+        let args = vec!["ext-sender".to_string(), "--direct".to_string(), "--capture=mutter".to_string()];
+        let cfg = SenderConfig::parse(&args).unwrap().unwrap();
+        assert_eq!(cfg.capture, CaptureEngine::Mutter);
+    }
+}
+

@@ -1,0 +1,38 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install essential runtime, media, VA-API, DRM and testing dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libclang-dev \
+    libudev-dev \
+    libusb-1.0-0-dev \
+    libasound2-dev \
+    libpipewire-0.3-dev \
+    libva-dev \
+    libva-drm2 \
+    libdrm-dev \
+    pipewire \
+    pipewire-pulse \
+    wireplumber \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-vaapi \
+    pulseaudio-utils \
+    dbus \
+    xvfb \
+    curl \
+    iproute2 \
+    usbutils \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+CMD ["cargo", "test"]

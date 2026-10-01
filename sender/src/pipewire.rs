@@ -107,31 +107,12 @@ pub fn link_monitor_port_to_sender(node_id: u32, monitor_name: &str) {
                             let props = &item["info"]["props"];
                             let dir = props["port.direction"].as_str().unwrap_or("");
                             if dir == "in" {
-                                // Skip any audio ports
-                                if props["audio.channel"].as_str().is_some() {
+                                if is_pipewire_audio_port(props) {
                                     continue;
                                 }
-                                if let Some(dsp) = props["format.dsp"].as_str() {
-                                    if dsp.contains("audio") {
-                                        continue;
-                                    }
-                                }
-
-                                if let Some(alias) = props["port.alias"].as_str() {
-                                    if alias.contains("ext-video-sender") || alias.contains("ext-hdmi-sender") {
-                                        in_port = item["id"].as_u64();
-                                        break;
-                                    }
-                                    if alias.contains("gst-launch") && !alias.contains("_FL") && !alias.contains("_FR") {
-                                        in_port = item["id"].as_u64();
-                                        break;
-                                    }
-                                }
-                                if let Some(path) = props["object.path"].as_str() {
-                                    if path.contains("ext-video-sender") || path.contains("ext-hdmi-sender") {
-                                        in_port = item["id"].as_u64();
-                                        break;
-                                    }
+                                if is_pipewire_video_in_port(props) {
+                                    in_port = item["id"].as_u64();
+                                    break;
                                 }
                             }
                         }
@@ -191,4 +172,74 @@ pub fn is_sender_linked() -> bool {
         return s.contains("ext-hdmi-sender") || s.contains("gst-launch");
     }
     true
+}
+
+/// Helper to detect if a PipeWire port belongs to an audio channel or audio DSP format
+pub fn is_pipewire_audio_port(props: &serde_json::Value) -> bool {
+    if props["audio.channel"].as_str().is_some() {
+        return true;
+    }
+    if let Some(dsp) = props["format.dsp"].as_str() {
+        if dsp.contains("audio") {
+            return true;
+        }
+    }
+    false
+}
+
+/// Helper to detect if a PipeWire port belongs to the ext-video-sender video input
+pub fn is_pipewire_video_in_port(props: &serde_json::Value) -> bool {
+    if let Some(alias) = props["port.alias"].as_str() {
+        if alias.contains("ext-video-sender") || alias.contains("ext-hdmi-sender") {
+            return true;
+        }
+        if alias.contains("gst-launch") && !alias.contains("_FL") && !alias.contains("_FR") {
+            return true;
+        }
+    }
+    if let Some(path) = props["object.path"].as_str() {
+        if path.contains("ext-video-sender") || path.contains("ext-hdmi-sender") {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pipewire_audio_detection() {
+        let audio_channel = serde_json::json!({"audio.channel": "FL"});
+        assert!(is_pipewire_audio_port(&audio_channel));
+
+        let audio_dsp = serde_json::json!({"format.dsp": "32 bit float audio"});
+        assert!(is_pipewire_audio_port(&audio_dsp));
+
+        let video_props = serde_json::json!({
+            "format.dsp": "video (raw)",
+            "port.alias": "ext-video-sender:input_0"
+        });
+        assert!(!is_pipewire_audio_port(&video_props));
+    }
+
+    #[test]
+    fn test_pipewire_video_in_port_matching() {
+        let valid_video = serde_json::json!({
+            "port.alias": "ext-video-sender:input_0"
+        });
+        assert!(is_pipewire_video_in_port(&valid_video));
+
+        let valid_gst = serde_json::json!({
+            "port.alias": "gst-launch-1.0:sink"
+        });
+        assert!(is_pipewire_video_in_port(&valid_gst));
+
+        // Audio ports from gst-launch should NOT be matched as video in
+        let audio_gst = serde_json::json!({
+            "port.alias": "gst-launch-1.0:input_FL"
+        });
+        assert!(!is_pipewire_video_in_port(&audio_gst));
+    }
 }

@@ -461,6 +461,25 @@ Esta lista de trabalho consolida todos os pontos apontados pelo Carlos, organiza
   - Validado "Estender Tela" -> Retomada instantânea a 60 FPS com decodificação por hardware VideoCore IV M2M e scanout direto via KMS plane 86.
   - 100% Rust nativo sem scripts bash/python intermediários.
 
+---
+
+### [x] 32. Ambiente de Testes Isolado em Docker e Bateria de Testes Unitários Nativos em Rust
+- [x] **32.1 Blindagem da Sessão Gráfica do Host contra Reinicializações do GNOME Shell / Mutter**:
+  - Implementado container Docker isolado (`docker/Dockerfile.test-sender`) com suporte a GStreamer 1.0 (plugins base, good, bad, ugly e vaapi), PipeWire, WirePlumber, D-Bus e utilitários de mídia.
+  - Repasse direto do barramento USB (`--privileged -v /dev/bus/usb:/dev/bus/usb`) e aceleração por hardware da GPU do host (`--device /dev/dri`), garantindo que o gadget do Pi Zero seja acessado diretamente sem risco de queda da interface gráfica do hospedeiro ou interrupção do agente de IA.
+- [x] **32.2 Integração Nativa no `ext-tool` (`tools/ext-tool/src/test.rs`)**:
+  - Adicionado o subcomando `ext-tool test [--unit] [--docker] [--usb]`.
+  - Suporte a diagnóstico de hardware USB em Rust puro inspecionando `/sys/bus/usb/devices/` (detecção instantânea de `1d50:614d` / `1d6b:0104`).
+  - Execução automatizada e isolada do container via `ext-tool test --docker`.
+- [x] **32.3 Expansão da Bateria de Testes Unitários Nativos**:
+  - `sender/src/control.rs`: Testes de parsing de comandos de controle Hot-Apply (Start, Stop, Transportes, FPS, Bitrate e Perfis de Cor).
+  - `sender/src/usb_transport.rs`: Testes de regras de limite de protocolo ZLP (múltiplos de 512 bytes) e identificação de VID/PID.
+  - `sender/src/pipewire.rs`: Testes de filtros de portas PipeWire (rejeição estrita de canais de áudio e identificação do sink de vídeo).
+  - `receiver/src/media_renderer.rs`: Testes de conversão de cor RGB565, cálculos de espectro FFT e limiar de silêncio (-55 dB).
+  - `receiver/src/i18n.rs`: Testes de detecção e parsing de idiomas (PT, IT, ZH, EN).
+  - `tools/ext-tool/src/test.rs`: Testes de opções e parâmetros de execução.
+
+
 
 
 

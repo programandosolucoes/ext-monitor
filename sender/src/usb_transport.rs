@@ -23,6 +23,20 @@ pub const USB_PRODUCT_ID_2: u16 = 0x614d; // ExtMonitor Composite
 pub const USB_DEFAULT_INTERFACE: u8 = 0;
 pub const USB_DEFAULT_ENDPOINT_OUT: u8 = 0x01;  // Bulk OUT
 
+/// Checks whether a given USB VID and PID match ExtMonitor hardware configurations
+#[inline]
+pub fn is_ext_monitor_vid_pid(vid: u16, pid: u16) -> bool {
+    (vid == USB_VENDOR_ID_1 && pid == USB_PRODUCT_ID_1)
+        || (vid == USB_VENDOR_ID_2 && pid == USB_PRODUCT_ID_2)
+}
+
+/// USB High-Speed Bulk transfer rule: if transfer size is a multiple of 512,
+/// a Zero-Length Packet (ZLP) must follow to signal end-of-transfer to hardware FIFO.
+#[inline]
+pub fn needs_zlp(transfer_len: usize) -> bool {
+    transfer_len > 0 && transfer_len % 512 == 0
+}
+
 /// Locates and opens the Pi Zero USB Display Gadget on the host USB bus
 pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), String> {
     let context = Context::new().map_err(|e| format!("Failed to initialize libusb context: {}", e))?;
@@ -30,8 +44,7 @@ pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), Stri
 
     for device in devices.iter() {
         if let Ok(desc) = device.device_descriptor() {
-            let is_match = (desc.vendor_id() == USB_VENDOR_ID_1 && desc.product_id() == USB_PRODUCT_ID_1)
-                || (desc.vendor_id() == USB_VENDOR_ID_2 && desc.product_id() == USB_PRODUCT_ID_2);
+            let is_match = is_ext_monitor_vid_pid(desc.vendor_id(), desc.product_id());
 
             if is_match {
                 println!(
@@ -222,7 +235,7 @@ pub fn spawn_usb_bulk_writer(
                 }
 
                 // Critical USB Bulk Protocol Rule: If transfer is exact multiple of 512, send ZLP
-                if n % 512 == 0 && offset == n {
+                if needs_zlp(n) && offset == n {
                     let _ = handle.write_bulk(ep_out, &[], Duration::from_millis(50));
                 }
 
@@ -247,5 +260,29 @@ pub fn spawn_usb_bulk_writer(
         let _ = handle.release_interface(iface_num);
         println!("\x1b[1;32m[usb-transport]\x1b[0m USB Bulk transport released cleanly.");
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_zlp_boundary_conditions() {
+        assert!(!needs_zlp(0));
+        assert!(!needs_zlp(511));
+        assert!(needs_zlp(512));
+        assert!(!needs_zlp(513));
+        assert!(needs_zlp(1024));
+        assert!(needs_zlp(65536));
+        assert!(!needs_zlp(65535));
+    }
+
+    #[test]
+    fn test_ext_monitor_vid_pid_matching() {
+        assert!(is_ext_monitor_vid_pid(0x1d6b, 0x0104));
+        assert!(is_ext_monitor_vid_pid(0x1d50, 0x614d));
+        assert!(!is_ext_monitor_vid_pid(0x1d6b, 0x0105));
+        assert!(!is_ext_monitor_vid_pid(0x1234, 0x5678));
+    }
 }
 

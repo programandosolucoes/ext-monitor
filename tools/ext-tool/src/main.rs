@@ -11,6 +11,7 @@ mod deploy;
 mod flash;
 mod scan;
 mod splash;
+mod test;
 
 use std::env;
 use std::path::PathBuf;
@@ -25,6 +26,7 @@ fn print_usage() {
     println!("  ext-tool <SUBCOMANDO> [OPÇÕES]\n");
 
     println!("\x1b[1;33mSUBCOMANDOS DISPONÍVEIS:\x1b[0m");
+    println!("  \x1b[1;32mtest\x1b[0m [--unit] [--docker] [--usb] Executa bateria de testes unitários ou container isolado Docker");
     println!("  \x1b[1;32mbuild\x1b[0m [--image] [--splash]  Compila ext-receiver (ARMv6), ext-sender e gera initramfs.cpio.gz");
     println!("  \x1b[1;32mdeploy\x1b[0m [--ip=<IP>]          Envia atualização OTA ao vivo para o Pi Zero (http://IP:8080)");
     println!("  \x1b[1;32msplash\x1b[0m                      Gera telas de splash (loading/ready) em RGB565 raw.gz em Rust");
@@ -33,6 +35,9 @@ fn print_usage() {
     println!("  \x1b[1;32mhelp\x1b[0m, -h, --help            Exibe esta mensagem de ajuda\n");
 
     println!("\x1b[1;33mEXEMPLOS RÁPIDOS:\x1b[0m");
+    println!("  ext-tool test               # Executa todos os testes unitários nativos em Rust");
+    println!("  ext-tool test --docker      # Executa testes isolados no Docker (blindagem de GNOME)");
+    println!("  ext-tool test --usb         # Diagnostica a comunicação direta com o gadget USB");
     println!("  ext-tool build              # Compila e empacota initramfs.cpio.gz");
     println!("  ext-tool deploy             # Envia o novo initramfs para o Pi Zero via OTA");
     println!("  ext-tool splash             # Regenera as telas de inicialização em RGB565");
@@ -64,6 +69,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let project_root = find_project_root();
 
     match args[1].as_str() {
+        "test" => {
+            let run_docker = args.iter().any(|a| a == "--docker" || a == "--isolated");
+            let test_usb = args.iter().any(|a| a == "--usb");
+            let run_unit = args.iter().any(|a| a == "--unit") || (!run_docker && !test_usb);
+            let opts = test::TestOptions {
+                project_root,
+                run_unit,
+                run_docker,
+                test_usb,
+            };
+            if let Err(e) = test::run_tests(&opts) {
+                eprintln!("\x1b[1;31m[!] Erro na execução dos testes: {}\x1b[0m", e);
+                std::process::exit(1);
+            }
+        }
         "build" => {
             let create_image = args.iter().any(|a| a == "--image");
             let generate_splashes = args.iter().any(|a| a == "--splash" || a == "--splashes");

@@ -155,6 +155,19 @@ ext-tool build --image
 sudo ext-tool flash /dev/sdX
 ```
 
+### 🧪 Bateria de Testes & Ambiente Isolado em Docker
+Execute testes unitários nativos em Rust ou inicialize um container Docker isolado com repasse de barramento USB e GPU DRI (protege a sessão do GNOME Shell / desktop do hospedeiro contra qualquer queda ou recarregamento inesperado):
+```bash
+# Executar todos os testes unitários 100% nativos em Rust (ext-sender, ext-receiver, ext-tool):
+ext-tool test
+
+# Diagnosticar o Pi Zero USB Display Gadget conectado via sysfs direto:
+ext-tool test --usb
+
+# Executar testes isolados no container Docker com /dev/bus/usb e /dev/dri:
+ext-tool test --docker
+```
+
 ---
 
 ## 📄 Licença & Atribuição

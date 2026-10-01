@@ -290,3 +290,24 @@ fn print_help_zh() {
     println!("      点击网页上的 \x1b[1;31m'⏹ 停止控制面板及服务'\x1b[0m 按钮；或点击 \x1b[1;33m'⏸ 暂停画面推流'\x1b[0m");
     println!("  - \x1b[1;37m通过终端信号:\x1b[0m 按下 \x1b[1;31mCtrl + C\x1b[0m 或在终端执行 \x1b[1;31mpkill -f ext-receiver\x1b[0m。\n");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_language_from_str() {
+        assert_eq!(Language::from_str("pt"), Language::Portuguese);
+        assert_eq!(Language::from_str("pt-BR"), Language::Portuguese);
+        assert_eq!(Language::from_str("portugues"), Language::Portuguese);
+
+        assert_eq!(Language::from_str("it"), Language::Italian);
+        assert_eq!(Language::from_str("italiano"), Language::Italian);
+
+        assert_eq!(Language::from_str("zh"), Language::Chinese);
+        assert_eq!(Language::from_str("zh-cn"), Language::Chinese);
+
+        assert_eq!(Language::from_str("en"), Language::English);
+        assert_eq!(Language::from_str("unknown"), Language::English);
+    }
+}

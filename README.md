@@ -273,6 +273,19 @@ ext-tool build --image
 sudo ext-tool flash /dev/sdX
 ```
 
+### 🧪 Test Suite & Isolated Docker Testing
+Execute native Rust unit tests or launch an isolated Docker test container with hardware USB and GPU DRI passthrough (protects the host GNOME Shell / desktop session from accidental reloads or crashes):
+```bash
+# Run 100% native Rust unit tests across workspace (ext-sender, ext-receiver, ext-tool):
+ext-tool test
+
+# Probe and diagnose connected Pi Zero USB Display Gadget via native sysfs:
+ext-tool test --usb
+
+# Execute isolated tests inside Docker container with /dev/bus/usb and /dev/dri:
+ext-tool test --docker
+```
+
 ---
 
 ## 📄 License & Attribution
