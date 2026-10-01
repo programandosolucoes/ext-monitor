@@ -100,7 +100,7 @@ git commit -m "feat(miracast): implement pure-rust mpeg-ts and rtp packetizer"
 - Consumes: Target IP and RTSP port (7236 standard, 7250 MS-MICE).
 - Produces: `WfdClient::connect(target_ip: &str, target_port: u16) -> Result<WfdClient, io::Error>`, `negotiate_session(&mut self) -> Result<u16, io::Error>` (returns negotiated sink UDP RTP port), `teardown(&mut self) -> Result<(), io::Error>`.
 
-- [ ] **Step 1: Write unit tests for RTSP message builders**
+- [x] **Step 1: Write unit tests for RTSP message builders**
 
 ```rust
 #[cfg(test)]
@@ -124,12 +124,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p ext-sender wfd_client`
 Expected: FAIL with missing methods.
 
-- [ ] **Step 3: Implement WfdClient state machine**
+- [x] **Step 3: Implement WfdClient state machine**
 
 Implement in `sender/src/miracast/wfd_client.rs`:
 - TCP stream connection to Sink on port 7236 (fallback 7250 MS-MICE).
@@ -143,12 +143,12 @@ Implement in `sender/src/miracast/wfd_client.rs`:
   - M7: `PLAY` command to initiate streaming.
   - `teardown()` sending `TEARDOWN rtsp://...` and flushing socket.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p ext-sender wfd_client`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sender/src/miracast/wfd_client.rs sender/src/miracast/mod.rs
