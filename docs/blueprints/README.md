@@ -18,7 +18,7 @@ All critical engineering milestones—from FAT16 sector alignment on Broadcom si
 
 ---
 
-## 2. Directory of the 20 Engineering Blueprints
+## 2. Directory of the 21 Engineering Blueprints
 
 | # | Technical Blueprint | Document File | Engineering Focus |
 | :---: | :--- | :--- | :--- |
@@ -42,6 +42,7 @@ All critical engineering milestones—from FAT16 sector alignment on Broadcom si
 | **18** | **Hybrid Audio: IP Opus & Bluetooth A2DP** | [`18-hybrid-audio-subsystem-network-opus-bluetooth-a2dp.md`](en/18-hybrid-audio-subsystem-network-opus-bluetooth-a2dp.md) | Private local headset audio vs HDMI TV sound, Bluetooth 4.1 pairing on Pi Zero W, and ALSA `hw:0,0` routing. |
 | **19** | **IoT Media Renderer: Cast & HDMI Visualizer** | [`19-iot-media-renderer-chromecast-upnp-hdmi-visualizer.md`](en/19-iot-media-renderer-chromecast-upnp-hdmi-visualizer.md) | Smart streaming dongle mode: Google Cast (CastV2), DIAL (YouTube), UPnP/DLNA, and HDMI audio visualizer. |
 | **20** | **Single-HDMI Multiplexer & Zero-Reboot** | [`20-single-hdmi-scanout-multiplexer-realtime-fft-i18n-zero-reboot.md`](en/20-single-hdmi-scanout-multiplexer-realtime-fft-i18n-zero-reboot.md) | Mutual exclusion on single physical HDMI port, 512-point Cooley-Tukey FFT, 4-language i18n, and zero-reboot teardown. |
+| **21** | **Miracast MS-MICE, Reverse RTSP WFD & 1080p SPS** | [`21-miracast-ms-mice-rtsp-wfd-dynamic-sps-and-gnome-network-displays.md`](en/21-miracast-ms-mice-rtsp-wfd-dynamic-sps-and-gnome-network-displays.md) | MS-MICE binary signaling (TCP 7250), reverse RTSP WFD connection to Source (7236), UDP 5005 discovery migration, and GNOME 1080p bug resolution via pure-Rust dynamic SPS parser. |
 
 ---
 

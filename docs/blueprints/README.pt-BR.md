@@ -18,7 +18,7 @@ Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silí
 
 ---
 
-## 2. Mapa dos 20 Blueprints de Engenharia
+## 2. Mapa dos 21 Blueprints de Engenharia
 
 | # | Blueprint Técnico | Arquivo | Foco de Engenharia |
 | :---: | :--- | :--- | :--- |
@@ -42,6 +42,7 @@ Todos os desafios fundamentais — desde o alinhamento de setores FAT16 no silí
 | **18** | **Áudio Híbrido: Rede IP Opus e Bluetooth A2DP Sink** | [`18-audio-hibrido-rede-opus-e-bluetooth-a2dp.md`](pt/18-audio-hibrido-rede-opus-e-bluetooth-a2dp.md) | Isolamento de áudio local (headset USB Yealink UH34) vs TV HDMI, pareamento Bluetooth 4.1 no Pi Zero W e roteamento ALSA `hw:0,0`. |
 | **19** | **Appliance IoT Media Renderer: Google Cast, UPnP/DLNA e Visualizador HDMI** | [`19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md`](pt/19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md) | Transformação em dongle multimídia inteligente: Google Cast (CastV2), DIAL (YouTube), UPnP/DLNA e tela visual com capa/espectro sonoro em áudio IoT. |
 | **20** | **Multiplexador HDMI Scanout, FFT Realtime, i18n e Arquitetura Zero-Reboot** | [`20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md`](pt/20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md) | Exclusão mútua do scanout HDMI único (vídeo vs visualizador), motor FFT 512 pontos com Hann, Canvas 30 FPS, i18n quadrilíngue 230 chaves, Swagger OAS 3.0 v2.3.0 e ciclo de vida zero-reboot contra travamentos estilo USB Bulk. |
+| **21** | **Miracast MS-MICE, Conexão Reversa RTSP WFD, Conflito UDP 5002 e SPS 1080p** | [`21-miracast-ms-mice-rtsp-wfd-sps-dinamico-e-gnome-network-displays.md`](pt/21-miracast-ms-mice-rtsp-wfd-sps-dinamico-e-gnome-network-displays.md) | Sinalização binária MS-MICE (TCP 7250), conexão reversa RTSP WFD ao Source (7236), migração da auto-descoberta para UDP 5005, resolução do bug de 1080p do GNOME Displays via parser nativo de SPS e escala de hardware KMS. |
 
 ---
 
