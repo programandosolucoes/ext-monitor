@@ -21,6 +21,9 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Pi Zero Extended Monitor - Control Dashboard</title>
     <style>
         :root {
@@ -573,6 +576,9 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
         </div>
         <div class="nav-controls">
             <div class="lang-flags">
+                <button type="button" onclick="window.location.href='/?_v=' + Date.now()" class="flag-btn" style="border-color: rgba(0, 229, 255, 0.4); color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 700;" title="Limpar cache e recarregar painel">
+                    <span>🔄</span> <span>Recarregar</span>
+                </button>
                 <button type="button" onclick="setLanguage('en')" class="flag-btn active" id="btnLang_en" title="English">🇺🇸 EN</button>
                 <button type="button" onclick="setLanguage('pt')" class="flag-btn" id="btnLang_pt" title="Português">🇧🇷 PT</button>
                 <button type="button" onclick="setLanguage('it')" class="flag-btn" id="btnLang_it" title="Italiano">🇮🇹 IT</button>
@@ -788,7 +794,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     <span class="card-badge badge-purple" data-i18n="servicesBadge">Hardware Listeners</span>
                 </div>
                 <div class="btn-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
-                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) setActiveTransport('mode1_udp')">
+                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode1_udp', currentTopology)">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">🐧 Mode 1: Linux Wayland</div>
                             <label class="switch" title="Toggle Mode 1">
@@ -797,12 +803,22 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             </label>
                         </div>
                         <div class="dl-desc" data-i18n="m1Desc">Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (&lt; 15ms).</div>
-                        <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; margin-top: 0.8rem;">
-                            <span id="badgeMode1" class="stat-badge badge-cyan" data-i18n="badgeMode1On">Enabled (UDP 5000)</span>
-                            <button class="btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm);" onclick="setActiveTransport('mode1_udp'); event.stopPropagation();" data-i18n="btnSelectMode1">▶ Ativar Rede UDP</button>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span id="badgeMode1" class="stat-badge badge-cyan" data-i18n="badgeMode1On">Enabled (UDP 5000)</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;" data-i18n="lblScreenMode">Display Mode:</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <button class="btn-toggle" id="btnMode1Extend" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode1_udp', 'extend'); event.stopPropagation();" data-i18n="btnM1Extend">
+                                    🖥️ Estender
+                                </button>
+                                <button class="btn-toggle" id="btnMode1Clone" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode1_udp', 'clone'); event.stopPropagation();" data-i18n="btnM1Clone">
+                                    💻 Clonar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) setActiveTransport('mode2_miracast')">
+                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode2_miracast', 'miracast')">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">🪟 Mode 2: Windows Miracast</div>
                             <label class="switch" title="Toggle Mode 2">
@@ -811,12 +827,17 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             </label>
                         </div>
                         <div class="dl-desc" data-i18n="m2Desc">Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.</div>
-                        <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; margin-top: 0.8rem;">
-                            <span id="badgeMode2" class="stat-badge badge-green" data-i18n="badgeMode2On">Enabled (TCP 7236)</span>
-                            <button class="btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm); background: var(--accent-emerald); border-color: var(--accent-emerald);" onclick="setActiveTransport('mode2_miracast'); event.stopPropagation();" data-i18n="btnSelectMode2">▶ Ativar Miracast (Win+K)</button>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span id="badgeMode2" class="stat-badge badge-green" data-i18n="badgeMode2On">Enabled (TCP 7236)</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Windows Display</span>
+                            </div>
+                            <button class="btn-toggle" id="btnMode2Connect" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm); border-color: var(--accent-emerald); color: var(--accent-emerald);" onclick="activateModeWithTopology('mode2_miracast', 'miracast'); event.stopPropagation();" data-i18n="btnSelectMode2">
+                                🪟 Conectar Miracast (Win+K)
+                            </button>
                         </div>
                     </div>
-                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) setActiveTransport('mode3_usb_bulk')">
+                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode3_usb_bulk', currentTopology)">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                             <div class="dl-title" style="margin: 0;">⚡ Mode 3: USB Bulk Direct</div>
                             <label class="switch" title="Toggle Mode 3">
@@ -825,9 +846,19 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             </label>
                         </div>
                         <div class="dl-desc" data-i18n="m3Desc">Direct 480 Mbps raw hardware pipe via USB FunctionFS without network stack overhead (&lt; 1ms).</div>
-                        <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; margin-top: 0.8rem;">
-                            <span id="badgeMode3" class="stat-badge badge-purple" data-i18n="badgeMode3On">Enabled (USB Bulk)</span>
-                            <button class="btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm); background: var(--accent-purple); border-color: var(--accent-purple);" onclick="setActiveTransport('mode3_usb_bulk'); event.stopPropagation();" data-i18n="btnSelectMode3">▶ Ativar USB Bulk</button>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span id="badgeMode3" class="stat-badge badge-purple" data-i18n="badgeMode3On">Enabled (USB Bulk)</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;" data-i18n="lblScreenMode">Display Mode:</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <button class="btn-toggle active" id="btnMode3Extend" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode3_usb_bulk', 'extend'); event.stopPropagation();" data-i18n="btnM3Extend">
+                                    🖥️ Estender
+                                </button>
+                                <button class="btn-toggle" id="btnMode3Clone" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode3_usb_bulk', 'clone'); event.stopPropagation();" data-i18n="btnM3Clone">
+                                    💻 Clonar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2025,7 +2056,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 toastExtCloned: "💻 Mirroring notebook display (eDP-1)...",
                 toastExtExtended: "🖥️ Extending desktop to TV (HDMI-1)...",
                 servicesHeader: "Appliance Listener Daemons & Services",
-                servicesBadge: "Hardware Listeners"
+                servicesBadge: "Hardware Listeners",
+                lblScreenMode: "Display Mode:",
+                btnM1Extend: "🖥️ Extend (UDP)",
+                btnM1Clone: "💻 Clone (UDP)",
+                btnM3Extend: "🖥️ Extend (USB)",
+                btnM3Clone: "💻 Clone (USB)"
             },
             pt: {
                 title: "Pi Zero Monitor Estendido",
@@ -2310,7 +2346,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 toastExtCloned: "💻 Espelhando tela primária do notebook (eDP-1)...",
                 toastExtExtended: "🖥️ Estendendo área de trabalho para TV (HDMI-1)...",
                 servicesHeader: "Daemons & Serviços de Escuta do Appliance",
-                servicesBadge: "Listeners no Hardware"
+                servicesBadge: "Listeners no Hardware",
+                lblScreenMode: "Modo de Exibição:",
+                btnM1Extend: "🖥️ Estender (UDP)",
+                btnM1Clone: "💻 Clonar (UDP)",
+                btnM3Extend: "🖥️ Estender (USB)",
+                btnM3Clone: "💻 Clonar (USB)"
             },
             it: {
                 title: "Pi Zero Monitor Esteso",
@@ -2590,7 +2631,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 toastExtCloned: "💻 Duplicazione schermo notebook (eDP-1)...",
                 toastExtExtended: "🖥️ Estensione desktop su TV (HDMI-1)...",
                 servicesHeader: "Servizi e Daemon di Ascolto dell'Appliance",
-                servicesBadge: "Listener Hardware"
+                servicesBadge: "Listener Hardware",
+                lblScreenMode: "Modalità Display:",
+                btnM1Extend: "🖥️ Estendi (UDP)",
+                btnM1Clone: "💻 Clona (UDP)",
+                btnM3Extend: "🖥️ Estendi (USB)",
+                btnM3Clone: "💻 Clona (USB)"
             },
             zh: {
                 title: "Pi Zero 扩展显示器",
@@ -2870,7 +2916,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 toastExtCloned: "💻 正在镜像笔记本屏幕 (eDP-1)...",
                 toastExtExtended: "🖥️ 正在将桌面扩展到电视 (HDMI-1)...",
                 servicesHeader: "设备监听守护进程与服务",
-                servicesBadge: "硬件监听服务"
+                servicesBadge: "硬件监听服务",
+                lblScreenMode: "显示模式:",
+                btnM1Extend: "🖥️ 扩展 (UDP)",
+                btnM1Clone: "💻 克隆 (UDP)",
+                btnM3Extend: "🖥️ 扩展 (USB)",
+                btnM3Clone: "💻 克隆 (USB)"
             }
         };
 
@@ -3010,42 +3061,55 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             updateKeyIntValue(val);
         }
 
-        // Active Extension Connection Transport
+        // Active Extension Connection Transport and Topology
         let currentTransport = 'mode3_usb_bulk';
+        let currentTopology = 'extend';
+
+        function activateModeWithTopology(transport, topology) {
+            currentTransport = transport;
+            if (topology && topology !== 'miracast') {
+                currentTopology = topology;
+            }
+
+            if (transport === 'mode2_miracast') {
+                setActiveTransport('mode2_miracast');
+                return;
+            }
+
+            const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
+            const modeLabel = currentTopology === 'clone' ? 'Clonar (eDP-1)' : 'Estender (HDMI-1)';
+            const transLabel = transport.includes('usb') ? 'USB Bulk Direct' : 'Rede UDP';
+            showToast(`🚀 Ativando ${transLabel} no modo ${modeLabel}...`);
+
+            // 1. Tell receiver to switch transport
+            fetch('/api/transport/active', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start' })
+            }).catch(() => {});
+
+            // 2. Tell host sender to switch transport and mode
+            sendHostControl({ action: 'start', mode: currentTopology, transport: activeTrans });
+            fetch('/api/stream/start', { method: 'POST' }).then(() => {
+                setTimeout(pollTelemetry, 250);
+                setTimeout(pollTelemetry, 800);
+            });
+
+            updateModeAndTopologyButtons();
+        }
 
         function setActiveTransport(transport) {
             currentTransport = transport;
             const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
-            document.querySelectorAll('#activeTransportGrid .btn-toggle, #hostTransportGrid .btn-toggle').forEach(b => {
-                const isCurrent = b.id === 'btnTransport_' + shortKey || b.id === 'btnHostTransport_' + shortKey;
-                b.classList.toggle('active', isCurrent);
-            });
-            const valHostTransport = document.getElementById('valHostTransport');
-            if (valHostTransport) {
-                valHostTransport.textContent = transport.includes('mode3') ? 'USB Bulk Direct (Mode 3)' :
-                    (transport.includes('mode2') ? 'Windows Miracast (Mode 2)' : 'Network UDP (Mode 1)');
-            }
-
-            const btnExt = document.getElementById('btnActionExtend');
-            const btnCln = document.getElementById('btnActionClone');
-            const btnStop = document.getElementById('btnActionStop');
-            const badge = document.getElementById('badgeExtState');
 
             if (transport === 'mode2_miracast') {
                 showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • ' + (t('waitingStream') || 'Ready for Win + K'));
-                if (btnExt) btnExt.classList.remove('active');
-                if (btnCln) btnCln.classList.remove('active');
-                if (btnStop) btnStop.classList.add('active');
-                if (badge) { badge.textContent = 'Miracast (Standby)'; badge.className = 'card-badge badge-cyan'; }
+                sendHostControl({ action: 'stop' });
             } else {
-                showToast('Switching active screen connection to ' + shortKey.toUpperCase() + '...');
-                // Wake up and switch extension state if it was in standby!
-                if (btnStop) btnStop.classList.remove('active');
-                if (btnExt && (!btnCln || !btnCln.classList.contains('active'))) {
-                    btnExt.classList.add('active');
-                }
-                if (badge) { badge.textContent = t('extBadgeActive') || 'Extending (HDMI-1)'; badge.className = 'card-badge badge-green'; }
-                sendHostControl({ action: 'start', transport: transport.includes('usb') ? 'usb_bulk' : 'network' });
+                showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (currentTopology === 'clone' ? 'Clonar' : 'Estender') + ')...');
+                const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
+                sendHostControl({ action: 'start', mode: currentTopology, transport: activeTrans });
+                fetch('/api/stream/start', { method: 'POST' }).catch(() => {});
             }
 
             fetch('/api/transport/active', {
@@ -3056,37 +3120,98 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 setTimeout(pollTelemetry, 250);
                 setTimeout(pollTelemetry, 800);
             }).catch(() => {});
+
+            updateModeAndTopologyButtons();
         }
 
         // Display Extension Actions: Extend (HDMI-1), Clone (eDP-1), or Stop / Standby
         function setExtensionAction(action) {
-            const btnExt = document.getElementById('btnActionExtend');
-            const btnCln = document.getElementById('btnActionClone');
-            const btnStop = document.getElementById('btnActionStop');
-            const badge = document.getElementById('badgeExtState');
-
-            if (btnExt) btnExt.classList.toggle('active', action === 'extend');
-            if (btnCln) btnCln.classList.toggle('active', action === 'clone');
-            if (btnStop) btnStop.classList.toggle('active', action === 'stop');
-
+            currentTopology = action;
             const activeTrans = currentTransport.includes('usb') ? 'usb_bulk' : 'network';
 
             if (action === 'stop') {
-                if (badge) { badge.textContent = t('extBadgeOff'); badge.className = 'card-badge badge-amber'; }
                 showToast(t('toastExtStopped') || '⏹ Extension disabled (Standby)');
                 sendHostControl({ action: 'stop' });
                 fetch('/api/stream/stop', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             } else if (action === 'clone') {
-                if (badge) { badge.textContent = t('extBadgeClone'); badge.className = 'card-badge badge-cyan'; }
                 showToast(t('toastExtCloned') || '💻 Mirroring notebook display (eDP-1)...');
                 sendHostControl({ action: 'start', mode: 'clone', transport: activeTrans });
                 fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             } else {
-                if (badge) { badge.textContent = t('extBadgeActive'); badge.className = 'card-badge badge-green'; }
                 showToast(t('toastExtExtended') || '🖥️ Extending desktop to TV (HDMI-1)...');
                 sendHostControl({ action: 'start', mode: 'extend', transport: activeTrans });
                 fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             }
+
+            updateModeAndTopologyButtons();
+        }
+
+        function setHostMode(mode) {
+            setExtensionAction(mode);
+        }
+
+        function updateModeAndTopologyButtons() {
+            const shortKey = currentTransport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
+
+            // 1. Update Transport buttons across Tab 1 & Tab 2
+            document.querySelectorAll('#activeTransportGrid .btn-toggle, #hostTransportGrid .btn-toggle').forEach(b => {
+                const isCurrent = b.id === 'btnTransport_' + shortKey || b.id === 'btnHostTransport_' + shortKey;
+                b.classList.toggle('active', isCurrent);
+            });
+            const valHostTransport = document.getElementById('valHostTransport');
+            if (valHostTransport) {
+                valHostTransport.textContent = currentTransport.includes('mode3') ? 'USB Bulk Direct (Mode 3)' :
+                    (currentTransport.includes('mode2') ? 'Windows Miracast (Mode 2)' : 'Network UDP (Mode 1)');
+            }
+
+            // 2. Update Topology buttons across Tab 1 & Tab 2
+            const btnExt = document.getElementById('btnActionExtend');
+            const btnCln = document.getElementById('btnActionClone');
+            const btnStop = document.getElementById('btnActionStop');
+            const badge = document.getElementById('badgeExtState');
+            const hostExt = document.getElementById('btnModeExtend');
+            const hostCln = document.getElementById('btnModeClone');
+            const valHostMode = document.getElementById('valHostMode');
+
+            if (currentTransport === 'mode2_miracast') {
+                if (btnExt) btnExt.classList.remove('active');
+                if (btnCln) btnCln.classList.remove('active');
+                if (btnStop) btnStop.classList.add('active');
+                if (badge) { badge.textContent = 'Miracast (Standby)'; badge.className = 'card-badge badge-cyan'; }
+            } else {
+                if (btnExt) btnExt.classList.toggle('active', currentTopology === 'extend');
+                if (btnCln) btnCln.classList.toggle('active', currentTopology === 'clone');
+                if (btnStop) btnStop.classList.toggle('active', currentTopology === 'stop');
+                if (badge) {
+                    if (currentTopology === 'stop') {
+                        badge.textContent = t('extBadgeOff');
+                        badge.className = 'card-badge badge-amber';
+                    } else if (currentTopology === 'clone') {
+                        badge.textContent = t('extBadgeClone');
+                        badge.className = 'card-badge badge-cyan';
+                    } else {
+                        badge.textContent = t('extBadgeActive');
+                        badge.className = 'card-badge badge-green';
+                    }
+                }
+            }
+
+            if (hostExt) hostExt.classList.toggle('active', currentTopology === 'extend');
+            if (hostCln) hostCln.classList.toggle('active', currentTopology === 'clone');
+            if (valHostMode) valHostMode.textContent = currentTopology === 'clone' ? (t('btnModeClone') || 'Cloned (eDP-1)') : (t('btnModeExtend') || 'Extended (HDMI-1)');
+
+            // 3. Update Individual Mode Card action buttons
+            const m1Ext = document.getElementById('btnMode1Extend');
+            const m1Cln = document.getElementById('btnMode1Clone');
+            const m3Ext = document.getElementById('btnMode3Extend');
+            const m3Cln = document.getElementById('btnMode3Clone');
+            const m2Conn = document.getElementById('btnMode2Connect');
+
+            if (m1Ext) m1Ext.classList.toggle('active', currentTransport === 'mode1_udp' && currentTopology === 'extend');
+            if (m1Cln) m1Cln.classList.toggle('active', currentTransport === 'mode1_udp' && currentTopology === 'clone');
+            if (m3Ext) m3Ext.classList.toggle('active', currentTransport === 'mode3_usb_bulk' && currentTopology === 'extend');
+            if (m3Cln) m3Cln.classList.toggle('active', currentTransport === 'mode3_usb_bulk' && currentTopology === 'clone');
+            if (m2Conn) m2Conn.classList.toggle('active', currentTransport === 'mode2_miracast');
         }
 
         // Operating Modes State & Toggle
@@ -3278,16 +3403,6 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             .then(res => res.json())
             .then(() => showToast('✓ Command sent to Host: ' + JSON.stringify(payload)))
             .catch(() => showToast('✓ Command transmitted'));
-        }
-
-        function setHostMode(mode) {
-            const btnExt = document.getElementById('btnModeExtend');
-            const btnCln = document.getElementById('btnModeClone');
-            if (btnExt) btnExt.classList.toggle('active', mode === 'extend');
-            if (btnCln) btnCln.classList.toggle('active', mode === 'clone');
-            const lbl = document.getElementById('valHostMode');
-            if (lbl) lbl.textContent = mode === 'extend' ? t('btnModeExtend') : t('btnModeClone');
-            sendHostControl({ mode: mode });
         }
 
         function setHostAudio(enabled) {
@@ -3702,40 +3817,17 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
                         // Update Active Transport Connection buttons across both tabs
                         const activeTrans = data.active_transport || am.id;
-                        if (data.active_transport) { currentTransport = data.active_transport; }
-                        document.querySelectorAll('#activeTransportGrid .btn-toggle, #hostTransportGrid .btn-toggle').forEach(b => {
-                            const isCurrent = (activeTrans.includes('mode1') && (b.id === 'btnTransport_mode1' || b.id === 'btnHostTransport_mode1')) ||
-                                              (activeTrans.includes('mode2') && (b.id === 'btnTransport_mode2' || b.id === 'btnHostTransport_mode2')) ||
-                                              (activeTrans.includes('mode3') && (b.id === 'btnTransport_mode3' || b.id === 'btnHostTransport_mode3'));
-                            b.classList.toggle('active', isCurrent);
-                        });
-                        const valHostTransport = document.getElementById('valHostTransport');
-                        if (valHostTransport) {
-                            valHostTransport.textContent = activeTrans.includes('mode3') ? 'USB Bulk Direct (Mode 3)' :
-                                (activeTrans.includes('mode2') ? 'Windows Miracast (Mode 2)' : 'Network UDP (Mode 1)');
+                        if (data.active_transport) {
+                            currentTransport = data.active_transport;
+                        } else if (am.id && am.id !== 'idle' && am.id !== 'standby') {
+                            currentTransport = am.id;
                         }
 
-                        // Update Display Extension Action buttons (Extend / Clone / Stop)
                         const isPaused = data.stream_state === 'paused' || am.id === 'standby';
-                        const btnExt = document.getElementById('btnActionExtend');
-                        const btnCln = document.getElementById('btnActionClone');
-                        const btnStop = document.getElementById('btnActionStop');
-                        const badgeExt = document.getElementById('badgeExtState');
-
-                        if (btnExt && btnCln && btnStop) {
-                            if (isPaused) {
-                                btnExt.classList.remove('active');
-                                btnCln.classList.remove('active');
-                                btnStop.classList.add('active');
-                                if (badgeExt) { badgeExt.textContent = t('extBadgeOff'); badgeExt.className = 'card-badge badge-amber'; }
-                            } else {
-                                btnStop.classList.remove('active');
-                                if (!btnCln.classList.contains('active')) {
-                                    btnExt.classList.add('active');
-                                    if (badgeExt) { badgeExt.textContent = t('extBadgeActive'); badgeExt.className = 'card-badge badge-green'; }
-                                }
-                            }
+                        if (isPaused) {
+                            currentTopology = 'stop';
                         }
+                        updateModeAndTopologyButtons();
 
                         // Also update statStream card
                         const valState = document.getElementById('valState');
