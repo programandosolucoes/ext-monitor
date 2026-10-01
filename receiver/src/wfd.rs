@@ -387,7 +387,7 @@ impl WfdSession {
 
                         if let Err(e) = self.handle_message(&method, &uri, &headers, &body_str) {
                             eprintln!("\x1b[1;31m[wfd-rust]\x1b[0m Message handling error: {}", e);
-                            return;
+                            break;
                         }
                     }
                 }

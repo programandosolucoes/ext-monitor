@@ -177,6 +177,12 @@ impl MiracastIngress {
                     if splash_active {
                         splash_active = false;
                     }
+                    if total_packets == 1 || total_packets % 300 == 0 {
+                        println!(
+                            "\x1b[1;32m[miracast-ingress]\x1b[0m Ingested {} TS packets from UDP 5002 (chunk: {} bytes)",
+                            total_packets, n
+                        );
+                    }
                     demuxer.push_udp_packet(&buffer[..n], &mut completed_frames);
                 }
             }

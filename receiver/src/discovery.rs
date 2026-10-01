@@ -1,6 +1,6 @@
 //! Network & Wi-Fi Auto-Discovery Beacon and Responder for Ext-Monitor Receiver
 //!
-//! Listens on UDP broadcast port 5002 for probe packets ("EXT-MONITOR-DISCOVER")
+//! Listens on UDP broadcast port 5005 for probe packets ("EXT-MONITOR-DISCOVER")
 //! and responds with device information and IP so senders on Wi-Fi or Ethernet
 //! can connect seamlessly without hardcoded IPs.
 //!
@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-pub const DISCOVERY_PORT: u16 = 5002;
+pub const DISCOVERY_PORT: u16 = 5005;
 
 /// Spawns the background discovery responder on UDP port 5002
 pub fn start_discovery_beacon(running: Arc<AtomicBool>, http_port: u16, stream_port: u16) {
@@ -60,7 +60,8 @@ pub fn start_discovery_beacon(running: Arc<AtomicBool>, http_port: u16, stream_p
                 // 2. Periodic broadcast announcement (every 10s)
                 if last_periodic_announce.elapsed() >= Duration::from_secs(10) {
                     last_periodic_announce = std::time::Instant::now();
-                    let _ = socket.send_to(response_payload.as_bytes(), "255.255.255.255:5002");
+                    let target = format!("255.255.255.255:{}", DISCOVERY_PORT);
+                    let _ = socket.send_to(response_payload.as_bytes(), target.as_str());
                 }
             }
         })

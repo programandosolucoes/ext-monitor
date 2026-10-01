@@ -1,7 +1,7 @@
 //! Network and Wi-Fi Auto-Discovery for Ext-Monitor Receiver
 //!
 //! Automatically discovers Raspberry Pi Zero or external monitors on the local
-//! Wi-Fi / Ethernet subnet using UDP broadcast probes on port 5002 and SSDP fallback.
+//! Wi-Fi / Ethernet subnet using UDP broadcast probes on port 5005 and SSDP fallback.
 //!
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
@@ -9,13 +9,13 @@
 use std::net::{SocketAddr, UdpSocket};
 use std::time::{Duration, Instant};
 
-pub const DISCOVERY_PORT: u16 = 5002;
+pub const DISCOVERY_PORT: u16 = 5005;
 pub const PROBE_PAYLOAD: &[u8] = b"EXT-MONITOR-DISCOVER";
 
 /// Attempts to discover the receiver IP automatically
 /// Priority:
 /// 1. USB Direct Cable (192.168.7.2) - ultra low latency (<1ms check)
-/// 2. Wi-Fi / Ethernet Subnet Broadcast on port 5002
+/// 2. Wi-Fi / Ethernet Subnet Broadcast on port 5005
 pub fn discover_receiver_ip(timeout: Duration) -> Option<String> {
     // 1. Quick check USB Gadget default IP (192.168.7.2)
     if is_endpoint_alive("192.168.7.2", 8080) {

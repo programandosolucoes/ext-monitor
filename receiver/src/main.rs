@@ -136,7 +136,7 @@ fn main() {
     // 4. Start UPnP / DLNA SSDP auto-discovery daemon on UDP 1900
     media_renderer::start_ssdp_responder(running.clone(), 8080);
 
-    // 4.1 Start Ext-Monitor Wi-Fi/Ethernet auto-discovery beacon on UDP 5002
+    // 4.1 Start Ext-Monitor Wi-Fi/Ethernet auto-discovery beacon on UDP 5005
     discovery::start_discovery_beacon(running.clone(), 8080, udp_port);
 
     // 5. Start HDMI dynamic visualizer engine (active when playing audio, multiplexed with video)
