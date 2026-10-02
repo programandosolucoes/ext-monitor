@@ -276,6 +276,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Transmissao ativa para o monitor secundario (Pi Zero)",
     );
 
+    // 4.1 Wayland Damage Pacer: maintains continuous 60 FPS clock on HDMI-1, preventing
+    // GNOME Mutter quiescence freeze when mouse is stationary or outside the screen (Blueprint 16)
+    let _pacer_process = if std::env::var("WAYLAND_DISPLAY").is_ok()
+        || std::env::var("XDG_SESSION_TYPE").map(|s| s == "wayland").unwrap_or(false)
+    {
+        let pacer_script = "/usr/local/bin/wayland-damage-pacer.py";
+        let local_script = "scripts/wayland-damage-pacer.py";
+        let script_to_run = if std::path::Path::new(pacer_script).exists() {
+            Some(pacer_script)
+        } else if std::path::Path::new(local_script).exists() {
+            Some(local_script)
+        } else {
+            None
+        };
+        if let Some(script) = script_to_run {
+            println!("\x1b[1;32m[*] Spawning Wayland Damage Pacer (1x1 invisible click-through heartbeat at 60 FPS)...\x1b[0m");
+            std::process::Command::new(script)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // 5. Main Supervisor Loop (Reconnects on Suspend/Resume or System Event)
     let mut is_paused = cfg.transport == TransportKind::Miracast;
 

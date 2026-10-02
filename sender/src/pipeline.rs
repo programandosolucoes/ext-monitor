@@ -206,15 +206,13 @@ impl PipelineBuilder {
                 .arg("config-interval=-1")
                 .arg("!")
                 .arg("queue")
-                .arg("max-size-buffers=1")
+                .arg("max-size-buffers=4")
                 .arg("max-size-bytes=0")
                 .arg("max-size-time=0")
-                .arg("leaky=downstream")
                 .arg("!")
                 .arg("fdsink")
                 .arg(format!("fd={}", fd))
-                .arg("sync=false")
-                .arg("blocksize=65536");
+                .arg("sync=false");
 
             use std::os::unix::process::CommandExt;
             unsafe {

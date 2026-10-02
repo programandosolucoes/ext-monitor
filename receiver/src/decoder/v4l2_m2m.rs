@@ -164,12 +164,9 @@ impl V4l2DecoderSession {
             return None;
         }
 
-        // Performance: Reduced from 16 to 4 OUTPUT buffers to prevent bufferbloat.
-        // At 60 FPS, 16 buffers = 266ms of latency queue depth.
-        // 4 buffers = 66ms, sufficient for double-buffering + headroom.
-        // 3. REQBUFS & MMAP OUTPUT (4 buffers for smooth burst handling during screen updates)
+        // 3. REQBUFS & MMAP OUTPUT (16 buffers for smooth burst handling during screen updates)
         let mut req_out = V4l2RequestBuffers {
-            count: 4,
+            count: 16,
             buf_type: V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
             memory: V4L2_MEMORY_MMAP,
             ..Default::default()
@@ -224,9 +221,9 @@ impl V4l2DecoderSession {
             free_out_indices.push(i);
         }
 
-        // 4. REQBUFS & MMAP CAPTURE (3 buffers)
+        // 4. REQBUFS & MMAP CAPTURE (8 buffers)
         let mut req_cap = V4l2RequestBuffers {
-            count: 3,
+            count: 8,
             buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
             memory: V4L2_MEMORY_MMAP,
             ..Default::default()
