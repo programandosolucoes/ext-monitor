@@ -69,6 +69,10 @@ pub const OPENAPI_JSON: &str = r##"{
       "description": "Kernel dmesg, receiver logs, remote command execution, and framebuffer capture"
     },
     {
+      "name": "Debug & Hardware Diagnostics",
+      "description": "Real-time SoC clocks via debugfs, V4L2 decoder devices, USB gadget endpoints, /proc/meminfo breakdown, and boot config.txt"
+    },
+    {
       "name": "Micro-SD Storage",
       "description": "Mount, unmount, and inspect the physical boot partition from RAM"
     },
@@ -439,6 +443,136 @@ pub const OPENAPI_JSON: &str = r##"{
           },
           "400": {
             "description": "Missing command body"
+          }
+        }
+      }
+    },
+    "/api/debug/clocks": {
+      "get": {
+        "tags": ["Debug & Hardware Diagnostics"],
+        "summary": "Real-time SoC Hardware Clocks (DebugFS)",
+        "description": "Reads actual Broadcom BCM2835 and VideoCore IV clock frequencies directly from '/sys/kernel/debug/clk/' without relying on stock fallback defaults. Essential for verifying overclock profiles and thermal throttling.",
+        "operationId": "getDebugClocks",
+        "responses": {
+          "200": {
+            "description": "Real hardware clock frequencies in MHz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "debugfs_mounted": { "type": "boolean", "example": true },
+                    "arm_mhz": { "type": "integer", "example": 1050 },
+                    "arm_max_mhz": { "type": "integer", "example": 1100 },
+                    "governor": { "type": "string", "example": "ondemand" },
+                    "core_mhz": { "type": "integer", "example": 500 },
+                    "vpu_mhz": { "type": "integer", "example": 500 },
+                    "h264_mhz": { "type": "integer", "example": 200 },
+                    "v3d_mhz": { "type": "integer", "example": 250 },
+                    "sdram_mhz": { "type": "integer", "example": 166 },
+                    "hevc_mhz": { "type": "integer", "nullable": true },
+                    "pixel_mhz": { "type": "integer", "example": 74 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/debug/pipeline": {
+      "get": {
+        "tags": ["Debug & Hardware Diagnostics"],
+        "summary": "V4L2 M2M Decoder & Device State",
+        "description": "Lists active V4L2 video devices (/dev/video10 through /dev/video31) and system uptime for pipeline diagnostics.",
+        "operationId": "getDebugPipeline",
+        "responses": {
+          "200": {
+            "description": "V4L2 devices and uptime",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "v4l2_devices": { "type": "array", "items": { "type": "string" } },
+                    "uptime_secs": { "type": "string", "example": "34.52" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/debug/usb": {
+      "get": {
+        "tags": ["Debug & Hardware Diagnostics"],
+        "summary": "USB Composite Gadget & FunctionFS Status",
+        "description": "Inspects USB UDC binding, FunctionFS display endpoint mount, and usb0 network interface MAC address.",
+        "operationId": "getDebugUsb",
+        "responses": {
+          "200": {
+            "description": "USB gadget state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "udc": { "type": "string", "example": "20980000.usb" },
+                    "functionfs_display_mounted": { "type": "boolean", "example": true },
+                    "usb0_up": { "type": "boolean", "example": true },
+                    "usb0_mac": { "type": "string", "example": "12:22:33:44:55:67" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/debug/memory": {
+      "get": {
+        "tags": ["Debug & Hardware Diagnostics"],
+        "summary": "Granular Memory Breakdown (/proc/meminfo)",
+        "description": "Provides precise memory breakdown in KB including total, free, available, buffers, and cached memory.",
+        "operationId": "getDebugMemory",
+        "responses": {
+          "200": {
+            "description": "Detailed memory usage in KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_kb": { "type": "integer", "example": 372420 },
+                    "free_kb": { "type": "integer", "example": 319348 },
+                    "available_kb": { "type": "integer", "example": 316864 },
+                    "buffers_kb": { "type": "integer", "example": 544 },
+                    "cached_kb": { "type": "integer", "example": 21064 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/debug/config": {
+      "get": {
+        "tags": ["Debug & Hardware Diagnostics"],
+        "summary": "Boot config.txt Inspection",
+        "description": "Returns raw text of '/boot/config.txt' from the physical SD card boot partition.",
+        "operationId": "getDebugConfig",
+        "responses": {
+          "200": {
+            "description": "config.txt content",
+            "content": {
+              "text/plain; charset=utf-8": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
