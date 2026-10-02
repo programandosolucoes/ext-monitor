@@ -56,6 +56,7 @@ Following the completion of the baseline appliance, the engineering scope expand
 | **23** | **Miracast GPU Hardware Acceleration & Host Launcher** | [`23-miracast-gpu-hardware-acceleration-and-host-launcher.md`](en/23-miracast-gpu-hardware-acceleration-and-host-launcher.md) | Direct sysfs GPU vendor detection (AMD, Intel, NVIDIA), automated hardware ranking launcher daemon, atomic debounce, and Web UI GPU command box. |
 | **24** | **Native 720p60 Miracast WFD & Deterministic Demux** | [`24-native-720p60-miracast-wfd-pes-au-deterministic-demux.md`](en/24-native-720p60-miracast-wfd-pes-au-deterministic-demux.md) | Enforcing CEA index 6 (1280x720p60) WFD formats, Level 3.1 profile, deterministic PES-demarcated MPEG-TS demuxer, and TS continuity counter verification. |
 | **25** | **Unified Standby Stop, RTSP Teardown & Transmitter Kill** | [`25-unified-standby-stop-multi-service-transmitter-teardown.md`](en/25-unified-standby-stop-multi-service-transmitter-teardown.md) | Multi-service standby stop (Modes 1, 2, 3), active RTSP TCP stream teardown, host gnome-network-displays kill via pkill, and persistent HDMI ready splash. |
+| **26** | **Empirical Latency, Responsiveness & Hardware Telemetry Benchmark** | [`26-latency-responsiveness-hardware-telemetry-benchmark.md`](en/26-latency-responsiveness-hardware-telemetry-benchmark.md) | Empirical measurements in direct Clone mode without upscaling (1280x720@60Hz): 0.26ms USB RTT, <1.3ms TCP handshakes, 12.63ms glass-to-glass latency, and 2.77% CPU utilization on Pi Zero at steady 60 FPS. |
 
 ---
 
