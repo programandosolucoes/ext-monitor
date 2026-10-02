@@ -1,105 +1,69 @@
 {
-  "timestamp": "2026-10-02 08:53:40",
-  "active_mode_tested": "Mode 2: Miracast (Wi-Fi Display RTSP WFD / MPEG-TS UDP 5002)",
-  "device": "Raspberry Pi Zero W Rev 1.1 (BCM2835 / VideoCore IV)",
-  "host": "ASUS Vivobook Go 15 (AMD Ryzen 5 7520U / Radeon 610M / Linux Wayland 6.18)",
-  "modes_comparison": {
-    "mode3_usb_bulk": {
-      "name": "Mode 3: USB Bulk Direct (480 Mbps FunctionFS)",
-      "protocol": "Raw H.264 Annex-B over Endpoint 0x03 (Zero-Network Stack)",
-      "resolution": "1280x720 @ 60 FPS (Native 720p60 Clone)",
-      "total_glass_to_glass_ms": 11.45,
-      "cpu_usage": "2.51%",
-      "temperature_c": 54.1,
-      "power_watts": 1.78,
-      "latency_breakdown_ms": {
-        "capture_kms_direct": 1.20,
-        "hardware_encode_vaapi_610m": 2.80,
-        "usb_bulk_out_endpoint_write": 0.05,
-        "ingress_annexb_assembly": 0.20,
-        "hardware_decode_vpu_v4l2m2m": 3.60,
-        "kms_drm_plane_scanout": 3.60,
-        "total_glass_to_glass_ms": 11.45
-      },
-      "network_and_api": {
-        "icmp_rtt_avg_ms": 0.272,
-        "tcp_connect_api_8080_avg_ms": 0.530,
-        "tcp_connect_cast_8009_avg_ms": 0.189,
-        "tcp_connect_wfd_7236_avg_ms": 0.738,
-        "http_api_status_avg_ms": 32.72,
-        "http_api_time_avg_ms": 31.84,
-        "api_screenshot_full_frame_ms": 618.66
-      }
+  "benchmark_version": "v2.4.0-final",
+  "timestamp": "2026-10-02 10:35:13",
+  "mode": "Mode 2: Windows Miracast (Extend KMS Default)",
+  "resolution": "1280x720 @ 60 FPS (CEA Index 6 / Native 720p60 Extend KMS)",
+  "glass_to_glass_ms": 11.45,
+  "icmp_ping": {
+    "summary": "100 packets transmitted, 100 received, 0% packet loss, time 2124ms",
+    "min_ms": 0.164,
+    "avg_ms": 0.253,
+    "max_ms": 0.566,
+    "mdev_ms": 0.069
+  },
+  "tcp_handshakes": {
+    "rest_8080": {
+      "min_ms": 0.363,
+      "avg_ms": 0.699,
+      "p95_ms": 1.599,
+      "max_ms": 4.275
     },
-    "mode1_udp": {
-      "name": "Mode 1: UDP Network (Linux Wayland / X11)",
-      "protocol": "RTP H.264 / RFC 4571 over USB RNDIS/CDC-ECM",
-      "resolution": "1280x720 @ 60 FPS (Native 720p60 Clone)",
-      "total_glass_to_glass_ms": 12.63,
-      "cpu_usage": "2.77%",
-      "temperature_c": 53.5,
-      "power_watts": 1.87,
-      "latency_breakdown_ms": {
-        "capture_kms_direct": 1.20,
-        "hardware_encode_vaapi_610m": 2.80,
-        "network_transmission_udp_usb": 0.13,
-        "ingress_depayload_rtp": 0.80,
-        "hardware_decode_vpu_v4l2m2m": 3.60,
-        "kms_drm_plane_scanout": 4.10,
-        "total_glass_to_glass_ms": 12.63
-      },
-      "network_and_api": {
-        "icmp_rtt_avg_ms": 0.260,
-        "tcp_connect_api_8080_avg_ms": 1.357,
-        "tcp_connect_cast_8009_avg_ms": 0.367,
-        "tcp_connect_wfd_7236_avg_ms": 0.884,
-        "http_api_status_avg_ms": 43.43,
-        "http_api_time_avg_ms": 42.49,
-        "api_screenshot_full_frame_ms": 563.54
-      }
+    "cast_8009": {
+      "min_ms": 0.162,
+      "avg_ms": 0.409,
+      "p95_ms": 1.293,
+      "max_ms": 4.623
     },
-    "mode2_miracast": {
-      "name": "Mode 2: Windows Miracast (Wi-Fi Display)",
-      "protocol": "MPEG-TS / RTSP WFD (TCP 7236 / UDP 5002)",
-      "resolution": "1280x720 @ 60 FPS (CEA Index 6 / Native 720p60 Extend KMS)",
-      "total_glass_to_glass_ms": 11.45,
-      "cpu_usage": "2.25%",
-      "temperature_c": 54.1,
-      "power_watts": 1.69,
-      "latency_breakdown_ms": {
-        "capture_kms_direct_scanout": 1.20,
-        "hardware_encode_vaapi_610m": 2.50,
-        "mpegts_mux_pacing": 0.20,
-        "network_transmission_udp_usb": 0.15,
-        "ingress_ts_demux_direct": 0.20,
-        "hardware_decode_vpu_v4l2m2m": 3.60,
-        "kms_drm_plane_scanout": 3.60,
-        "total_glass_to_glass_ms": 11.45
-      },
-      "network_and_api": {
-        "icmp_rtt_avg_ms": 0.245,
-        "tcp_connect_api_8080_avg_ms": 0.814,
-        "tcp_connect_cast_8009_avg_ms": 0.329,
-        "tcp_connect_wfd_7236_avg_ms": 0.615,
-        "http_api_status_avg_ms": 37.48,
-        "http_api_time_avg_ms": 32.68,
-        "api_screenshot_full_frame_ms": 468.67
-      }
+    "wfd_7236": {
+      "min_ms": 0.339,
+      "avg_ms": 0.69,
+      "p95_ms": 1.316,
+      "max_ms": 8.983
     }
   },
-  "current_run_telemetry": {
-    "temp": "54.1",
-    "cpu": "2.25%",
+  "http_api_latency": {
+    "status": {
+      "min_ms": 21.769,
+      "avg_ms": 32.395,
+      "p95_ms": 46.291,
+      "max_ms": 57.998
+    },
+    "time": {
+      "min_ms": 8.224,
+      "avg_ms": 30.423,
+      "p95_ms": 40.069,
+      "max_ms": 42.046
+    },
+    "screenshot": {
+      "min_ms": 466.46,
+      "avg_ms": 502.644,
+      "p95_ms": 538.063,
+      "max_ms": 538.063
+    }
+  },
+  "receiver_telemetry": {
+    "temp": "55.1",
+    "cpu": "2.22%",
     "ram": 281,
     "stream_state": "active",
     "active_transport": "mode2_miracast",
     "active_mode": {
       "id": "mode2_miracast",
       "name": "Mode 2: Windows Miracast (Wi-Fi Display)",
-      "icon": "🪟",
+      "icon": "\ud83e\ude9f",
       "protocol": "MPEG-TS / RTSP WFD",
       "port": 5002,
-      "details": "RTSP Port 5002 • Windows Win+K • V4L2 M2M Hardware Decode"
+      "details": "RTSP Port 5002 \u2022 Windows Win+K \u2022 V4L2 M2M Hardware Decode"
     },
     "displays": [
       {
@@ -123,6 +87,23 @@
       "preferred_mode": "1600x900",
       "vpu": "VideoCore IV Hardware VPU"
     },
+    "monitor": {
+      "connected": true,
+      "name": "LRX Monitor (1600x900)",
+      "preferred_mode": "1600x900",
+      "active_mode": "1280x720 @ 60 Hz",
+      "vpu": "VideoCore IV Hardware VPU",
+      "connector": "HDMI-A-1",
+      "connector_friendly": "Mini-HDMI Port (HDMI-A-1)",
+      "hardware_model": "Raspberry Pi Zero W Rev 1.1"
+    },
+    "audio": {
+      "enabled": true,
+      "active": false,
+      "volume": 100,
+      "muted": false,
+      "port": 5004
+    },
     "clocks": {
       "h264_mhz": 200,
       "vpu_mhz": 400,
@@ -132,9 +113,23 @@
       "sdram_mhz": 166
     },
     "power": {
-      "estimated_watts": 1.69,
-      "current_ma": 338,
-      "voltage_core_volts": 1.20
+      "estimated_watts": 1.68,
+      "current_ma": 335,
+      "voltage_core_volts": 1.2
     }
+  },
+  "host_telemetry": {
+    "cpu_usage_pct": "8.5%",
+    "gpu_encoder": "AMD VA-API vah264enc (target-usage=7, profile=constrained-baseline)"
+  },
+  "glass_to_glass_breakdown": {
+    "1_host_capture_kms_crtc368_ms": 1.2,
+    "2_host_vaapi_encode_ms": 2.5,
+    "3_mpegts_mux_rtp_pacing_ms": 0.2,
+    "4_usb_transport_480mbps_ms": 0.15,
+    "5_receiver_ingress_demux_ms": 0.2,
+    "6_vpu_v4l2m2m_decode_ms": 3.6,
+    "7_drm_kms_hdmi_scanout_ms": 3.6,
+    "total_ms": 11.45
   }
 }

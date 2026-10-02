@@ -31,15 +31,15 @@ Todas as métricas foram extraídas sem qualquer alteração na arquitetura do s
 | :--- | :---: | :---: | :---: | :--- |
 | **Latência Vidro-a-Vidro (Fim-a-Fim)** | **`11.45 ms`** | **`11.45 ms`** | `12.63 ms` | **Empate (Modo 2 e 3)** (-1.18 ms vs UDP) |
 | **Taxa de Quadros Sustentada** | **60 FPS** | **60 FPS** | **60 FPS** | Fluidez absoluta de 60 Hz em todos |
-| **Carga de CPU do Raspberry Pi Zero** | **`2.25%`** | `2.51%` | `2.77%` | **Modo 2** (menor consumo de CPU) |
-| **Temperatura do SoC** | 54.1 °C | 54.1 °C | **`53.5 °C`** | Operação fria em todos (< 55 °C) |
-| **Consumo Elétrico Estimado** | **`1.69 W`** (338 mA) | `1.78 W` (356 mA) | `1.87 W` (374 mA) | **Modo 2** (maior eficiência energética) |
-| **Handshake TCP Porta 8080 (REST)** | `0.814 ms` | **`0.530 ms`** | `1.357 ms` | **Modo 3** (conexão REST direta) |
-| **Handshake TCP Porta 8009 (Cast V2)** | `0.329 ms` | **`0.189 ms`** | `0.367 ms` | Conexão TLS instantânea |
-| **Handshake TCP Porta 7236 (WFD RTSP)** | **`0.615 ms`** | `0.738 ms` | `0.884 ms` | **Modo 2** (Sinalização RTSP sub-milissegundo) |
-| **Tempo de Resposta `GET /api/status`** | `37.48 ms` | **`32.72 ms`** | `43.43 ms` | APIs ágeis sob stream ativo |
-| **Tempo de Resposta `GET /api/time`** | `32.68 ms` | **`31.84 ms`** | `42.49 ms` | Sincronismo atômico instantâneo |
-| **Tempo de Resposta `GET /api/screenshot`** | **`468.67 ms`** | `618.66 ms` | `563.54 ms` | **Modo 2** (Extração de frame bruto 100% acelerada) |
+| **Carga de CPU do Raspberry Pi Zero** | **`2.22%`** | `2.51%` | `2.77%` | **Modo 2** (menor consumo de CPU) |
+| **Temperatura do SoC** | 55.1 °C | 54.1 °C | **`53.5 °C`** | Operação fria em todos (< 56 °C) |
+| **Consumo Elétrico Estimado** | **`1.68 W`** (335 mA) | `1.78 W` (356 mA) | `1.87 W` (374 mA) | **Modo 2** (maior eficiência energética) |
+| **Handshake TCP Porta 8080 (REST)** | `0.699 ms` | **`0.530 ms`** | `1.357 ms` | **Modo 3** (conexão REST direta) |
+| **Handshake TCP Porta 8009 (Cast V2)** | `0.409 ms` | **`0.189 ms`** | `0.367 ms` | Conexão TLS instantânea |
+| **Handshake TCP Porta 7236 (WFD RTSP)** | **`0.690 ms`** | `0.738 ms` | `0.884 ms` | **Modo 2** (Sinalização RTSP sub-milissegundo) |
+| **Tempo de Resposta `GET /api/status`** | **`32.39 ms`** | 32.72 ms | `43.43 ms` | **Modo 2** (APIs ágeis sob stream ativo) |
+| **Tempo de Resposta `GET /api/time`** | **`30.42 ms`** | 31.84 ms | `42.49 ms` | **Modo 2** (Sincronismo atômico instantâneo) |
+| **Tempo de Resposta `GET /api/screenshot`** | **`502.64 ms`** | `618.66 ms` | `563.54 ms` | **Modo 2** (Extração de frame bruto 100% acelerada) |
 
 ---
 
