@@ -237,6 +237,8 @@ impl MiracastSession {
                 cmd.arg("pipewiresrc");
                 cmd.arg(format!("path={}", screencast.node_id));
                 cmd.arg("do-timestamp=true");
+                cmd.arg("min-buffers=2");
+                cmd.arg("max-buffers=4");
                 cmd.arg("keepalive-time=16");
                 cmd.arg("always-copy=false");
                 cmd.arg("!");
@@ -247,43 +249,103 @@ impl MiracastSession {
 
         if pipeline_ready {
             cmd.arg("videorate");
+            cmd.arg("drop-only=true");
+            cmd.arg("skip-to-first=true");
             cmd.arg("!");
             cmd.arg(format!("video/x-raw,framerate={}/1", config.fps));
             cmd.arg("!");
 
-            if gpu.vendor_name.contains("AMD") || gpu.vendor_name.contains("Intel") {
+            if gpu.vendor_name.contains("AMD") {
+                println!(
+                    "\x1b[1;36m[miracast-gpu]\x1b[0m AMD Radeon Profile: vah264enc (target-usage=7 UltraFast, aud=true, b-frames=0, ref=1, cbr={}k)",
+                    config.bitrate_kbps
+                );
                 cmd.arg("vapostproc").arg("!");
                 cmd.arg(format!("video/x-raw(memory:VAMemory),width={},height={}", config.width, config.height)).arg("!");
                 cmd.arg("vah264enc")
                     .arg(format!("bitrate={}", config.bitrate_kbps))
                     .arg("rate-control=cbr")
+                    .arg("target-usage=7")
+                    .arg("aud=true")
                     .arg("b-frames=0")
+                    .arg("ref-frames=1")
+                    .arg("key-int-max=60")
                     .arg("!");
+                cmd.arg("video/x-h264,profile=constrained-baseline").arg("!");
+            } else if gpu.vendor_name.contains("Intel") {
+                let cpb = (config.bitrate_kbps / 4).max(500);
+                println!(
+                    "\x1b[1;36m[miracast-gpu]\x1b[0m Intel QuickSync Profile: vah264enc (target-usage=7 TU7 Lowest-Latency, aud=true, b-frames=0, ref=1, cpb={}k, cbr={}k)",
+                    cpb, config.bitrate_kbps
+                );
+                cmd.arg("vapostproc").arg("!");
+                cmd.arg(format!("video/x-raw(memory:VAMemory),width={},height={}", config.width, config.height)).arg("!");
+                cmd.arg("vah264enc")
+                    .arg(format!("bitrate={}", config.bitrate_kbps))
+                    .arg("rate-control=cbr")
+                    .arg("target-usage=7")
+                    .arg("aud=true")
+                    .arg("b-frames=0")
+                    .arg("ref-frames=1")
+                    .arg("key-int-max=60")
+                    .arg(format!("cpb-size={}", cpb))
+                    .arg("!");
+                cmd.arg("video/x-h264,profile=constrained-baseline").arg("!");
             } else if gpu.vendor_name.contains("NVIDIA") {
+                println!(
+                    "\x1b[1;36m[miracast-gpu]\x1b[0m NVIDIA NVENC Profile: nvh264enc (zerolatency=true, aud=true, b-frames=0, gop=60, cbr={}k)",
+                    config.bitrate_kbps
+                );
+                cmd.arg("videoconvert").arg("!");
+                cmd.arg(format!("video/x-raw,format=NV12,width={},height={}", config.width, config.height)).arg("!");
                 cmd.arg("nvh264enc")
                     .arg(format!("bitrate={}", config.bitrate_kbps))
                     .arg("zerolatency=true")
                     .arg("b-frames=0")
+                    .arg("aud=true")
+                    .arg("gop-size=60")
                     .arg("!");
+                cmd.arg("video/x-h264,profile=constrained-baseline").arg("!");
             } else {
+                println!(
+                    "\x1b[1;36m[miracast-cpu]\x1b[0m CPU Profile: x264enc (tune=zerolatency, speed=ultrafast, sliced-threads=true, aud=true, b-frames=0, ref=1, cbr={}k)",
+                    config.bitrate_kbps
+                );
                 cmd.arg("videoscale").arg("!");
-                cmd.arg(format!("video/x-raw,width={},height={}", config.width, config.height)).arg("!");
+                cmd.arg("videoconvert").arg("!");
+                cmd.arg(format!("video/x-raw,format=I420,width={},height={}", config.width, config.height)).arg("!");
                 cmd.arg("x264enc")
                     .arg(format!("bitrate={}", config.bitrate_kbps))
                     .arg("tune=zerolatency")
                     .arg("speed-preset=ultrafast")
                     .arg("b-frames=0")
+                    .arg("ref=1")
+                    .arg("sliced-threads=true")
+                    .arg("aud=true")
+                    .arg("key-int-max=60")
                     .arg("!");
+                cmd.arg("video/x-h264,profile=constrained-baseline").arg("!");
             }
 
             cmd.arg("h264parse").arg("config-interval=1").arg("!");
-            cmd.arg("mpegtsmux").arg("!");
+
+            cmd.arg("mpegtsmux")
+                .arg("alignment=7")
+                .arg("latency=0")
+                .arg("start-time-selection=now")
+                .arg("pat-interval=90000")
+                .arg("pmt-interval=90000")
+                .arg("pcr-interval=3600")
+                .arg("!");
+
             cmd.arg("rtpmp2tpay").arg("!");
+
             cmd.arg("udpsink")
                 .arg(format!("host={}", config.target_ip))
                 .arg(format!("port={}", sink_rtp_port))
-                .arg("buffer-size=262144")
-                .arg("sync=false");
+                .arg("buffer-size=524288")
+                .arg("sync=false")
+                .arg("async=false");
 
             match cmd.spawn() {
                 Ok(child) => {

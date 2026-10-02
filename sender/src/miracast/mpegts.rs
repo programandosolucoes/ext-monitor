@@ -387,14 +387,20 @@ impl MpegTsMuxer {
 
         let mut seq = start_seq;
 
-        for chunk in ts_packets.chunks(TS_PACKETS_PER_RTP) {
+        for (idx, chunk) in ts_packets.chunks(TS_PACKETS_PER_RTP).enumerate() {
+            let is_last_chunk = idx + 1 == num_rtp;
             let mut rtp = Vec::with_capacity(RTP_HEADER_SIZE + chunk.len() * TS_PACKET_SIZE);
 
             // 12-byte RTP Header:
             // Byte 0: V=2 (0b10), P=0, X=0, CC=0 -> 0x80
             rtp.push(0x80);
-            // Byte 1: M=0, PT=33 (MP2T) -> 0x21 (33)
-            rtp.push(RTP_PAYLOAD_TYPE_MP2T);
+            // Byte 1: M bit (0x80 on last chunk of AU per WFD Spec 5.3.3) | PT=33 (MP2T) -> 0x21
+            let marker_byte = if is_last_chunk {
+                0x80 | RTP_PAYLOAD_TYPE_MP2T
+            } else {
+                RTP_PAYLOAD_TYPE_MP2T
+            };
+            rtp.push(marker_byte);
             // Bytes 2..3: Sequence Number (big endian)
             rtp.extend_from_slice(&seq.to_be_bytes());
             // Bytes 4..7: Timestamp (90 kHz, big endian)
@@ -482,7 +488,9 @@ mod tests {
         assert_eq!(rtp_packets.len(), 2);
         assert_eq!(rtp_packets[0].len(), 12 + 7 * 188);
         assert_eq!(rtp_packets[0][1] & 0x7F, 33, "RTP Payload Type must be 33 (MP2T)");
+        assert_eq!(rtp_packets[0][1] & 0x80, 0x00, "First RTP packet must have Marker bit M=0");
         assert_eq!(rtp_packets[1].len(), 12 + 7 * 188);
+        assert_eq!(rtp_packets[1][1] & 0x80, 0x80, "Last RTP packet must have Marker bit M=1 (WFD Spec 5.3.3)");
 
         // Verify sequence numbers
         let seq0 = u16::from_be_bytes([rtp_packets[0][2], rtp_packets[0][3]]);

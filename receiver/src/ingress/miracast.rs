@@ -140,7 +140,7 @@ impl MiracastIngress {
         crate::display::SplashEngine::show_miracast();
 
         while running.load(Ordering::SeqCst) {
-            let ret = unsafe { libc::poll(&mut pfd, 1, 5) };
+            let ret = unsafe { libc::poll(&mut pfd, 1, 2) };
             if ret < 0 {
                 let err = io::Error::last_os_error();
                 if err.kind() == io::ErrorKind::Interrupted {
@@ -195,10 +195,12 @@ impl MiracastIngress {
             }
 
             // Drain all available TS packets in tight loop
+            let mut burst_packets = 0;
             while let Ok(n) = sock.recv(&mut buffer) {
                 if n >= 188 {
                     last_packet_time = std::time::Instant::now();
                     total_packets += 1;
+                    burst_packets += 1;
                     if splash_active {
                         splash_active = false;
                     }
@@ -226,6 +228,15 @@ impl MiracastIngress {
 
                 if let Some(ref mut dec) = decoder {
                     dec.decode_chunk(&frame, |frame_rgb565| {
+                        display.render_frame(frame_rgb565);
+                    });
+                }
+            }
+
+            // Immediately drain ready frames from V4L2 capture queue to eliminate frame latency
+            if burst_packets > 0 {
+                if let Some(ref mut dec) = decoder {
+                    dec.drain_decoded_frames(|frame_rgb565| {
                         display.render_frame(frame_rgb565);
                     });
                 }
