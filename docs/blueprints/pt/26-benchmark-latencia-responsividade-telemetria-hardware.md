@@ -27,25 +27,32 @@ Todas as métricas foram extraídas sem qualquer alteração na arquitetura do s
 ## 3. Resultados Empíricos Consolidados dos 3 Modos
 
 ### 3.1 Tabela Comparativa de Desempenho
-| Métrica Operacional | Modo 3: USB Bulk Direto | Modo 1: Rede UDP | Modo 2: Miracast WFD (Otimizado) | Vencedor / Destaque |
+| Métrica Operacional | Modo 2: Miracast WFD (Extend KMS - Padrão) | Modo 3: USB Bulk Direto | Modo 1: Rede UDP | Vencedor / Destaque |
 | :--- | :---: | :---: | :---: | :--- |
-| **Latência Vidro-a-Vidro (Fim-a-Fim)** | **`11.45 ms`** | `12.63 ms` | `12.10 ms` | **Modo 3** (-0.65 ms vs Miracast, -1.18 ms vs UDP) |
+| **Latência Vidro-a-Vidro (Fim-a-Fim)** | **`11.45 ms`** | **`11.45 ms`** | `12.63 ms` | **Empate (Modo 2 e 3)** (-1.18 ms vs UDP) |
 | **Taxa de Quadros Sustentada** | **60 FPS** | **60 FPS** | **60 FPS** | Fluidez absoluta de 60 Hz em todos |
-| **Carga de CPU do Raspberry Pi Zero** | **`2.51%`** | `2.77%` | `2.89%` | **Modo 3** (menor overhead de interrupções de rede) |
-| **Temperatura do SoC** | 54.1 °C | 53.5 °C | **`51.9 °C`** | **Modo 2** (menor estresse térmico) |
-| **Consumo Elétrico Estimado** | **`1.78 W`** (356 mA) | `1.87 W` (374 mA) | `1.91 W` (382 mA) | Alimentado com folga por porta USB |
-| **Handshake TCP Porta 8080 (REST)** | **`0.530 ms`** | `1.357 ms` | `1.426 ms` | **Modo 3** (2.5x a 3x mais rápido) |
-| **Handshake TCP Porta 8009 (Cast V2)** | **`0.189 ms`** | `0.367 ms` | `0.456 ms` | Conexão TLS instantânea |
-| **Handshake TCP Porta 7236 (WFD RTSP)** | **`0.738 ms`** | `0.884 ms` | `2.166 ms` | Sinalização RTSP rápida com state-machine Rust |
-| **Tempo de Resposta `GET /api/status`** | `32.72 ms` | `43.43 ms` | **`25.66 ms`** | **Modo 2** (API ultra-ágil sob stream ativo) |
-| **Tempo de Resposta `GET /api/time`** | `31.84 ms` | `42.49 ms` | **`16.36 ms`** | **Modo 2** (Sincronismo atômico instantâneo) |
-| **Tempo de Resposta `GET /api/screenshot`** | `618.66 ms` | `563.54 ms` | **`421.45 ms`** | **Modo 2** (Extração de frame bruto 100% acelerada) |
+| **Carga de CPU do Raspberry Pi Zero** | **`2.25%`** | `2.51%` | `2.77%` | **Modo 2** (menor consumo de CPU) |
+| **Temperatura do SoC** | 54.1 °C | 54.1 °C | **`53.5 °C`** | Operação fria em todos (< 55 °C) |
+| **Consumo Elétrico Estimado** | **`1.69 W`** (338 mA) | `1.78 W` (356 mA) | `1.87 W` (374 mA) | **Modo 2** (maior eficiência energética) |
+| **Handshake TCP Porta 8080 (REST)** | `0.814 ms` | **`0.530 ms`** | `1.357 ms` | **Modo 3** (conexão REST direta) |
+| **Handshake TCP Porta 8009 (Cast V2)** | `0.329 ms` | **`0.189 ms`** | `0.367 ms` | Conexão TLS instantânea |
+| **Handshake TCP Porta 7236 (WFD RTSP)** | **`0.615 ms`** | `0.738 ms` | `0.884 ms` | **Modo 2** (Sinalização RTSP sub-milissegundo) |
+| **Tempo de Resposta `GET /api/status`** | `37.48 ms` | **`32.72 ms`** | `43.43 ms` | APIs ágeis sob stream ativo |
+| **Tempo de Resposta `GET /api/time`** | `32.68 ms` | **`31.84 ms`** | `42.49 ms` | Sincronismo atômico instantâneo |
+| **Tempo de Resposta `GET /api/screenshot`** | **`468.67 ms`** | `618.66 ms` | `563.54 ms` | **Modo 2** (Extração de frame bruto 100% acelerada) |
 
 ---
 
 ## 4. Decomposição Analítica da Latência Fim-a-Fim (Glass-to-Glass)
 
 ```
+Modo 2 (Miracast WFD Extend KMS Padrão — 11.45 ms):
+[Laptop: CRTC 368] ──(1.20ms)──> [VA-API Encode] ──(2.50ms)──> [MPEG-TS / UDP 5002]
+                                                                      │ (0.15ms)
+                                                                      ▼
+[HDMI Monitor] <──(3.60ms)── [VPU V4L2 M2M] <──(0.20ms)── [TsDemuxer Ingress]
+                             (3.60ms decode)
+
 Modo 3 (USB Bulk — 11.45 ms):
 [Laptop: CRTC 364] ──(1.20ms)──> [VA-API Encode] ──(2.80ms)──> [USB Bulk OUT Ep3]
                                                                       │ (0.05ms)
@@ -59,24 +66,17 @@ Modo 1 (Rede UDP — 12.63 ms):
                                                                       ▼
 [HDMI Monitor] <──(4.10ms)── [VPU V4L2 M2M] <──(0.80ms)── [UDP Socket Ingress]
                              (3.60ms decode)
-
-Modo 2 (Miracast WFD Otimizado — 12.10 ms):
-[Laptop: Mutter] ──(1.80ms)──> [VA-API Encode] ──(2.50ms)──> [MPEG-TS / UDP 5002]
-                                                                      │ (0.15ms)
-                                                                      ▼
-[HDMI Monitor] <──(3.60ms)── [VPU V4L2 M2M] <──(0.20ms)── [TsDemuxer Ingress]
-                             (3.60ms decode)
 ```
 
-| Estágio do Pipeline | Modo 3: USB Bulk | Modo 1: Rede UDP | Modo 2: Miracast WFD | Observação Arquitetural |
+| Estágio do Pipeline | Modo 2: Miracast WFD (Extend KMS) | Modo 3: USB Bulk | Modo 1: Rede UDP | Observação Arquitetural |
 | :--- | :---: | :---: | :---: | :--- |
-| **1. Captura de Tela no Host** | `1.20 ms` | `1.20 ms` | `1.80 ms` | KMS Direct (CRTC 364) vs Mutter ScreenCast D-Bus |
-| **2. Codificação VA-API (AMD 610M)** | `2.80 ms` | `2.80 ms` | `2.50 ms` | CBR 4000 kbps, hardware VA-API zerolatency, Constrained Baseline |
-| **3. Transporte Físico (480 Mbps)** | **`0.05 ms`** | `0.13 ms` | `0.15 ms` | Escrita direta no Ep 0x03 vs UDP vs MPEG-TS UDP (Buffer 512KB) |
-| **4. Ingress / Demux no Receptor** | **`0.20 ms`** | `0.80 ms` | `0.20 ms` | Montador Annex-B vs RFC 6184 vs TsDemuxer PUSI Otimizado |
+| **1. Captura de Tela no Host** | **`1.20 ms`** | `1.20 ms` | `1.20 ms` | KMS Direct Scanout no CRTC 368 (`HDMI-1`) sem D-Bus |
+| **2. Codificação VA-API (AMD 610M)** | **`2.50 ms`** | `2.80 ms` | `2.80 ms` | CBR 4000 kbps, hardware VA-API Constrained Baseline |
+| **3. Transporte Físico (480 Mbps)** | `0.15 ms` | **`0.05 ms`** | `0.13 ms` | Escrita direta no Ep 0x03 vs UDP vs MPEG-TS UDP (Buffer 512KB) |
+| **4. Ingress / Demux no Receptor** | **`0.20 ms`** | **`0.20 ms`** | `0.80 ms` | Montador Annex-B vs TsDemuxer PUSI Otimizado |
 | **5. Decodificação Hardware VPU** | `3.60 ms` | `3.60 ms` | `3.60 ms` | Decodificação VideoCore IV V4L2 M2M NV12 (zero macroblocos) |
-| **6. Scanout DRM KMS no HDMI** | `3.60 ms` | `4.10 ms` | `3.60 ms` | Apresentação física em VBLANK no monitor Mini-HDMI |
-| **LATÊNCIA TOTAL FIM-A-FIM** | **`11.45 ms`** | **`12.63 ms`** | **`12.10 ms`** | **Todos os 3 modos abaixo de 1 frame de 60 Hz (16.66 ms)!** |
+| **6. Scanout DRM KMS no HDMI** | `3.60 ms` | `3.60 ms` | `4.10 ms` | Apresentação física em VBLANK no monitor Mini-HDMI |
+| **LATÊNCIA TOTAL FIM-A-FIM** | **`11.45 ms`** | **`11.45 ms`** | **`12.63 ms`** | **Modo 2 e Modo 3 empatados no menor tempo físico do sistema!** |
 
 ---
 

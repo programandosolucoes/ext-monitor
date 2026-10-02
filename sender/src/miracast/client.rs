@@ -35,7 +35,7 @@ pub const DEFAULT_HEIGHT: u32 = 720;
 pub const DEFAULT_FPS: u32 = 60;
 pub const DEFAULT_BITRATE_KBPS: u32 = 4000;
 pub const DEFAULT_MODE: &str = "extend";
-pub const DEFAULT_CAPTURE: &str = "mutter";
+pub const DEFAULT_CAPTURE: &str = "kms";
 
 /// Configuration parameters for establishing a Miracast session
 #[derive(Debug, Clone, PartialEq, Eq)]

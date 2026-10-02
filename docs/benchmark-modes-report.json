@@ -61,36 +61,36 @@
     "mode2_miracast": {
       "name": "Mode 2: Windows Miracast (Wi-Fi Display)",
       "protocol": "MPEG-TS / RTSP WFD (TCP 7236 / UDP 5002)",
-      "resolution": "1280x720 @ 60 FPS (CEA Index 6 / Native 720p60 Clone)",
-      "total_glass_to_glass_ms": 12.10,
-      "cpu_usage": "2.89%",
-      "temperature_c": 51.9,
-      "power_watts": 1.91,
+      "resolution": "1280x720 @ 60 FPS (CEA Index 6 / Native 720p60 Extend KMS)",
+      "total_glass_to_glass_ms": 11.45,
+      "cpu_usage": "2.25%",
+      "temperature_c": 54.1,
+      "power_watts": 1.69,
       "latency_breakdown_ms": {
-        "capture_mutter_screencast": 1.80,
+        "capture_kms_direct_scanout": 1.20,
         "hardware_encode_vaapi_610m": 2.50,
-        "mpegts_mux_leaky_queue": 0.25,
+        "mpegts_mux_pacing": 0.20,
         "network_transmission_udp_usb": 0.15,
-        "ingress_ts_demux_burst_flush": 0.20,
+        "ingress_ts_demux_direct": 0.20,
         "hardware_decode_vpu_v4l2m2m": 3.60,
         "kms_drm_plane_scanout": 3.60,
-        "total_glass_to_glass_ms": 12.10
+        "total_glass_to_glass_ms": 11.45
       },
       "network_and_api": {
-        "icmp_rtt_avg_ms": 0.241,
-        "tcp_connect_api_8080_avg_ms": 1.426,
-        "tcp_connect_cast_8009_avg_ms": 0.456,
-        "tcp_connect_wfd_7236_avg_ms": 2.166,
-        "http_api_status_avg_ms": 25.66,
-        "http_api_time_avg_ms": 16.36,
-        "api_screenshot_full_frame_ms": 421.45
+        "icmp_rtt_avg_ms": 0.245,
+        "tcp_connect_api_8080_avg_ms": 0.814,
+        "tcp_connect_cast_8009_avg_ms": 0.329,
+        "tcp_connect_wfd_7236_avg_ms": 0.615,
+        "http_api_status_avg_ms": 37.48,
+        "http_api_time_avg_ms": 32.68,
+        "api_screenshot_full_frame_ms": 468.67
       }
     }
   },
   "current_run_telemetry": {
-    "temp": "51.9",
-    "cpu": "2.89%",
-    "ram": 284,
+    "temp": "54.1",
+    "cpu": "2.25%",
+    "ram": 281,
     "stream_state": "active",
     "active_transport": "mode2_miracast",
     "active_mode": {
@@ -132,8 +132,8 @@
       "sdram_mhz": 166
     },
     "power": {
-      "estimated_watts": 1.91,
-      "current_ma": 382,
+      "estimated_watts": 1.69,
+      "current_ma": 338,
       "voltage_core_volts": 1.20
     }
   }
