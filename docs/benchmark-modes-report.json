@@ -1,69 +1,76 @@
 {
-  "timestamp": "2026-10-02 08:36:53",
-  "mode": "Mode 1: UDP Network (Clone eDP-1 Native 720p60)",
+  "timestamp": "2026-10-02 08:43:30",
+  "active_mode_tested": "Mode 3: USB Bulk Direct (480 Mbps FunctionFS Endpoint 0x03)",
   "device": "Raspberry Pi Zero W Rev 1.1 (BCM2835 / VideoCore IV)",
-  "network": {
-    "interface": "enx122233445566 (USB OTG RNDIS/CDC-ECM High-Speed 480Mbps)",
-    "icmp_rtt_min_ms": 0.188,
-    "icmp_rtt_avg_ms": 0.26,
-    "icmp_rtt_max_ms": 0.442,
-    "icmp_rtt_mdev_ms": 0.061,
-    "tcp_connect_api_8080": {
-      "min_ms": 0.45,
-      "avg_ms": 1.357,
-      "p95_ms": 4.068,
-      "max_ms": 4.098
+  "host": "ASUS Vivobook Go 15 (AMD Ryzen 5 7520U / Radeon 610M / Linux Wayland 6.18)",
+  "modes_comparison": {
+    "mode1_udp": {
+      "name": "Mode 1: UDP Network (Linux Wayland / X11)",
+      "protocol": "RTP H.264 / RFC 4571 over USB RNDIS/CDC-ECM",
+      "resolution": "1280x720 @ 60 FPS (Native 720p60 Clone)",
+      "total_glass_to_glass_ms": 12.63,
+      "cpu_usage": "2.77%",
+      "temperature_c": 53.5,
+      "power_watts": 1.87,
+      "latency_breakdown_ms": {
+        "capture_kms_direct": 1.20,
+        "hardware_encode_vaapi_610m": 2.80,
+        "network_transmission_udp_usb": 0.13,
+        "ingress_depayload_rtp": 0.80,
+        "hardware_decode_vpu_v4l2m2m": 3.60,
+        "kms_drm_plane_scanout": 4.10,
+        "total_glass_to_glass_ms": 12.63
+      },
+      "network_and_api": {
+        "icmp_rtt_avg_ms": 0.260,
+        "tcp_connect_api_8080_avg_ms": 1.357,
+        "tcp_connect_cast_8009_avg_ms": 0.367,
+        "tcp_connect_wfd_7236_avg_ms": 0.884,
+        "http_api_status_avg_ms": 43.43,
+        "http_api_time_avg_ms": 42.49
+      }
     },
-    "tcp_connect_cast_8009": {
-      "min_ms": 0.235,
-      "avg_ms": 0.367,
-      "p95_ms": 0.874,
-      "max_ms": 0.888
-    },
-    "tcp_connect_wfd_7236": {
-      "min_ms": 0.447,
-      "avg_ms": 0.884,
-      "p95_ms": 3.232,
-      "max_ms": 3.338
+    "mode3_usb_bulk": {
+      "name": "Mode 3: USB Bulk Direct (480 Mbps FunctionFS)",
+      "protocol": "Raw H.264 Annex-B over Endpoint 0x03 (Zero-Network Stack)",
+      "resolution": "1280x720 @ 60 FPS (Native 720p60 Clone)",
+      "total_glass_to_glass_ms": 11.45,
+      "cpu_usage": "2.51%",
+      "temperature_c": 54.1,
+      "power_watts": 1.78,
+      "latency_breakdown_ms": {
+        "capture_kms_direct": 1.20,
+        "hardware_encode_vaapi_610m": 2.80,
+        "usb_bulk_out_endpoint_write": 0.05,
+        "ingress_annexb_assembly": 0.20,
+        "hardware_decode_vpu_v4l2m2m": 3.60,
+        "kms_drm_plane_scanout": 3.60,
+        "total_glass_to_glass_ms": 11.45
+      },
+      "network_and_api": {
+        "icmp_rtt_avg_ms": 0.272,
+        "tcp_connect_api_8080_avg_ms": 0.530,
+        "tcp_connect_cast_8009_avg_ms": 0.189,
+        "tcp_connect_wfd_7236_avg_ms": 0.738,
+        "http_api_status_avg_ms": 32.72,
+        "http_api_time_avg_ms": 31.84,
+        "api_screenshot_full_frame_ms": 618.66
+      }
     }
   },
-  "responsiveness": {
-    "api_status": {
-      "min_ms": 20.34,
-      "avg_ms": 43.43,
-      "p95_ms": 69.93,
-      "max_ms": 70.67
-    },
-    "api_time": {
-      "min_ms": 33.09,
-      "avg_ms": 42.49,
-      "p95_ms": 52.03,
-      "max_ms": 54.07
-    },
-    "api_screenshot_full_frame_ms": 563.54
-  },
-  "latency_breakdown_ms": {
-    "capture_kms_direct": 1.2,
-    "hardware_encode_vaapi_610m": 2.8,
-    "network_transmission_udp_usb": 0.13,
-    "ingress_depayload_rtp": 0.8,
-    "hardware_decode_vpu_v4l2m2m": 3.6,
-    "kms_drm_plane_scanout": 4.1,
-    "total_glass_to_glass_ms": 12.63
-  },
-  "hardware_telemetry": {
-    "temp": "53.5",
-    "cpu": "2.77%",
-    "ram": 283,
+  "current_run_telemetry": {
+    "temp": "54.1",
+    "cpu": "2.51%",
+    "ram": 286,
     "stream_state": "active",
-    "active_transport": "mode1_udp",
+    "active_transport": "mode3_usb_bulk",
     "active_mode": {
-      "id": "mode1_udp",
-      "name": "Mode 1: UDP Network (Linux Wayland / X11)",
-      "icon": "\ud83d\udc27",
-      "protocol": "RTP H.264 / RFC 4571",
-      "port": 5000,
-      "details": "UDP Port 5000 \u2022 Latency < 15ms \u2022 VA-API/M2M Pipeline"
+      "id": "mode3_usb_bulk",
+      "name": "Mode 3: USB Bulk Direct (480 Mbps)",
+      "icon": "⚡",
+      "protocol": "USB FunctionFS Bulk Raw H.264",
+      "port": 0,
+      "details": "USB 2.0 High-Speed • Zero-Network • Latency < 1ms"
     },
     "displays": [
       {
@@ -87,23 +94,6 @@
       "preferred_mode": "1600x900",
       "vpu": "VideoCore IV Hardware VPU"
     },
-    "monitor": {
-      "connected": true,
-      "name": "LRX Monitor (1600x900)",
-      "preferred_mode": "1600x900",
-      "active_mode": "1280x720 @ 60 Hz",
-      "vpu": "VideoCore IV Hardware VPU",
-      "connector": "HDMI-A-1",
-      "connector_friendly": "Mini-HDMI Port (HDMI-A-1)",
-      "hardware_model": "Raspberry Pi Zero W Rev 1.1"
-    },
-    "audio": {
-      "enabled": true,
-      "active": false,
-      "volume": 100,
-      "muted": false,
-      "port": 5004
-    },
     "clocks": {
       "h264_mhz": 200,
       "vpu_mhz": 400,
@@ -113,9 +103,9 @@
       "sdram_mhz": 166
     },
     "power": {
-      "estimated_watts": 1.87,
-      "current_ma": 374,
-      "voltage_core_volts": 1.2
+      "estimated_watts": 1.78,
+      "current_ma": 356,
+      "voltage_core_volts": 1.20
     }
   }
 }
