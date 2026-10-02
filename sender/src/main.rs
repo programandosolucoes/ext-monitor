@@ -246,10 +246,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.saturation
     );
     let audio_running = Arc::new(AtomicBool::new(cfg.audio));
+    let mut audio_tx_running = Arc::new(AtomicBool::new(cfg.audio));
     if cfg.audio {
         println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Enabled (UDP Native PCM {}:{} @ {} Hz Hi-Res, Realtime Spectrum: 5006)", cfg.target_ip, cfg.audio_port, cfg.audio_rate);
         let _ = pipeline::spawn_audio_spectrum_monitor(cfg.target_ip.clone(), audio_running.clone());
-        let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_running.clone());
+        let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
     } else {
         println!("\x1b[1;33m[*] Audio Subsystem:\x1b[0m Disabled (--no-audio)");
     }
@@ -473,9 +474,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             cfg.audio = a;
                             pipeline_builder.audio = a;
                             audio_running.store(a, Ordering::SeqCst);
+                            audio_tx_running.store(false, Ordering::SeqCst);
                             if a {
+                                audio_tx_running = Arc::new(AtomicBool::new(true));
                                 let _ = pipeline::spawn_audio_spectrum_monitor(cfg.target_ip.clone(), audio_running.clone());
-                                let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_running.clone());
+                                let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+                            }
+                        }
+                    }
+                    ControlAction::SetAudioRate(rate) => {
+                        if [44100, 48000, 88200, 96000, 192000].contains(&rate) && rate != cfg.audio_rate {
+                            println!("\x1b[1;35m[*] Web Command: Switching Audio Sample Rate {} Hz -> {} Hz\x1b[0m", cfg.audio_rate, rate);
+                            cfg.audio_rate = rate;
+                            if cfg.audio {
+                                audio_tx_running.store(false, Ordering::SeqCst);
+                                thread::sleep(Duration::from_millis(80));
+                                audio_tx_running = Arc::new(AtomicBool::new(true));
+                                let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
                             }
                         }
                     }

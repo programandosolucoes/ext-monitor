@@ -16,6 +16,7 @@ pub enum ControlAction {
     LaunchMiracast,
     SetMode(String),
     SetAudio(bool),
+    SetAudioRate(u32),
     SetBitrate(u32),
     SetFps(u32),
     SetColorProfile(ColorProfile),
@@ -120,6 +121,12 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
 
         if let Some(audio_val) = v.get("audio").and_then(|x| x.as_bool()) {
             actions.push(ControlAction::SetAudio(audio_val));
+        }
+
+        if let Some(rate) = v.get("audio_rate").or_else(|| v.get("rate")).and_then(|x| x.as_u64()).map(|x| x as u32) {
+            if [44100, 48000, 88200, 96000, 192000].contains(&rate) {
+                actions.push(ControlAction::SetAudioRate(rate));
+            }
         }
 
         if let Some(bitrate) = v.get("bitrate").and_then(|x| x.as_u64()).map(|x| x as u32) {

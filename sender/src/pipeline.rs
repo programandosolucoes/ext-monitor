@@ -512,14 +512,36 @@ fn fft_512(real: &mut [f32; 512], imag: &mut [f32; 512]) {
     }
 }
 
-pub fn ensure_audio_sink_exists(rate: u32) {
-    let exists = Command::new("pactl")
-        .args(["list", "sinks", "short"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("Raspberry_Pi_HDMI_Audio"))
-        .unwrap_or(false);
+static SINK_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    if !exists {
+pub fn ensure_audio_sink_exists(rate: u32) {
+    let _lock = SINK_MUTEX.lock().unwrap();
+
+    let output = Command::new("pactl")
+        .args(["list", "modules", "short"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    let mut module_ids: Vec<String> = Vec::new();
+    for line in output.lines() {
+        if line.contains("module-null-sink") && line.contains("Raspberry_Pi_HDMI_Audio") {
+            if let Some(id) = line.split_whitespace().next() {
+                module_ids.push(id.to_string());
+            }
+        }
+    }
+
+    // If duplicate sink modules were loaded, clean them up proactively
+    if module_ids.len() > 1 {
+        println!("\x1b[1;33m[audio-pcm] Cleaning up {} duplicate PulseAudio null-sink modules...\x1b[0m", module_ids.len() - 1);
+        for id in &module_ids[1..] {
+            let _ = Command::new("pactl").args(["unload-module", id]).output();
+        }
+    }
+
+    if module_ids.is_empty() {
+        println!("\x1b[1;34m[audio-pcm] Creating unified PulseAudio sink 'Raspberry_Pi_HDMI_Audio' at {} Hz...\x1b[0m", rate);
         let _ = Command::new("pactl")
             .args([
                 "load-module",
@@ -567,6 +589,8 @@ pub fn spawn_opus_audio_streamer(
                     .arg("-q")
                     .arg("pulsesrc")
                     .arg("device=Raspberry_Pi_HDMI_Audio.monitor")
+                    .arg("buffer-time=20000")
+                    .arg("latency-time=5000")
                     .arg("do-timestamp=true")
                     .arg("!")
                     .arg("audioconvert")
@@ -599,14 +623,14 @@ pub fn spawn_opus_audio_streamer(
                 while running.load(Ordering::Relaxed) {
                     match child.try_wait() {
                         Ok(Some(_status)) => break,
-                        Ok(None) => thread::sleep(Duration::from_millis(500)),
+                        Ok(None) => thread::sleep(Duration::from_millis(50)),
                         Err(_) => break,
                     }
                 }
 
                 let _ = child.kill();
                 let _ = child.wait();
-                thread::sleep(Duration::from_millis(500));
+                thread::sleep(Duration::from_millis(50));
             }
         })
         .expect("Failed to spawn audio streamer thread")

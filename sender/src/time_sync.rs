@@ -63,7 +63,7 @@ pub fn start_time_sync_daemon(running: Arc<AtomicBool>, target_ip: String, http_
             let mut last_sync = Instant::now() - Duration::from_secs(120); // Force immediate first sync
 
             while running.load(Ordering::Relaxed) {
-                if last_sync.elapsed() >= Duration::from_secs(30) {
+                if last_sync.elapsed() >= Duration::from_secs(300) {
                     match sync_receiver_time(&target_ip, http_port) {
                         Ok(epoch) => {
                             println!(

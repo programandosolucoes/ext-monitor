@@ -216,9 +216,12 @@ impl AlsaHdmiDevice {
         if ret < 0 {
             let err = std::io::Error::last_os_error();
             if err.raw_os_error() == Some(libc::EPIPE) {
-                // Buffer underrun, re-prepare PCM and resume
+                // Buffer underrun: re-prepare PCM and immediately retry write so no initial audio frames are dropped
                 unsafe { libc::ioctl(self.fd, SNDRV_PCM_IOCTL_PREPARE as _) };
-                return Ok(());
+                let retry_ret = unsafe { libc::ioctl(self.fd, SNDRV_PCM_IOCTL_WRITEI_FRAMES as _, &mut xfer) };
+                if retry_ret >= 0 {
+                    return Ok(());
+                }
             }
             return Err(err);
         }
@@ -318,7 +321,11 @@ impl AudioReceiver {
                 };
                 let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
 
-                let mut pcm_device: Option<AlsaHdmiDevice> = None;
+                let initial_rate = rate.load(Ordering::Relaxed);
+                let mut pcm_device: Option<AlsaHdmiDevice> = AlsaHdmiDevice::open(initial_rate).ok();
+                if let Some(ref d) = pcm_device {
+                    println!("\x1b[1;32m[audio-native] Pre-warmed /dev/snd/pcmC0D0p ({} Hz Hi-Res Stereo IEC958)\x1b[0m", d.rate);
+                }
                 let mut frame_counter: usize = 0;
                 let mut last_active = Instant::now();
                 let mut udp_buf = [0u8; 16384];
@@ -435,10 +442,9 @@ impl AudioReceiver {
                         Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
                             if active.load(Ordering::Relaxed) && last_active.elapsed() > Duration::from_millis(1500) {
                                 active.store(false, Ordering::Relaxed);
-                                if let Some(mut dev) = pcm_device.take() {
-                                    dev.drain();
-                                    dev.drop_playback();
-                                }
+                                // Note: We deliberately KEEP pcm_device open and warm!
+                                // Tearing down and reopening /dev/snd/pcmC0D0p takes ~300ms on the bcm2835
+                                // ALSA driver, which causes audio delay and clipped syllables when dialogue resumes.
                             }
                         }
                         Err(e) => {

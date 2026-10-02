@@ -1245,6 +1245,24 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- HDMI Audio Hardware Profiles & Master Clock -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="audioProfileLabel">HDMI Master Audio Profile & Sample Rate</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipAudioProfile">Select and force-load the hardware sample rate clock directly into the Pi Zero BCM2835 ALSA sound core. Supports true IEC958 subframe audio up to 192kHz 24-bit Hi-Res.</span>
+                        </span>
+                        <span class="control-value" id="valAudioRate">96 kHz (Hi-Res Studio - Default)</span>
+                    </div>
+                    <div class="btn-grid" id="audioRateGrid">
+                        <button class="btn-toggle active" id="btnRate96k" onclick="setAudioRate(96000)" data-rate="96000">🎵 Hi-Res Studio (96 kHz / 24-bit)</button>
+                        <button class="btn-toggle" id="btnRate192k" onclick="setAudioRate(192000)" data-rate="192000">🚀 Ultra Hi-Res (192 kHz / 24-bit)</button>
+                        <button class="btn-toggle" id="btnRate48k" onclick="setAudioRate(48000)" data-rate="48000">🎬 Cinema Standard (48 kHz / 16-bit)</button>
+                        <button class="btn-toggle" id="btnRate44k" onclick="setAudioRate(44100)" data-rate="44100">💿 CD Fidelity (44.1 kHz / 16-bit)</button>
+                    </div>
+                </div>
+
                 <!-- Transmission Mode: Continuous CFR vs Drop-Only Economy -->
                 <div class="control-group">
                     <div class="control-label">
@@ -2071,6 +2089,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnConfirmReboot: "Yes, Reboot",
                 audioLabel: "HDMI Digital Audio (Opus 48kHz)",
                 tipAudio: "Digital audio volume sent to monitor/TV via HDMI cable. Sub-25ms latency with A/V sync.",
+                audioProfileLabel: "HDMI Master Audio Profile & Sample Rate",
+                tipAudioProfile: "Select and force-load the hardware sample rate clock directly into the Pi Zero BCM2835 ALSA sound core. Supports true IEC958 subframe audio up to 192kHz 24-bit Hi-Res.",
                 docAltPlayersCmd: "# FFmpeg / ffplay (Low Latency):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
                 copied: "Copied!",
                 copiedSuccess: "✓ Copied to clipboard!",
@@ -2361,6 +2381,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnConfirmReboot: "Sim, Reiniciar",
                 audioLabel: "Áudio Digital HDMI (Opus 48kHz)",
                 tipAudio: "Volume do áudio digital enviado ao monitor/TV via cabo HDMI. Latência sub-25ms com sincronismo A/V.",
+                audioProfileLabel: "Perfil de Áudio HDMI e Taxa de Amostragem",
+                tipAudioProfile: "Selecione e force o carregamento do clock de hardware diretamente no núcleo de áudio ALSA BCM2835 do Pi Zero. Suporta áudio subframe IEC958 real de até 192kHz 24-bit Hi-Res.",
                 docAltPlayersCmd: "# FFmpeg / ffplay (Baixa Latência):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
                 copied: "Copiado!",
                 copiedSuccess: "✓ Copiado para a área de transferência!",
@@ -2646,6 +2668,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnConfirmReboot: "Sì, Riavvia",
                 audioLabel: "Audio Digitale HDMI (Opus 48kHz)",
                 tipAudio: "Volume dell'audio digitale inviato al monitor/TV tramite cavo HDMI. Latenza inferiore a 25ms con sincronizzazione A/V.",
+                audioProfileLabel: "Profilo Audio HDMI e Frequenza di Campionamento",
+                tipAudioProfile: "Seleziona e forza il clock hardware direttamente nel core audio ALSA BCM2835 del Pi Zero. Supporta audio subframe IEC958 reale fino a 192kHz 24-bit Hi-Res.",
                 docAltPlayersCmd: "# FFmpeg / ffplay (Bassa Latenza):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
                 copied: "Copiato!",
                 copiedSuccess: "✓ Copiato negli appunti!",
@@ -2931,6 +2955,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnConfirmReboot: "确认重启",
                 audioLabel: "HDMI 数字音频 (Opus 48kHz)",
                 tipAudio: "通过 HDMI 发送到监视器/电视的数字音频音量。低于 25ms 延迟并保证音画同步。",
+                audioProfileLabel: "HDMI 主音频配置与采样率",
+                tipAudioProfile: "选择并强制将硬件采样率时钟直接载入树莓派 Pi Zero BCM2835 ALSA 核心。支持高达 192kHz 24-bit Hi-Res 真实 IEC958 子帧音频。",
                 docAltPlayersCmd: "# FFmpeg / ffplay (超低延迟播放):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
                 copied: "已复制!",
                 copiedSuccess: "✓ 已复制到剪贴板!",
@@ -3691,6 +3717,43 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }).catch(() => {});
         }
 
+        let currentAudioRate = 96000;
+
+        function setAudioRate(rate) {
+            currentAudioRate = rate;
+            localStorage.setItem('ext_audio_rate', rate);
+            updateAudioRateUI(rate);
+
+            // 1. Reconfigure Receiver ALSA Hardware directly
+            fetch('/api/audio/rate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rate: rate })
+            })
+            .then(r => r.json())
+            .then(() => {
+                showToast(`✓ Receiver ALSA clock reconfigured: ${rate} Hz`);
+            })
+            .catch(() => showToast(`Receiver rate set to ${rate} Hz`));
+
+            // 2. Transmit rate change to Host Sender via UDP control channel
+            sendHostControl({ audio_rate: rate });
+        }
+
+        function updateAudioRateUI(rate) {
+            const lbl = document.getElementById('valAudioRate');
+            let desc = `${rate} Hz`;
+            if (rate === 96000) desc = '96 kHz (Hi-Res Studio - Default)';
+            else if (rate === 192000) desc = '192 kHz (Ultra Hi-Res)';
+            else if (rate === 48000) desc = '48 kHz (Cinema Standard)';
+            else if (rate === 44100) desc = '44.1 kHz (CD Fidelity)';
+            if (lbl) lbl.textContent = desc;
+
+            document.querySelectorAll('#audioRateGrid .btn-toggle').forEach(b => {
+                b.classList.toggle('active', parseInt(b.getAttribute('data-rate'), 10) === rate);
+            });
+        }
+
         // Highlight Active Streaming Card
         function highlightActiveCard(activeId) {
             ['cardMode1', 'cardMode2', 'cardMode3'].forEach(id => {
@@ -3870,6 +3933,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                         if (btn) {
                             btn.textContent = a.muted ? '🔇 ' + t('unmute') : '🔊 ' + t('mute');
                             btn.className = a.muted ? 'btn-danger' : 'btn-primary';
+                        }
+                        if (a.rate && typeof currentAudioRate !== 'undefined' && a.rate !== currentAudioRate) {
+                            currentAudioRate = a.rate;
+                            updateAudioRateUI(a.rate);
                         }
                     }
 
@@ -4192,6 +4259,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         const savedBitrate = localStorage.getItem('ext_bitrate');
         if (savedBitrate) setBitrate(parseInt(savedBitrate, 10));
+
+        const savedRate = localStorage.getItem('ext_audio_rate');
+        if (savedRate) updateAudioRateUI(parseInt(savedRate, 10));
 
         const savedDropOnly = localStorage.getItem('ext_drop_only');
         if (savedDropOnly !== null) setDropOnly(savedDropOnly === 'true');

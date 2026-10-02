@@ -208,19 +208,27 @@ fn handle_http_client(
             if let Some(idx) = req_str.find("\r\n\r\n") {
                 let body = &req_str[idx + 4..];
                 if let Some(epoch_secs) = extract_json_u64(body, "unix_epoch_secs") {
-                    let tv = libc::timeval {
-                        tv_sec: epoch_secs as _,
-                        tv_usec: 0,
-                    };
-                    let res = unsafe { libc::settimeofday(&tv, std::ptr::null()) };
-                    if res == 0 {
-                        println!("\x1b[1;32m[time-sync]\x1b[0m System clock set to Unix timestamp {}", epoch_secs);
-                        let resp = format!("{{\"status\":\"synchronized\",\"unix_epoch_secs\":{}}}", epoch_secs);
-                        send_response(&mut stream, "200 OK", "application/json", resp.as_bytes());
-                        return;
-                    } else {
-                        eprintln!("\x1b[1;31m[time-sync]\x1b[0m settimeofday failed: {}", std::io::Error::last_os_error());
+                    let cur_now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    // Only invoke settimeofday if the clock is uninitialized (< 2024) or drift exceeds 5 seconds.
+                    // Routine time calls during live playback disrupt monotonic timer wheels and cause video flickers.
+                    if cur_now < 1704067200 || (cur_now as i64 - epoch_secs as i64).abs() > 5 {
+                        let tv = libc::timeval {
+                            tv_sec: epoch_secs as _,
+                            tv_usec: 0,
+                        };
+                        let res = unsafe { libc::settimeofday(&tv, std::ptr::null()) };
+                        if res == 0 {
+                            println!("\x1b[1;32m[time-sync]\x1b[0m System clock set to Unix timestamp {}", epoch_secs);
+                        } else {
+                            eprintln!("\x1b[1;31m[time-sync]\x1b[0m settimeofday failed: {}", std::io::Error::last_os_error());
+                        }
                     }
+                    let resp = format!("{{\"status\":\"synchronized\",\"unix_epoch_secs\":{}}}", epoch_secs);
+                    send_response(&mut stream, "200 OK", "application/json", resp.as_bytes());
+                    return;
                 }
             }
             send_response(&mut stream, "400 Bad Request", "text/plain", b"Invalid unix_epoch_secs");
