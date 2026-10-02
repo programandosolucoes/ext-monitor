@@ -622,6 +622,9 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
         <button class="tab-btn" onclick="switchTab('manual')" id="tabBtn_manual">
             <span>📖</span> <span data-i18n="tabManual">Operation Manual</span>
         </button>
+        <a href="/cast" target="_blank" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:0.5rem; border: 1px solid var(--accent-cyan); background: rgba(0, 229, 255, 0.12); color: var(--accent-cyan); font-weight: bold;" id="tabBtn_cast">
+            <span>📺</span> <span>Web Cast (Aba / Tela)</span>
+        </a>
         <a href="/swagger" target="_blank" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:0.5rem;" id="tabBtn_swagger">
             <span>⚡</span> <span>Swagger API</span>
         </a>

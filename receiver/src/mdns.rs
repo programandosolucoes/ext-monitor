@@ -46,7 +46,7 @@ pub fn encode_dns_txt(txts: &[&str]) -> Vec<u8> {
 }
 
 /// Builds a complete mDNS response packet containing Google Cast, Miracast, and Display records.
-pub fn build_full_mdns_response(device_ip: [u8; 4], http_port: u16, miracast_port: u16) -> Vec<u8> {
+pub fn build_full_mdns_response(device_ip: [u8; 4], _http_port: u16, miracast_port: u16) -> Vec<u8> {
     let mut packet = Vec::with_capacity(512);
 
     // 1. Header (12 bytes)
@@ -106,7 +106,7 @@ pub fn build_full_mdns_response(device_ip: [u8; 4], http_port: u16, miracast_por
     packet.extend_from_slice(&srv_rdlen.to_be_bytes());
     packet.extend_from_slice(&0u16.to_be_bytes()); // Priority
     packet.extend_from_slice(&0u16.to_be_bytes()); // Weight
-    packet.extend_from_slice(&http_port.to_be_bytes()); // Port
+    packet.extend_from_slice(&8009u16.to_be_bytes()); // Cast V2 TLS Port 8009
     packet.extend_from_slice(&host_encoded);
 
     // Additional 2: TXT for Google Cast
@@ -115,7 +115,7 @@ pub fn build_full_mdns_response(device_ip: [u8; 4], http_port: u16, miracast_por
         "cd=",
         "rm=",
         "ve=05",
-        "md=Ext-Monitor",
+        "md=Chromecast",
         "ic=/setup/icon.png",
         "fn=Ext-Monitor (Raspberry Pi)",
         "ca=4101",

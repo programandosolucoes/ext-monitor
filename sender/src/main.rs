@@ -14,6 +14,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+mod cast_cert;
+mod cast_server;
 mod config;
 mod control;
 mod discovery;
@@ -26,6 +28,7 @@ mod pipeline;
 mod pipewire;
 mod screencast;
 mod service;
+mod time_sync;
 mod usb_transport;
 
 use config::{CaptureEngine, SenderConfig, TransportKind};
@@ -157,6 +160,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start local SSDP / DIAL bridge for instant Google Chrome casting discovery
     discovery::start_host_ssdp_bridge(running.clone(), cfg.target_ip.clone(), 8080);
+
+    // Auto-provision Cast V2 developer certificates into Google Chrome
+    if let Err(e) = cast_cert::auto_provision_chrome() {
+        eprintln!("\x1b[1;33m[!] Aviso Cast Cert: {}\x1b[0m", e);
+    }
+
+    // Start Google Cast V2 (TLS 8009) Server for Chrome Tab and Screen Mirroring
+    cast_server::start_cast_v2_server(running.clone());
+
+    // Start background time synchronization with Pi Zero appliance
+    time_sync::start_time_sync_daemon(running.clone(), cfg.target_ip.clone(), 8080);
 
     // Optimize USB interface txqueuelen for ultra-low jitter (<15ms)
     if let Ok(output) = std::process::Command::new("ip").args(["-o", "link"]).output() {

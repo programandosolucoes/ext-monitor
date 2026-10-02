@@ -150,7 +150,21 @@ fn handle_http_client(
     let method = parts[0];
     let path = parts[1];
 
+    // 0. WebSocket Stream for Web Cast (Option C)
+    if path == "/api/stream/ws" && req_str.to_ascii_lowercase().contains("upgrade: websocket") {
+        crate::web_cast::handle_websocket_stream(stream, &req_str, pipeline_mgr, default_udp_port);
+        return;
+    }
+
     match (method, path) {
+        ("GET", "/cast") | ("GET", "/cast/") | ("HEAD", "/cast") | ("HEAD", "/cast/") => {
+            let body = if method == "HEAD" {
+                &[][..]
+            } else {
+                crate::web_cast::CAST_HTML.as_bytes()
+            };
+            send_response(&mut stream, "200 OK", "text/html; charset=utf-8", body);
+        }
         ("GET", "/") | ("GET", "/index.html") | ("HEAD", "/") | ("HEAD", "/index.html") => {
             let body = if method == "HEAD" {
                 &[][..]
@@ -189,6 +203,35 @@ fn handle_http_client(
             let audio_st = pipeline_mgr.audio_status();
             let status_json = get_system_telemetry_json(is_paused, cur_kind, &audio_st);
             send_response(&mut stream, "200 OK", "application/json", status_json.as_bytes());
+        }
+        ("POST", "/api/time/sync") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = &req_str[idx + 4..];
+                if let Some(epoch_secs) = extract_json_u64(body, "unix_epoch_secs") {
+                    let tv = libc::timeval {
+                        tv_sec: epoch_secs as _,
+                        tv_usec: 0,
+                    };
+                    let res = unsafe { libc::settimeofday(&tv, std::ptr::null()) };
+                    if res == 0 {
+                        println!("\x1b[1;32m[time-sync]\x1b[0m System clock set to Unix timestamp {}", epoch_secs);
+                        let resp = format!("{{\"status\":\"synchronized\",\"unix_epoch_secs\":{}}}", epoch_secs);
+                        send_response(&mut stream, "200 OK", "application/json", resp.as_bytes());
+                        return;
+                    } else {
+                        eprintln!("\x1b[1;31m[time-sync]\x1b[0m settimeofday failed: {}", std::io::Error::last_os_error());
+                    }
+                }
+            }
+            send_response(&mut stream, "400 Bad Request", "text/plain", b"Invalid unix_epoch_secs");
+        }
+        ("GET", "/api/time") => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let resp = format!("{{\"unix_epoch_secs\":{}}}", now);
+            send_response(&mut stream, "200 OK", "application/json", resp.as_bytes());
         }
         ("GET", "/api/audio/status") => {
             let audio_st = pipeline_mgr.audio_status();
@@ -1251,6 +1294,16 @@ fn extract_json_str<'a>(json: &'a str, key: &str) -> Option<&'a str> {
 }
 
 fn extract_json_u32(json: &str, key: &str) -> Option<u32> {
+    let pattern = format!("\"{}\"", key);
+    let idx = json.find(&pattern)?;
+    let rest = &json[idx + pattern.len()..];
+    let colon_idx = rest.find(':')?;
+    let after_colon = rest[colon_idx + 1..].trim_start();
+    let num_str: String = after_colon.chars().take_while(|c| c.is_ascii_digit()).collect();
+    num_str.parse().ok()
+}
+
+fn extract_json_u64(json: &str, key: &str) -> Option<u64> {
     let pattern = format!("\"{}\"", key);
     let idx = json.find(&pattern)?;
     let rest = &json[idx + pattern.len()..];

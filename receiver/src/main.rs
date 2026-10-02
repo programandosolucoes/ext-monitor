@@ -35,6 +35,8 @@ mod web_ui;
 mod wfd;
 pub mod media_renderer;
 pub mod mdns;
+pub mod web_cast;
+pub mod cast_proxy;
 
 use i18n::Language;
 use pipeline::{PipelineBackend, PipelineKind, PipelineManager};
@@ -142,6 +144,9 @@ fn main() {
 
     // 4.2 Start pure-Rust mDNS Google Cast / Miracast responder on UDP 5353
     mdns::start_mdns_responder(running.clone());
+
+    // 4.3 Start Google Cast V2 TCP forwarder on port 8009 -> 192.168.7.1:8009
+    cast_proxy::start_cast_forwarder(running.clone(), "192.168.7.1", 8009);
 
     // 5. Start HDMI dynamic visualizer engine (active when playing audio, multiplexed with video)
     media_renderer::VisualizerEngine::start(running.clone(), pipeline_mgr.clone());
