@@ -309,26 +309,26 @@ git commit -m "feat(miracast): integrate native pure-rust miracast into ext-send
 **Files:**
 - Hardware Test on local Raspberry Pi Zero W (`192.168.7.2`)
 
-- [ ] **Step 1: Test discovery**
+- [x] **Step 1: Test discovery**
 
 Run: `./target/debug/ext-miracast`
 Expected: Detects `ExtMonitor-Pi0 (192.168.7.2)` via direct USB probe or mDNS.
 
-- [ ] **Step 2: Test live streaming**
+- [x] **Step 2: Test live streaming**
 
 Run: `./target/debug/ext-miracast 192.168.7.2`
 Expected:
 - Pi Zero terminal logs show: `Incoming RTSP WFD connection`, `Negotiated 720p60`, starts decoding.
 - Physical HDMI screen transitions from Standby/Ready splash to live fluid desktop stream.
 
-- [ ] **Step 3: Test clean teardown**
+- [x] **Step 3: Test clean teardown**
 
 Press `Ctrl+C` in `ext-miracast`.
 Expected:
 - Source sends `TEARDOWN`.
 - Pi Zero receives EOF/teardown and immediately renders Standby ready splash screen without crashing.
 
-- [ ] **Step 4: Commit and finalize branch documentation**
+- [x] **Step 4: Commit and finalize branch documentation**
 
 ```bash
 git add docs/
