@@ -594,7 +594,7 @@ mod tests {
         assert_eq!(config.fps, 60);
         assert_eq!(config.bitrate_kbps, 4000);
         assert_eq!(config.mode, "extend");
-        assert_eq!(config.capture, "mutter");
+        assert_eq!(config.capture, "kms");
     }
 
     #[test]

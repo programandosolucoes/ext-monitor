@@ -21,6 +21,7 @@ mod control;
 mod discovery;
 mod encoder;
 mod i18n;
+pub mod flow;
 pub mod kms;
 pub mod miracast;
 pub mod miracast_launcher;
