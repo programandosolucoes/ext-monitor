@@ -26,8 +26,10 @@ use std::os::unix::io::{IntoRawFd, RawFd};
 pub const DEFAULT_USB_FFS_EP1: &str = "/dev/usb-ffs/display/ep1";
 pub const DEFAULT_USB_FFS_EP3: &str = "/dev/usb-ffs/display/ep3";
 
-/// Standard USB High-Speed Bulk transfer chunk size (64 KB)
-pub const USB_BULK_BUFFER_SIZE: usize = 65536;
+/// Standard USB High-Speed Bulk transfer chunk size
+// Performance: Increased from 64KB to 256KB to handle large I-frames
+// without fragmentation. H.264 keyframes at 1280x720 can exceed 100KB.
+pub const USB_BULK_BUFFER_SIZE: usize = 262144;
 
 /// High-Speed USB max packet size (512 bytes)
 pub const USB_HS_PACKET_SIZE: usize = 512;

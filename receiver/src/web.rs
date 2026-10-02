@@ -688,6 +688,118 @@ fn handle_http_client(
             let logs = std::fs::read("/var/log/ext-receiver.log").unwrap_or_else(|_| b"No /var/log/ext-receiver.log found".to_vec());
             send_response(&mut stream, "200 OK", "text/plain; charset=utf-8", &logs);
         }
+
+        // ======================================================================
+        // Debug / Diagnostics API — Structured endpoints for system inspection
+        // Replaces ad-hoc /api/exec calls with safe, typed REST responses
+        // ======================================================================
+
+        ("GET", "/api/debug/clocks") => {
+            // Read real SoC clocks from debugfs (requires mount -t debugfs)
+            let read_clk = |path: &str| -> String {
+                fs::read_to_string(path)
+                    .ok()
+                    .and_then(|s| s.trim().parse::<u64>().ok())
+                    .map(|hz| format!("{}", hz / 1_000_000))
+                    .unwrap_or_else(|| "null".to_string())
+            };
+            let arm_mhz = fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+                .ok()
+                .and_then(|s| s.trim().parse::<u64>().ok())
+                .map(|khz| format!("{}", khz / 1000))
+                .unwrap_or_else(|| read_clk("/sys/kernel/debug/clk/fw-clk-arm/clk_rate"));
+            let arm_max = fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
+                .ok()
+                .and_then(|s| s.trim().parse::<u64>().ok())
+                .map(|khz| format!("{}", khz / 1000))
+                .unwrap_or_else(|| "null".to_string());
+            let governor = fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
+                .unwrap_or_else(|_| "unknown".to_string()).trim().to_string();
+            let debugfs_mounted = fs::metadata("/sys/kernel/debug/clk/fw-clk-core/clk_rate").is_ok();
+
+            let json = format!(
+                "{{\"debugfs_mounted\":{},\"arm_mhz\":{},\"arm_max_mhz\":{},\"governor\":\"{}\",\
+                \"core_mhz\":{},\"vpu_mhz\":{},\"h264_mhz\":{},\"v3d_mhz\":{},\
+                \"sdram_mhz\":{},\"hevc_mhz\":{},\"pixel_mhz\":{}}}",
+                debugfs_mounted,
+                arm_mhz, arm_max,
+                governor,
+                read_clk("/sys/kernel/debug/clk/fw-clk-core/clk_rate"),
+                read_clk("/sys/kernel/debug/clk/vpu/clk_rate"),
+                read_clk("/sys/kernel/debug/clk/h264/clk_rate"),
+                read_clk("/sys/kernel/debug/clk/fw-clk-v3d/clk_rate"),
+                read_clk("/sys/kernel/debug/clk/sdram/clk_rate"),
+                read_clk("/sys/kernel/debug/clk/fw-clk-hevc/clk_rate"),
+                read_clk("/sys/kernel/debug/clk/fw-clk-pixel/clk_rate"),
+            );
+            send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
+        }
+
+        ("GET", "/api/debug/pipeline") => {
+            // V4L2 M2M decoder state and process statistics
+            let v4l2_devices: Vec<String> = fs::read_dir("/dev")
+                .map(|entries| {
+                    entries.filter_map(|e| e.ok())
+                        .filter(|e| e.file_name().to_str().map(|n| n.starts_with("video")).unwrap_or(false))
+                        .map(|e| format!("\"/dev/{}\"", e.file_name().to_string_lossy()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let uptime = fs::read_to_string("/proc/uptime")
+                .unwrap_or_else(|_| "0".to_string());
+            let uptime_secs = uptime.split_whitespace().next().unwrap_or("0");
+
+            let json = format!(
+                "{{\"v4l2_devices\":[{}],\"uptime_secs\":{}}}",
+                v4l2_devices.join(","),
+                uptime_secs
+            );
+            send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
+        }
+
+        ("GET", "/api/debug/usb") => {
+            // USB gadget and FunctionFS endpoint status
+            let gadget_udc = fs::read_to_string(
+                "/sys/kernel/config/usb_gadget/ext_composite/UDC"
+            ).unwrap_or_else(|_| "not_bound".to_string()).trim().to_string();
+            let ffs_mounted = fs::metadata("/dev/usb-ffs/display").is_ok();
+            let usb0_up = fs::metadata("/sys/class/net/usb0").is_ok();
+            let usb0_mac = fs::read_to_string("/sys/class/net/usb0/address")
+                .unwrap_or_else(|_| "unknown".to_string()).trim().to_string();
+
+            let json = format!(
+                "{{\"udc\":\"{}\",\"functionfs_display_mounted\":{},\"usb0_up\":{},\"usb0_mac\":\"{}\"}}",
+                gadget_udc, ffs_mounted, usb0_up, usb0_mac
+            );
+            send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
+        }
+
+        ("GET", "/api/debug/memory") => {
+            // Detailed memory breakdown from /proc/meminfo
+            let meminfo = fs::read_to_string("/proc/meminfo").unwrap_or_default();
+            let parse_kb = |key: &str| -> u64 {
+                meminfo.lines()
+                    .find(|l| l.starts_with(key))
+                    .and_then(|l| l.split_whitespace().nth(1))
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(0)
+            };
+            let json = format!(
+                "{{\"total_kb\":{},\"free_kb\":{},\"available_kb\":{},\
+                \"buffers_kb\":{},\"cached_kb\":{}}}",
+                parse_kb("MemTotal:"), parse_kb("MemFree:"), parse_kb("MemAvailable:"),
+                parse_kb("Buffers:"), parse_kb("Cached:")
+            );
+            send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
+        }
+
+        ("GET", "/api/debug/config") => {
+            // Read boot config.txt from mounted boot partition
+            let config = fs::read_to_string("/boot/config.txt")
+                .or_else(|_| fs::read_to_string("/mnt/boot/config.txt"))
+                .unwrap_or_else(|_| "# config.txt not readable (boot partition not mounted)".to_string());
+            send_response(&mut stream, "200 OK", "text/plain; charset=utf-8", config.as_bytes());
+        }
         ("POST", "/api/exec") => {
             if let Some(idx) = req_str.find("\r\n\r\n") {
                 let cmd_str = req_str[idx + 4..].trim();

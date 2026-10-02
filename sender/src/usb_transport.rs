@@ -53,6 +53,10 @@ pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), Stri
                     device.bus_number(),
                     device.address()
                 );
+                let is_debug = std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false);
+                if is_debug {
+                    println!("\x1b[1;35m[DEBUG] [usb-transport] Device identified as target. Scanning for interfaces...\x1b[0m");
+                }
 
                 // Dynamically discover Bulk OUT interface and endpoint
                 // Prioritize Vendor-Specific (Class 0xFF) FunctionFS display interface
@@ -70,6 +74,10 @@ pub fn open_usb_display_device() -> Result<(DeviceHandle<Context>, u8, u8), Stri
                                     {
                                         target_iface = Some(iface_desc.interface_number());
                                         target_ep = Some(ep_desc.address());
+                                        let is_debug = std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false);
+                                        if is_debug {
+                                            println!("\x1b[1;35m[DEBUG] [usb-transport] Found matching Bulk OUT Interface: {}, Endpoint Address: 0x{:02x}\x1b[0m", iface_desc.interface_number(), ep_desc.address());
+                                        }
                                         break;
                                     }
                                 }
@@ -169,6 +177,9 @@ pub fn spawn_usb_bulk_writer(
         let mut buffer = [0u8; 65536]; // 64 KB chunk size matching OS pipe capacity
         let mut total_bytes = 0u64;
         let mut last_log = std::time::Instant::now();
+        let is_debug = std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false);
+        let mut stalls = 0;
+        let mut last_bytes = 0u64;
 
         while running.load(Ordering::SeqCst) && !stop_flag.load(Ordering::SeqCst) {
             let mut pfd = libc::pollfd {
@@ -212,6 +223,7 @@ pub fn spawn_usb_bulk_writer(
                             retries = 0;
                         }
                         Err(rusb::Error::Pipe) => {
+                            stalls += 1;
                             eprintln!("\x1b[1;33m[usb-transport]\x1b[0m Endpoint halted (stall), clearing halt...");
                             let _ = handle.clear_halt(ep_out);
                             retries += 1;
@@ -239,12 +251,19 @@ pub fn spawn_usb_bulk_writer(
                     let _ = handle.write_bulk(ep_out, &[], Duration::from_millis(50));
                 }
 
-                if last_log.elapsed() >= Duration::from_secs(5) {
+                let elapsed = last_log.elapsed();
+                if elapsed >= Duration::from_secs(5) {
                     let mb = (total_bytes as f64) / (1024.0 * 1024.0);
                     println!(
                         "\x1b[1;34m[usb-transport]\x1b[0m Total transmitted via USB Bulk: {:.2} MB (Zero-Network)",
                         mb
                     );
+                    if is_debug {
+                        let bytes_sec = (total_bytes - last_bytes) as f64 / elapsed.as_secs_f64();
+                        println!("\x1b[1;35m[DEBUG] [usb-transport] Avg Rate: {:.2} KB/s | Stalls in window: {}\x1b[0m", bytes_sec / 1024.0, stalls);
+                        stalls = 0;
+                        last_bytes = total_bytes;
+                    }
                     use std::io::Write;
                     let _ = std::io::stdout().flush();
                     last_log = std::time::Instant::now();

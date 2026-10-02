@@ -213,7 +213,8 @@ impl PipelineBuilder {
                 .arg("!")
                 .arg("fdsink")
                 .arg(format!("fd={}", fd))
-                .arg("sync=false");
+                .arg("sync=false")
+                .arg("blocksize=65536");
 
             use std::os::unix::process::CommandExt;
             unsafe {
@@ -247,6 +248,10 @@ impl PipelineBuilder {
     }
 
     fn spawn_and_attach_logger(mut cmd: Command, tag: &'static str) -> io::Result<Child> {
+        let is_debug = std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false);
+        if is_debug {
+            println!("\x1b[1;35m[DEBUG] [{}] Pipeline args: {:?}\x1b[0m", tag, cmd.get_args());
+        }
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
         let mut child = cmd.spawn()?;
@@ -545,8 +550,8 @@ pub fn spawn_opus_audio_streamer(
                     target_ip, audio_port
                 );
 
-                let mut child = match Command::new("gst-launch-1.0")
-                    .env("PULSE_SOURCE", "Raspberry_Pi_HDMI_Audio.monitor")
+                let mut cmd = Command::new("gst-launch-1.0");
+                cmd.env("PULSE_SOURCE", "Raspberry_Pi_HDMI_Audio.monitor")
                     .env("PULSE_PROP", "media.role=filter stream.dont-route=true node.dont-reconnect=true")
                     .arg("-q")
                     .arg("pulsesrc")
@@ -572,9 +577,14 @@ pub fn spawn_opus_audio_streamer(
                     .arg(format!("port={}", audio_port))
                     .arg("sync=false")
                     .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
-                {
+                    .stderr(Stdio::null());
+
+                let is_debug = std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false);
+                if is_debug {
+                    println!("\x1b[1;35m[DEBUG] [Audio] Pipeline args: {:?}\x1b[0m", cmd.get_args());
+                }
+
+                let mut child = match cmd.spawn() {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("\x1b[1;33m[!] Failed to spawn audio streamer: {}. Retrying in 1s...\x1b[0m", e);

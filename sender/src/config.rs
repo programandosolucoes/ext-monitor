@@ -151,6 +151,7 @@ pub struct SenderConfig {
     pub cas: bool,
     pub contrast: f32,
     pub saturation: f32,
+    pub debug: bool,
 }
 
 impl SenderConfig {
@@ -541,6 +542,8 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             .and_then(|v| v.parse::<f32>().ok())
             .unwrap_or(if cas { 1.08 } else { 1.0 });
 
+        let debug = args.iter().any(|a| a == "--debug" || a == "-d");
+
         Ok(Some(Self {
             target_ip,
             target_port,
@@ -562,6 +565,7 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             cas,
             contrast,
             saturation,
+            debug,
         }))
     }
 }

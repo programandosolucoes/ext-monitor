@@ -80,7 +80,9 @@ fn open_usb_pipe_transport(
             unsafe {
                 libc::pipe2(pipe_fds.as_mut_ptr(), libc::O_CLOEXEC);
                 const F_SETPIPE_SZ: libc::c_int = 1031;
-                libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 65536);
+                // Performance: 256KB pipe buffer to prevent stalls at high bitrate.
+                // Matches fdsink blocksize=65536 with 4x headroom for burst I-frames.
+                libc::fcntl(pipe_fds[1], F_SETPIPE_SZ, 262144);
             }
             let read_fd = pipe_fds[0];
             let write_fd = pipe_fds[1];
@@ -129,6 +131,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(c) => c,
         None => return Ok(()),
     };
+
+    // Debug mode: enabled via --debug flag or EXT_DEBUG=1 environment variable
+    let debug_mode = cfg.debug || std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false);
+    if debug_mode {
+        std::env::set_var("EXT_DEBUG", "1");
+        println!("\x1b[1;35m[DEBUG] Debug mode ACTIVE — verbose logging enabled\x1b[0m");
+        println!("\x1b[1;35m[DEBUG] Config: {:?}\x1b[0m", cfg);
+    }
 
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-sender: Universal Virtual Second Monitor Sender v0.3.0            \x1b[0m");

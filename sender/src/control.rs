@@ -208,6 +208,10 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
         if let Some(cas_val) = v.get("cas").and_then(|x| x.as_bool()) {
             actions.push(ControlAction::SetCas(cas_val));
         }
+    } else {
+        if std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false) {
+            eprintln!("\x1b[1;31m[DEBUG] Malformed JSON payload received: {}\x1b[0m", String::from_utf8_lossy(buf));
+        }
     }
 
     actions
