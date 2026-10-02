@@ -18,6 +18,7 @@ mod cast_cert;
 mod cast_server;
 mod config;
 mod control;
+pub mod damage_pacer;
 mod discovery;
 mod encoder;
 mod i18n;
@@ -276,30 +277,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Transmissao ativa para o monitor secundario (Pi Zero)",
     );
 
-    // 4.1 Wayland Damage Pacer: maintains continuous 60 FPS clock on HDMI-1, preventing
-    // GNOME Mutter quiescence freeze when mouse is stationary or outside the screen (Blueprint 16)
-    let _pacer_process = if std::env::var("WAYLAND_DISPLAY").is_ok()
+    // 4.1 Wayland Damage Pacer (100% Pure Rust): maintains continuous 60 FPS clock on HDMI-1,
+    // preventing GNOME Mutter quiescence freeze when mouse is stationary or outside the screen (Blueprint 16 & 28)
+    let _pacer_handle = if std::env::var("WAYLAND_DISPLAY").is_ok()
         || std::env::var("XDG_SESSION_TYPE").map(|s| s == "wayland").unwrap_or(false)
     {
-        let pacer_script = "/usr/local/bin/wayland-damage-pacer.py";
-        let local_script = "scripts/wayland-damage-pacer.py";
-        let script_to_run = if std::path::Path::new(pacer_script).exists() {
-            Some(pacer_script)
-        } else if std::path::Path::new(local_script).exists() {
-            Some(local_script)
+        let (pacer_x, pacer_y) = if monitor_to_record == "HDMI-1" {
+            (1920 + 1280 - 2, 720 - 2)
         } else {
-            None
+            (1280 - 2, 720 - 2)
         };
-        if let Some(script) = script_to_run {
-            println!("\x1b[1;32m[*] Spawning Wayland Damage Pacer (1x1 invisible click-through heartbeat at 60 FPS)...\x1b[0m");
-            std::process::Command::new(script)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .ok()
-        } else {
-            None
-        }
+        damage_pacer::spawn_damage_pacer(running.clone(), pacer_x, pacer_y)
     } else {
         None
     };
