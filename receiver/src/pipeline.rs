@@ -368,5 +368,9 @@ impl PipelineManager {
     pub fn set_audio_enabled(&self, enabled: bool) {
         self.audio.lock().unwrap().set_enabled(enabled);
     }
+
+    pub fn start_audio(&self) {
+        let _ = self.audio.lock().unwrap().start();
+    }
 }
 

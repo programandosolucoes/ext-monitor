@@ -152,6 +152,7 @@ fn main() {
     // 5. Start HDMI dynamic visualizer engine (active when playing audio, multiplexed with video)
     media_renderer::VisualizerEngine::start(running.clone(), pipeline_mgr.clone());
     media_renderer::start_audio_telemetry_listener(running.clone());
+    pipeline_mgr.start_audio();
 
     if let Ok(mut cfg) = web::CONFIG.lock() {
         cfg.mode3 = is_usb_bulk_mode;
