@@ -250,7 +250,7 @@ git commit -m "feat(miracast): implement pure-rust miracast session orchestrator
 - Create: `sender/src/bin/ext-miracast.rs`
 - Modify: `sender/Cargo.toml` (declare `[[bin]] name = "ext-miracast"`)
 
-- [ ] **Step 1: Write the standalone CLI executable**
+- [x] **Step 1: Write the standalone CLI executable**
 
 In `sender/src/bin/ext-miracast.rs`:
 - Parse CLI arguments (`--ip`, `--port`, `--help`).
@@ -258,17 +258,17 @@ In `sender/src/bin/ext-miracast.rs`:
 - Register `SIGINT` / `SIGTERM` handlers via `libc::signal` or `signal_hook` to ensure clean RTSP `TEARDOWN`.
 - Call `MiracastSession::start(...)`.
 
-- [ ] **Step 2: Build the binary**
+- [x] **Step 2: Build the binary**
 
 Run: `cargo build -p ext-sender --bin ext-miracast`
 Expected: Binary `./target/debug/ext-miracast` created successfully.
 
-- [ ] **Step 3: Run `--help` test**
+- [x] **Step 3: Run `--help` test**
 
 Run: `./target/debug/ext-miracast --help`
 Expected: Prints clean usage information and exits with code 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add sender/src/bin/ext-miracast.rs sender/Cargo.toml

@@ -5,6 +5,17 @@ edition = "2021"
 license = "MIT"
 authors = ["Carlos Alberto <carlosalberto4ti@gmail.com>"]
 description = "GPU Hardware-Accelerated Virtual Display Sender for Linux Wayland"
+[[bin]]
+name = "ext-sender"
+path = "src/main.rs"
+
+[[bin]]
+name = "ext-miracast"
+path = "src/bin/ext-miracast.rs"
+
+[[bin]]
+name = "ext_kms_probe"
+path = "src/bin/ext_kms_probe.rs"
 
 [dependencies]
 drm = "0.15.0"
