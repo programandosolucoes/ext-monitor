@@ -38,8 +38,17 @@ impl MutterScreenCastSession {
         println!("\x1b[1;32m[+] Mutter Session created:\x1b[0m {}", session_path);
 
         // 2. Request monitor recording with cursor embedded (mode 1)
-        // If monitor is virtual or auto, create virtual display via RecordVirtual
-        let (stream_path, active_monitor) = if monitor.to_lowercase() == "virtual" || monitor.to_lowercase() == "auto" {
+        // If monitor is virtual, auto, or extend, create virtual display via RecordVirtual
+        let is_virtual = monitor.to_lowercase() == "virtual"
+            || monitor.to_lowercase() == "auto"
+            || monitor.to_lowercase() == "extend";
+        let target_connector = if monitor.to_lowercase() == "clone" {
+            "eDP-1"
+        } else {
+            monitor
+        };
+
+        let (stream_path, active_monitor) = if is_virtual {
             let mut virtual_props: HashMap<&str, Value> = HashMap::new();
             virtual_props.insert("is-platform", Value::from(true));
             virtual_props.insert("cursor-mode", Value::from(1u32));
@@ -51,7 +60,7 @@ impl MutterScreenCastSession {
                 &(virtual_props,),
             )?;
             let sp: OwnedObjectPath = stream_reply.body().deserialize()?;
-            println!("\x1b[1;32m[+] Mutter Virtual ScreenCast Stream created:\x1b[0m {}", sp);
+            println!("\x1b[1;32m[+] Mutter Virtual ScreenCast Stream created (Extend Mode):\x1b[0m {}", sp);
             (sp, "Virtual-Display".to_string())
         } else {
             let mut monitor_props: HashMap<&str, Value> = HashMap::new();
@@ -61,12 +70,12 @@ impl MutterScreenCastSession {
                 session_path.as_str(),
                 Some("org.gnome.Mutter.ScreenCast.Session"),
                 "RecordMonitor",
-                &(monitor, monitor_props),
+                &(target_connector, monitor_props),
             ) {
                 Ok(stream_reply) => {
                     let sp: OwnedObjectPath = stream_reply.body().deserialize()?;
-                    println!("\x1b[1;32m[+] {} ScreenCast Stream created:\x1b[0m {}", monitor, sp);
-                    (sp, monitor.to_string())
+                    println!("\x1b[1;32m[+] {} ScreenCast Stream created (Clone Mode):\x1b[0m {}", target_connector, sp);
+                    (sp, target_connector.to_string())
                 }
                 Err(err) => {
                     println!(

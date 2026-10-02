@@ -34,6 +34,7 @@ pub const DEFAULT_WIDTH: u32 = 1280;
 pub const DEFAULT_HEIGHT: u32 = 720;
 pub const DEFAULT_FPS: u32 = 60;
 pub const DEFAULT_BITRATE_KBPS: u32 = 4000;
+pub const DEFAULT_MODE: &str = "extend";
 
 /// Configuration parameters for establishing a Miracast session
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +51,8 @@ pub struct MiracastConfig {
     pub fps: u32,
     /// Target video bitrate in kilobits per second (defaults to 4000)
     pub bitrate_kbps: u32,
+    /// Display mode: "extend" (create virtual display) or "clone" (mirror primary display)
+    pub mode: String,
 }
 
 impl Default for MiracastConfig {
@@ -61,6 +64,7 @@ impl Default for MiracastConfig {
             height: DEFAULT_HEIGHT,
             fps: DEFAULT_FPS,
             bitrate_kbps: DEFAULT_BITRATE_KBPS,
+            mode: DEFAULT_MODE.to_string(),
         }
     }
 }
@@ -93,6 +97,12 @@ impl MiracastConfig {
         self.bitrate_kbps = bitrate_kbps;
         self
     }
+
+    /// Sets display mode: "extend" or "clone".
+    pub fn with_mode(mut self, mode: impl Into<String>) -> Self {
+        self.mode = mode.into();
+        self
+    }
 }
 
 /// Active Miracast streaming session orchestrator
@@ -104,6 +114,8 @@ pub struct MiracastSession {
     worker: Option<JoinHandle<()>>,
     wfd_client: Option<WfdClient>,
     current_frame: Arc<RwLock<Option<Vec<u8>>>>,
+    screencast_session: Option<crate::screencast::MutterScreenCastSession>,
+    stream_process: Option<std::process::Child>,
 }
 
 impl MiracastSession {
@@ -160,16 +172,90 @@ impl MiracastSession {
         let udp_socket = UdpSocket::bind("0.0.0.0:0")?;
         let _ = udp_socket.set_write_timeout(Some(Duration::from_millis(50)));
 
-        // 4. Multi-architecture GPU hardware video encoder initialization
-        let encoder = create_best_encoder(config.width, config.height, config.fps, config.bitrate_kbps);
+        // 4. Multi-architecture GPU hardware video encoder and desktop capture setup
+        let target_monitor = if config.mode.to_lowercase() == "clone" {
+            "eDP-1"
+        } else {
+            "virtual"
+        };
+
         println!(
-            "\x1b[1;32m[miracast-hw]\x1b[0m Hardware Acceleration Active: \x1b[1;36m{}\x1b[0m ({}x{} @ {} FPS, {} kbps)",
-            encoder.name(),
-            config.width,
-            config.height,
-            config.fps,
-            config.bitrate_kbps
+            "\x1b[1;34m[miracast]\x1b[0m Inspecionando GNOME Mutter ScreenCast para captura (Modo: {})...",
+            config.mode
         );
+
+        let mut screencast_session = None;
+        let mut stream_process = None;
+
+        if let Ok(screencast) = crate::screencast::MutterScreenCastSession::create_and_start(target_monitor) {
+            println!(
+                "\x1b[1;32m[miracast]\x1b[0m Captura ScreenCast ativa no nó PipeWire {} (Monitor: {}, Modo: {})",
+                screencast.node_id, target_monitor, config.mode
+            );
+
+            let gpu = crate::miracast_launcher::detect_gpu_hardware();
+            let mut cmd = std::process::Command::new("gst-launch-1.0");
+            cmd.arg("-q");
+            cmd.env("GST_PLUGIN_FEATURE_RANK", &gpu.rank_string);
+            cmd.arg("pipewiresrc");
+            cmd.arg(format!("path={}", screencast.node_id));
+            cmd.arg("do-timestamp=true");
+            cmd.arg("keepalive-time=16");
+            cmd.arg("always-copy=false");
+            cmd.arg("!");
+            cmd.arg("videorate");
+            cmd.arg("!");
+            cmd.arg(format!("video/x-raw,framerate={}/1", config.fps));
+            cmd.arg("!");
+
+            if gpu.vendor_name.contains("AMD") || gpu.vendor_name.contains("Intel") {
+                cmd.arg("vapostproc").arg("!");
+                cmd.arg(format!("video/x-raw(memory:VAMemory),width={},height={}", config.width, config.height)).arg("!");
+                cmd.arg("vah264enc")
+                    .arg(format!("bitrate={}", config.bitrate_kbps))
+                    .arg("rate-control=cbr")
+                    .arg("b-frames=0")
+                    .arg("!");
+            } else if gpu.vendor_name.contains("NVIDIA") {
+                cmd.arg("nvh264enc")
+                    .arg(format!("bitrate={}", config.bitrate_kbps))
+                    .arg("zerolatency=true")
+                    .arg("b-frames=0")
+                    .arg("!");
+            } else {
+                cmd.arg("videoscale").arg("!");
+                cmd.arg(format!("video/x-raw,width={},height={}", config.width, config.height)).arg("!");
+                cmd.arg("x264enc")
+                    .arg(format!("bitrate={}", config.bitrate_kbps))
+                    .arg("tune=zerolatency")
+                    .arg("speed-preset=ultrafast")
+                    .arg("b-frames=0")
+                    .arg("!");
+            }
+
+            cmd.arg("h264parse").arg("config-interval=1").arg("!");
+            cmd.arg("mpegtsmux").arg("!");
+            cmd.arg("rtpmp2tpay").arg("!");
+            cmd.arg("udpsink")
+                .arg(format!("host={}", config.target_ip))
+                .arg(format!("port={}", sink_rtp_port))
+                .arg("buffer-size=262144")
+                .arg("sync=false");
+
+            match cmd.spawn() {
+                Ok(child) => {
+                    println!(
+                        "\x1b[1;32m[miracast]\x1b[0m Pipeline de streaming acelerado por GPU ativo (PID: {}, Destino: {}:{}, Modo: {})",
+                        child.id(), config.target_ip, sink_rtp_port, config.mode
+                    );
+                    stream_process = Some(child);
+                    screencast_session = Some(screencast);
+                }
+                Err(e) => {
+                    eprintln!("\x1b[1;33m[miracast]\x1b[0m Falha ao disparar pipeline GStreamer ({}). Usando worker in-process...", e);
+                }
+            }
+        }
 
         // 5. Initialize atomic control flags and frame buffer
         let running = Arc::new(AtomicBool::new(true));
@@ -179,34 +265,50 @@ impl MiracastSession {
 
         let cfg = config.clone();
 
-        // 6. Spawn worker thread running at CFR pacing
-        let worker = thread::spawn(move || {
-            Self::streaming_worker_loop(
-                udp_socket,
-                sink_addr,
-                cfg,
-                encoder,
-                frame_source,
-                running_clone,
+        // 6. Spawn worker thread if no external pipeline is active
+        let worker = if stream_process.is_none() {
+            let encoder = create_best_encoder(config.width, config.height, config.fps, config.bitrate_kbps);
+            println!(
+                "\x1b[1;32m[miracast-hw]\x1b[0m Hardware Acceleration Active: \x1b[1;36m{}\x1b[0m ({}x{} @ {} FPS, {} kbps)",
+                encoder.name(),
+                config.width,
+                config.height,
+                config.fps,
+                config.bitrate_kbps
             );
-        });
+            let handle = thread::spawn(move || {
+                Self::streaming_worker_loop(
+                    udp_socket,
+                    sink_addr,
+                    cfg,
+                    encoder,
+                    frame_source,
+                    running_clone,
+                );
+            });
+            Some(handle)
+        } else {
+            None
+        };
 
         Ok(Self {
             config,
             sink_rtp_port,
             session_id,
             running,
-            worker: Some(worker),
+            worker,
             wfd_client: Some(client),
             current_frame,
+            screencast_session,
+            stream_process,
         })
     }
 
     /// Stops the Miracast streaming session gracefully.
     ///
-    /// 1. Signals worker thread to terminate.
+    /// 1. Terminates desktop streaming pipeline and destroys virtual monitor.
     /// 2. Sends RTSP `TEARDOWN` to the sink and cleanly shuts down TCP socket (< 100ms).
-    /// 3. Joins the worker thread.
+    /// 3. Joins the worker thread if active.
     pub fn stop(&mut self) {
         if !self.running.swap(false, Ordering::SeqCst) {
             // Already stopped or stopping
@@ -215,14 +317,27 @@ impl MiracastSession {
 
         println!("\x1b[1;33m[miracast]\x1b[0m Stopping Miracast session and sending RTSP TEARDOWN...");
 
-        // Clean RTSP TEARDOWN to sink
+        // 1. Terminate streaming process if active
+        if let Some(mut child) = self.stream_process.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+            println!("\x1b[1;33m[miracast]\x1b[0m Processo de streaming finalizado.");
+        }
+
+        // 2. Drop screencast session (destroys virtual monitor or unbinds clone monitor)
+        if let Some(s) = self.screencast_session.take() {
+            drop(s);
+            println!("\x1b[1;33m[miracast]\x1b[0m Sessão Mutter ScreenCast encerrada (modo {}).", self.config.mode);
+        }
+
+        // 3. Clean RTSP TEARDOWN to sink
         if let Some(mut client) = self.wfd_client.take() {
             if let Err(e) = client.teardown() {
                 eprintln!("\x1b[1;33m[miracast]\x1b[0m TEARDOWN warning: {}", e);
             }
         }
 
-        // Join worker thread
+        // 4. Join worker thread if active
         if let Some(handle) = self.worker.take() {
             let _ = handle.join();
         }
@@ -369,6 +484,7 @@ mod tests {
         assert_eq!(config.height, 720);
         assert_eq!(config.fps, 60);
         assert_eq!(config.bitrate_kbps, 4000);
+        assert_eq!(config.mode, "extend");
     }
 
     #[test]
@@ -376,7 +492,8 @@ mod tests {
         let config = MiracastConfig::new("10.0.0.5", 7250)
             .with_resolution(1920, 1080)
             .with_fps(30)
-            .with_bitrate(8000);
+            .with_bitrate(8000)
+            .with_mode("clone");
 
         assert_eq!(config.target_ip, "10.0.0.5");
         assert_eq!(config.target_port, 7250);
@@ -384,6 +501,7 @@ mod tests {
         assert_eq!(config.height, 1080);
         assert_eq!(config.fps, 30);
         assert_eq!(config.bitrate_kbps, 8000);
+        assert_eq!(config.mode, "clone");
     }
 
     #[test]
@@ -473,6 +591,7 @@ mod tests {
             height: 240,
             fps: 30,
             bitrate_kbps: 1000,
+            mode: "extend".to_string(),
         };
 
         let mut session = MiracastSession::start(config).expect("MiracastSession::start failed");
@@ -532,6 +651,7 @@ mod tests {
             height: 240,
             fps: 30,
             bitrate_kbps: 1000,
+            mode: "extend".to_string(),
         };
 
         let mut session = MiracastSession::start(config).unwrap();

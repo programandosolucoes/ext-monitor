@@ -334,3 +334,18 @@ Expected:
 git add docs/
 git commit -m "docs(plan): complete implementation and validation of pure-rust miracast client"
 ```
+
+---
+
+### Task 8: Desktop Capture Integration (`--mode extend` and `--mode clone`)
+
+**Files:**
+- Modify: `sender/src/screencast.rs` (map `extend` to `RecordVirtual` and `clone` to `RecordMonitor` on `eDP-1`)
+- Modify: `sender/src/miracast/client.rs` (support `mode: String`, Mutter D-Bus screencast capture, VA-API pipeline)
+- Modify: `sender/src/bin/ext-miracast.rs` (CLI flags `--mode extend|clone`, `-m`, `--clone`, `--extend`)
+- Modify: `sender/src/main.rs` (re-export modules)
+
+- [x] **Step 1: Implement `--mode extend` (virtual monitor) and `--mode clone` (primary monitor)**
+- [x] **Step 2: Add CLI arguments and comprehensive unit tests**
+- [x] **Step 3: Hardware validate against Pi Zero (`192.168.7.2`) in both clone and extend modes**
+- [x] **Step 4: Verify live framebuffer capture and clean TEARDOWN return to standby splash**

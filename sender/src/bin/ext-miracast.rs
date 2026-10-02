@@ -19,14 +19,17 @@ use std::time::Duration;
 mod encoder;
 
 #[path = "../miracast_launcher.rs"]
-mod miracast_launcher;
+pub mod miracast_launcher;
+
+#[path = "../screencast.rs"]
+pub mod screencast;
 
 #[path = "../miracast/mod.rs"]
 pub mod miracast;
 
 use miracast::client::{
     MiracastConfig, MiracastSession, DEFAULT_BITRATE_KBPS, DEFAULT_FPS, DEFAULT_HEIGHT,
-    DEFAULT_TARGET_PORT, DEFAULT_WIDTH,
+    DEFAULT_MODE, DEFAULT_TARGET_PORT, DEFAULT_WIDTH,
 };
 use miracast::discovery::{interactive_select_sink, scan_sinks};
 use miracast_launcher::detect_gpu_hardware;
@@ -59,6 +62,8 @@ pub struct CliArgs {
     pub fps: u32,
     /// Video bitrate in kbps (default: 4000)
     pub bitrate_kbps: u32,
+    /// Display mode: "extend" (create virtual display) or "clone" (mirror primary display) (default: "extend")
+    pub mode: String,
     /// Scan local network (mDNS/SSDP) for Miracast sinks and list them
     pub scan: bool,
     /// Show help message flag
@@ -74,6 +79,7 @@ impl Default for CliArgs {
             height: DEFAULT_HEIGHT,
             fps: DEFAULT_FPS,
             bitrate_kbps: DEFAULT_BITRATE_KBPS,
+            mode: DEFAULT_MODE.to_string(),
             scan: false,
             show_help: false,
         }
@@ -185,6 +191,28 @@ impl CliArgs {
                         .parse::<u32>()
                         .map_err(|_| format!("Invalid bitrate value: '{}'", val))?;
                 }
+                "--mode" | "-m" => {
+                    let val = iter.next().ok_or_else(|| "--mode requires a value ('extend' or 'clone')".to_string())?;
+                    let m = val.to_lowercase();
+                    if m != "extend" && m != "clone" {
+                        return Err(format!("Invalid mode '{}'. Must be 'extend' or 'clone'", val));
+                    }
+                    cli.mode = m;
+                }
+                arg if arg.starts_with("--mode=") => {
+                    let val = &arg["--mode=".len()..];
+                    let m = val.to_lowercase();
+                    if m != "extend" && m != "clone" {
+                        return Err(format!("Invalid mode '{}'. Must be 'extend' or 'clone'", val));
+                    }
+                    cli.mode = m;
+                }
+                "--clone" => {
+                    cli.mode = "clone".to_string();
+                }
+                "--extend" => {
+                    cli.mode = "extend".to_string();
+                }
                 arg if arg.starts_with('-') => {
                     return Err(format!("Unknown option '{}'", arg));
                 }
@@ -215,6 +243,10 @@ pub fn print_help() {
     println!("    --res <720p|1080p>      Video resolution (default: 720p, 1280x720 native CEA index 6)");
     println!("    --fps <30|60>           Frame rate (default: 60)");
     println!("    --bitrate <KBPS>        Video bitrate in kbps (default: 4000)");
+    println!("    --mode <extend|clone>   Display mode: 'extend' (virtual screen) or 'clone' (mirror primary eDP-1) (default: extend)");
+    println!("    -m <extend|clone>       Short flag for --mode");
+    println!("    --clone                 Shortcut for --mode clone");
+    println!("    --extend                Shortcut for --mode extend");
     println!("    --scan                  Scan local network (mDNS/SSDP) for Miracast sinks and list them");
     println!("    -h, --help              Print help information");
 }
@@ -292,11 +324,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = MiracastConfig::new(&target_ip, target_port)
         .with_resolution(cli.width, cli.height)
         .with_fps(cli.fps)
-        .with_bitrate(cli.bitrate_kbps);
+        .with_bitrate(cli.bitrate_kbps)
+        .with_mode(cli.mode.clone());
 
     println!(
-        "\x1b[1;36m[miracast]\x1b[0m Launching session: {}x{} @ {} FPS, {} kbps -> {}:{}",
-        cli.width, cli.height, cli.fps, cli.bitrate_kbps, target_ip, target_port
+        "\x1b[1;36m[miracast]\x1b[0m Launching session [mode: {}]: {}x{} @ {} FPS, {} kbps -> {}:{}",
+        cli.mode, cli.width, cli.height, cli.fps, cli.bitrate_kbps, target_ip, target_port
     );
 
     let mut session = match MiracastSession::start(config) {
@@ -452,5 +485,39 @@ mod tests {
         let err = CliArgs::parse_from(args);
         assert!(err.is_err());
         assert!(err.unwrap_err().contains("Unexpected positional argument"));
+    }
+
+    #[test]
+    fn test_cli_args_mode_options() {
+        let args1 = ["ext-miracast", "--mode", "extend"];
+        let cli1 = CliArgs::parse_from(args1).expect("Failed to parse --mode extend");
+        assert_eq!(cli1.mode, "extend");
+
+        let args2 = ["ext-miracast", "-m", "clone"];
+        let cli2 = CliArgs::parse_from(args2).expect("Failed to parse -m clone");
+        assert_eq!(cli2.mode, "clone");
+
+        let args3 = ["ext-miracast", "--mode=clone"];
+        let cli3 = CliArgs::parse_from(args3).expect("Failed to parse --mode=clone");
+        assert_eq!(cli3.mode, "clone");
+    }
+
+    #[test]
+    fn test_cli_args_mode_flags_clone_and_extend() {
+        let args1 = ["ext-miracast", "--clone"];
+        let cli1 = CliArgs::parse_from(args1).expect("Failed to parse --clone");
+        assert_eq!(cli1.mode, "clone");
+
+        let args2 = ["ext-miracast", "--extend"];
+        let cli2 = CliArgs::parse_from(args2).expect("Failed to parse --extend");
+        assert_eq!(cli2.mode, "extend");
+    }
+
+    #[test]
+    fn test_cli_args_invalid_mode() {
+        let args = ["ext-miracast", "--mode", "mirror"];
+        let err = CliArgs::parse_from(args);
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("Invalid mode"));
     }
 }
