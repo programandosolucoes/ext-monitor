@@ -186,7 +186,12 @@ impl MiracastSession {
         let target_monitor = if config.mode.to_lowercase() == "clone" {
             "eDP-1"
         } else {
-            "virtual"
+            // For extend mode, prioritize the active HDMI-1 DRM/KMS display, fallback to virtual
+            if crate::kms::KmsOutputInfo::discover("HDMI-1").is_ok() {
+                "HDMI-1"
+            } else {
+                "virtual"
+            }
         };
 
         let mut screencast_session = None;
@@ -209,29 +214,29 @@ impl MiracastSession {
             cmd.arg("use-damage=false");
             cmd.arg("!");
             pipeline_ready = true;
-        } else if capture_backend == "kernel" || capture_backend == "kms" {
-            println!(
-                "\x1b[1;34m[miracast-kernel]\x1b[0m Captura Kernel DRM/KMS ativada (bypassing Mutter/D-Bus)..."
-            );
-            if let Ok(kms_out) = crate::kms::KmsOutputInfo::discover(target_monitor) {
+        } else {
+            // "kms", "kernel", or "mutter"
+            if capture_backend == "kernel" || capture_backend == "kms" {
                 println!(
-                    "\x1b[1;32m[miracast-kernel]\x1b[0m DRM/KMS Hardware Scanout: {} (CRTC {}, Card {:?})",
-                    kms_out.connector_name, kms_out.crtc_id, kms_out.card_path
+                    "\x1b[1;34m[miracast-kms]\x1b[0m Captura Hardware DRM/KMS Scanout ativada para monitor '{}'...",
+                    target_monitor
+                );
+                if let Ok(kms_out) = crate::kms::KmsOutputInfo::discover(target_monitor) {
+                    println!(
+                        "\x1b[1;32m[miracast-kms]\x1b[0m DRM/KMS Hardware Scanout: {} (CRTC {}, Card {:?}, {}x{}@{}Hz)",
+                        kms_out.connector_name, kms_out.crtc_id, kms_out.card_path, kms_out.width, kms_out.height, kms_out.vrefresh
+                    );
+                }
+            } else {
+                println!(
+                    "\x1b[1;34m[miracast]\x1b[0m Inspecionando GNOME Mutter ScreenCast para captura (Modo: {}, Monitor: {})...",
+                    config.mode, target_monitor
                 );
             }
-            cmd.arg("ximagesrc");
-            cmd.arg("use-damage=false");
-            cmd.arg("!");
-            pipeline_ready = true;
-        } else {
-            // "mutter" backend (default)
-            println!(
-                "\x1b[1;34m[miracast]\x1b[0m Inspecionando GNOME Mutter ScreenCast para captura (Modo: {})...",
-                config.mode
-            );
+
             if let Ok(screencast) = crate::screencast::MutterScreenCastSession::create_and_start(target_monitor) {
                 println!(
-                    "\x1b[1;32m[miracast]\x1b[0m Captura ScreenCast ativa no nó PipeWire {} (Monitor: {}, Modo: {})",
+                    "\x1b[1;32m[miracast]\x1b[0m Captura Scanout ativa no nó PipeWire {} (Monitor: {}, Modo: {})",
                     screencast.node_id, target_monitor, config.mode
                 );
                 cmd.arg("pipewiresrc");
