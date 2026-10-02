@@ -8,7 +8,7 @@
 [![Latency: Sub-Millisecond](https://img.shields.io/badge/Latency-%3C1ms_USB_Bulk-brightgreen.svg)]()
 [![OS: Linux & Windows](https://img.shields.io/badge/OS-Linux_Wayland_%26_Windows_10%2F11-blueviolet.svg)]()
 [![API: OpenAPI 3.0](https://img.shields.io/badge/API-OpenAPI_3.0_Swagger-green.svg)](http://192.168.7.2:8080/swagger)
-[![Version: v2.3.0](https://img.shields.io/badge/Release-v2.3.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.3.0-final)
+[![Version: v2.4.0](https://img.shields.io/badge/Release-v2.4.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.4.0-final)
 
 Um sistema de alta performance, 100% em Rust nativo puro, concebido para transformar um modesto **Raspberry Pi Zero (v1.2 / v1.3 / W / Zero 2 W)** conectado por um único **cabo Micro-USB comum** em um **monitor secundário HDMI de hardware com latência zero, sink de áudio digital, visualizador de espectro sonoro em tempo real e central multimídia IoT** para Linux (Wayland / GNOME Mutter) e Windows 10/11 (Miracast nativo / `Win + K`).
 
@@ -143,14 +143,15 @@ Os 20 blueprints fundamentais documentam a arquitetura de silício e o motor ess
 19. **[Blueprint 19: Appliance IoT Media Renderer: Cast e Visualizador HDMI](docs/blueprints/pt/19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md):** Dongle multimídia inteligente: Google Cast (CastV2), DIAL (YouTube), UPnP/DLNA e visualizador gráfico HDMI.
 20. **[Blueprint 20: Multiplexador HDMI de Porta Única e Zero-Reboot](docs/blueprints/pt/20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md):** Exclusão mútua na porta HDMI física, FFT de 512 pontos com Hann, i18n simétrico e ciclo de vida zero-reboot.
 
-### A Suíte de Expansão Miracast (Blueprints 21 a 25)
-Para viabilizar projeção de tela sem fio nativa e sem necessidade de instalar drivers ou aplicativos adicionais, o escopo foi expandido com 5 novos blueprints dedicados ao ecossistema Wi-Fi Display (Miracast / MS-MICE) no Windows 10/11 (`Win + K`) e desktops Linux:
+### A Suíte de Expansão Miracast e Benchmark (Blueprints 21 a 26)
+Para viabilizar projeção de tela sem fio nativa e sem necessidade de instalar drivers ou aplicativos adicionais, o escopo foi expandido com 6 novos blueprints dedicados ao ecossistema Wi-Fi Display (Miracast / MS-MICE) no Windows 10/11 (`Win + K`), desktops Linux e benchmarks empíricos de hardware:
 
 21. **[Blueprint 21: Miracast MS-MICE, Conexão Reversa RTSP WFD e SPS Dinâmico](docs/blueprints/pt/21-miracast-ms-mice-rtsp-wfd-sps-dinamico-e-gnome-network-displays.md):** Sinalização binária MS-MICE (TCP 7250), reversão RTSP WFD para o Source (7236), migração para UDP 5005 e parser puro em Rust de SPS dinâmico.
 22. **[Blueprint 22: Alinhamento NV12 no KMS, Fim da Faixa Verde e Otimizações Realtime](docs/blueprints/pt/22-correcao-faixa-verde-nv12-stride-alinhamento-e-otimizacoes-realtime-miracast.md):** Correção matemática de stride de 16 linhas (1080->1088), remoção de padding de 15.360 bytes no plano UV do KMS, demuxer MPEG-TS zero-delay via PUSI e aceleração VA-API AMD Radeon 610M.
 23. **[Blueprint 23: Aceleração por Hardware GPU no Miracast e Launcher do Host](docs/blueprints/pt/23-aceleracao-hardware-gpu-miracast-e-launcher-host.md):** Detecção direta via sysfs de GPUs (AMD, Intel, NVIDIA), daemon de ranking de encoders, debounce atômico e caixa interativa de comandos no painel Web.
 24. **[Blueprint 24: Resolução Nativa 720p60 WFD, Nível 3.1 e Demuxer PES AU Determinista](docs/blueprints/pt/24-resolucao-nativa-720p60-miracast-wfd-demux-pes-au-determinista.md):** Imposição do CEA índice 6 (1280x720p60), Nível 3.1 H.264, demuxer MPEG-TS determinista por PES/RTP Marker e validação de continuidade TS.
 25. **[Blueprint 25: Parada Unificada de Serviços (Standby), Teardown RTSP e Encerramento de Transmissores](docs/blueprints/pt/25-parada-unificada-standby-multi-servico-teardown-transmissor.md):** Parada limpa dos 3 modos (Modo 1 UDP, Modo 2 Miracast, Modo 3 USB Bulk), encerramento forçado de conexões RTSP ativas, finalização de transmissores no host (`SIGTERM`/`SIGKILL`) e exibição contínua da tela Ready via KMS no HDMI.
+26. **[Blueprint 26: Benchmark Empírico de Latência, Responsividade e Telemetria de Hardware](docs/blueprints/pt/26-benchmark-latencia-responsividade-telemetria-hardware.md):** Medições empíricas consolidadas dos 3 modos a 60 FPS nativo: Modo 2 Miracast Extend KMS (11.45ms), Modo 3 USB Bulk (11.45ms) e Modo 1 UDP (12.63ms); telemetria de silício, isolamento de barramento, consumo contido em 1.69W e <2.3% de CPU no Pi Zero.
 
 ---
 

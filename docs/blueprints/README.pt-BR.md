@@ -22,10 +22,11 @@ Após a conclusão do appliance base, o escopo de engenharia foi expandido para 
 * **BP 23:** Detecção determinística e ranking automatizado de GPUs do host (AMD Mendocino/RDNA, Intel QuickSync, NVIDIA NVENC) via sysfs com tooltips na UI.
 * **BP 24:** Imposição nativa do formato CEA índice 6 (1280x720p60 Nível 3.1) e demuxer MPEG-TS determinista demarcado por PES.
 * **BP 25:** Parada unificada de standby multi-serviço, teardown de sockets TCP RTSP ativos, encerramento de transmissores do host (`SIGTERM`/`SIGKILL`) e tela de splash Ready persistente no HDMI.
+* **BP 26:** Benchmark empírico de latência vidro-a-vidro, responsividade de API e telemetria de hardware nos 3 modos com padrão Extend KMS.
 
 ---
 
-## 2. Mapa dos 25 Blueprints de Engenharia
+## 2. Mapa dos 26 Blueprints de Engenharia
 
 | # | Blueprint Técnico | Arquivo | Foco de Engenharia |
 | :---: | :--- | :--- | :--- |
@@ -54,7 +55,7 @@ Após a conclusão do appliance base, o escopo de engenharia foi expandido para 
 | **23** | **Aceleração de Hardware por GPU no Miracast e Launcher Automático do Host** | [`23-aceleracao-hardware-gpu-miracast-e-launcher-host.md`](pt/23-aceleracao-hardware-gpu-miracast-e-launcher-host.md) | Detecção determinística de GPU via sysfs (AMD, Intel, NVIDIA), daemon de ranking de encoders de hardware, debounce atômico e caixa interativa de comandos de GPU no painel Web. |
 | **24** | **Resolução Nativa 720p60 WFD, Nível 3.1 e Demuxer PES AU Determinista** | [`24-resolucao-nativa-720p60-miracast-wfd-demux-pes-au-determinista.md`](pt/24-resolucao-nativa-720p60-miracast-wfd-demux-pes-au-determinista.md) | Aplicação estrita do CEA índice 6 (1280x720p60), Nível 3.1, eliminação de sobrecarga 1080p, demuxer MPEG-TS determinista por PES/RTP Marker e validação de continuidade TS. |
 | **25** | **Parada Unificada de Serviços (Standby), Teardown RTSP e Encerramento de Transmissores** | [`25-parada-unificada-standby-multi-servico-teardown-transmissor.md`](pt/25-parada-unificada-standby-multi-servico-teardown-transmissor.md) | Interrupção atômica dos 3 modos (Modos 1, 2, 3), fechamento forçado de sockets RTSP Miracast/MS-MICE, finalização de gnome-network-displays no host e persistência da saída HDMI ativa com tela de Standby. |
-| **26** | **Benchmark Empírico de Latência, Responsividade e Telemetria de Hardware** | [`26-benchmark-latencia-responsividade-telemetria-hardware.md`](pt/26-benchmark-latencia-responsividade-telemetria-hardware.md) | Medições empíricas consolidadas dos 3 modos a 60 FPS nativo: Modo 3 USB Bulk (11.45ms), Modo 1 UDP (12.63ms) e Modo 2 Miracast (13.90ms); telemetria de silício, isolamento de barramento e <3.3% de CPU no Pi Zero. |
+| **26** | **Benchmark Empírico de Latência, Responsividade e Telemetria de Hardware** | [`26-benchmark-latencia-responsividade-telemetria-hardware.md`](pt/26-benchmark-latencia-responsividade-telemetria-hardware.md) | Medições empíricas consolidadas dos 3 modos a 60 FPS nativo: Modo 2 Miracast Extend KMS (11.45ms), Modo 3 USB Bulk (11.45ms) e Modo 1 UDP (12.63ms); telemetria de silício, isolamento de barramento, consumo contido em 1.69W e <2.3% de CPU no Pi Zero. |
 
 ---
 

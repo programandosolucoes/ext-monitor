@@ -24,10 +24,11 @@ Following the completion of the baseline appliance, the engineering scope expand
 * **BP 23:** Automated sysfs host GPU hardware ranking (AMD Mendocino/RDNA, Intel QuickSync, NVIDIA NVENC) and UI launch tooltips.
 * **BP 24:** Native 720p60 CEA index 6 enforcement (Level 3.1) and deterministic PES-demarcated MPEG-TS Access Unit demuxing.
 * **BP 25:** Unified multi-service standby stop, active RTSP client socket teardown, host transmitter termination (`SIGTERM`/`SIGKILL`), and persistent HDMI ready splash.
+* **BP 26:** Empirical glass-to-glass latency, API responsiveness, and hardware telemetry benchmark across all 3 modes with Extend KMS default.
 
 ---
 
-## 2. Directory of the 25 Engineering Blueprints
+## 2. Directory of the 26 Engineering Blueprints
 
 | # | Technical Blueprint | Document File | Engineering Focus |
 | :---: | :--- | :--- | :--- |
@@ -56,7 +57,7 @@ Following the completion of the baseline appliance, the engineering scope expand
 | **23** | **Miracast GPU Hardware Acceleration & Host Launcher** | [`23-miracast-gpu-hardware-acceleration-and-host-launcher.md`](en/23-miracast-gpu-hardware-acceleration-and-host-launcher.md) | Direct sysfs GPU vendor detection (AMD, Intel, NVIDIA), automated hardware ranking launcher daemon, atomic debounce, and Web UI GPU command box. |
 | **24** | **Native 720p60 Miracast WFD & Deterministic Demux** | [`24-native-720p60-miracast-wfd-pes-au-deterministic-demux.md`](en/24-native-720p60-miracast-wfd-pes-au-deterministic-demux.md) | Enforcing CEA index 6 (1280x720p60) WFD formats, Level 3.1 profile, deterministic PES-demarcated MPEG-TS demuxer, and TS continuity counter verification. |
 | **25** | **Unified Standby Stop, RTSP Teardown & Transmitter Kill** | [`25-unified-standby-stop-multi-service-transmitter-teardown.md`](en/25-unified-standby-stop-multi-service-transmitter-teardown.md) | Multi-service standby stop (Modes 1, 2, 3), active RTSP TCP stream teardown, host gnome-network-displays kill via pkill, and persistent HDMI ready splash. |
-| **26** | **Empirical Latency, Responsiveness & Hardware Telemetry Benchmark** | [`26-latency-responsiveness-hardware-telemetry-benchmark.md`](en/26-latency-responsiveness-hardware-telemetry-benchmark.md) | Consolidated empirical benchmark across all 3 modes at native 60 FPS: Mode 3 USB Bulk (11.45ms), Mode 1 UDP (12.63ms), and Mode 2 Miracast (13.90ms); silicon telemetry, bus isolation, and <3.3% CPU load on Pi Zero. |
+| **26** | **Empirical Latency, Responsiveness & Hardware Telemetry Benchmark** | [`26-latency-responsiveness-hardware-telemetry-benchmark.md`](en/26-latency-responsiveness-hardware-telemetry-benchmark.md) | Consolidated empirical benchmark across all 3 modes at native 60 FPS: Mode 2 Miracast Extend KMS (11.45ms), Mode 3 USB Bulk (11.45ms), and Mode 1 UDP (12.63ms); silicon telemetry, bus isolation, low 1.69W power draw, and <2.3% CPU load on Pi Zero. |
 
 ---
 

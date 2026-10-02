@@ -8,7 +8,7 @@
 [![Latency: Sub-Millisecond](https://img.shields.io/badge/Latency-%3C1ms_USB_Bulk-brightgreen.svg)]()
 [![OS: Linux & Windows](https://img.shields.io/badge/OS-Linux_Wayland_%26_Windows_10%2F11-blueviolet.svg)]()
 [![API: OpenAPI 3.0](https://img.shields.io/badge/API-OpenAPI_3.0_Swagger-green.svg)](http://192.168.7.2:8080/swagger)
-[![Version: v2.3.0](https://img.shields.io/badge/Release-v2.3.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.3.0-final)
+[![Version: v2.4.0](https://img.shields.io/badge/Release-v2.4.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.4.0-final)
 
 A high-performance, 100% native Rust system designed to transform a modest **Raspberry Pi Zero (v1.2 / v1.3 / W / Zero 2 W)** connected via a single standard **Micro-USB cable** into a **zero-latency hardware HDMI secondary display, digital audio sink, real-time audio spectrum visualizer, and IoT media appliance** for Linux (Wayland / GNOME Mutter) and Windows 10/11 (native Miracast / `Win + K`).
 
@@ -262,14 +262,15 @@ The initial 20 engineering blueprints document the core silicon architecture and
 19. **[Blueprint 19: IoT Media Renderer, Chromecast/UPnP/DLNA & Web Visualizer](docs/blueprints/en/19-iot-media-renderer-chromecast-upnp-hdmi-visualizer.md):** Media streaming appliance mode, background player, and HDMI audio visualizer.
 20. **[Blueprint 20: Single-HDMI Scanout Multiplexer, Realtime Hardware FFT & Zero-Reboot](docs/blueprints/en/20-single-hdmi-scanout-multiplexer-realtime-fft-i18n-zero-reboot.md):** 512-point Cooley-Tukey FFT, single-HDMI mutual exclusion, 4-language i18n, and zero-reboot teardown.
 
-### The Miracast & Expansion Suite (Blueprints 21 to 25)
-To support native zero-driver wireless projection across modern OSes without installing software, the architecture was expanded with 5 additional engineering blueprints covering Wi-Fi Display (Miracast / MS-MICE) on Windows 10/11 (`Win + K`) and Linux desktops:
+### The Miracast & Benchmark Expansion Suite (Blueprints 21 to 26)
+To support native zero-driver wireless projection across modern OSes without installing software, the architecture was expanded with 6 additional engineering blueprints covering Wi-Fi Display (Miracast / MS-MICE) on Windows 10/11 (`Win + K`), Linux desktops, and empirical hardware benchmarks:
 
 21. **[Blueprint 21: Miracast MS-MICE, Reverse RTSP WFD & Dynamic SPS Parsing](docs/blueprints/en/21-miracast-ms-mice-rtsp-wfd-dynamic-sps-and-gnome-network-displays.md):** MS-MICE binary signaling (TCP 7250), reverse RTSP WFD connection to Source (7236), UDP 5005 discovery migration, and GNOME 1080p bug resolution via pure-Rust dynamic SPS parser.
 22. **[Blueprint 22: NV12 Macroblock Stride Alignment & Realtime Miracast Optimizations](docs/blueprints/en/22-nv12-macroblock-stride-green-bar-fix-and-realtime-miracast-optimizations.md):** 16-line macroblock pitch math (1080->1088), 15,360-byte padding fix on KMS UV plane, PUSI zero-delay TS demuxing, 2ms polling, and AMD Radeon 610M VA-API hardware acceleration.
 23. **[Blueprint 23: Miracast GPU Hardware Acceleration & Automated Host Launcher](docs/blueprints/en/23-miracast-gpu-hardware-acceleration-and-host-launcher.md):** Direct sysfs GPU vendor detection (AMD, Intel, NVIDIA), automated hardware ranking launcher daemon, atomic debounce, and Web UI GPU command box.
 24. **[Blueprint 24: Native 720p60 Miracast WFD & Deterministic Demux](docs/blueprints/en/24-native-720p60-miracast-wfd-pes-au-deterministic-demux.md):** Enforcing CEA index 6 (1280x720p60) WFD formats, Level 3.1 profile, deterministic PES-demarcated MPEG-TS demuxer, and TS continuity counter verification.
 25. **[Blueprint 25: Unified Multi-Service Standby Stop & Transmitter Teardown](docs/blueprints/en/25-unified-standby-stop-multi-service-transmitter-teardown.md):** Atomic standby stop across all 3 streaming modes (UDP, Miracast, USB Bulk), active RTSP TCP stream teardown, host transmitter termination (`SIGTERM`/`SIGKILL`), and persistent HDMI ready splash.
+26. **[Blueprint 26: Empirical Glass-to-Glass Latency, API Responsiveness & Hardware Telemetry Benchmark](docs/blueprints/en/26-latency-responsiveness-hardware-telemetry-benchmark.md):** Consolidated empirical benchmark across all 3 modes at native 60 FPS: Mode 2 Miracast Extend KMS (11.45ms), Mode 3 USB Bulk (11.45ms), and Mode 1 UDP (12.63ms); silicon telemetry, bus isolation, low 1.69W power draw, and <2.3% CPU load on Pi Zero.
 
 ---
 
