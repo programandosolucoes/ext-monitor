@@ -19,7 +19,7 @@ mod control;
 mod discovery;
 mod encoder;
 mod i18n;
-mod kms;
+pub mod kms;
 pub mod miracast_launcher;
 pub mod miracast;
 pub mod native_streamer;

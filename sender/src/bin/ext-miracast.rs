@@ -18,6 +18,9 @@ use std::time::Duration;
 #[path = "../encoder.rs"]
 mod encoder;
 
+#[path = "../kms.rs"]
+pub mod kms;
+
 #[path = "../miracast_launcher.rs"]
 pub mod miracast_launcher;
 
@@ -28,8 +31,8 @@ pub mod screencast;
 pub mod miracast;
 
 use miracast::client::{
-    MiracastConfig, MiracastSession, DEFAULT_BITRATE_KBPS, DEFAULT_FPS, DEFAULT_HEIGHT,
-    DEFAULT_MODE, DEFAULT_TARGET_PORT, DEFAULT_WIDTH,
+    MiracastConfig, MiracastSession, DEFAULT_BITRATE_KBPS, DEFAULT_CAPTURE, DEFAULT_FPS,
+    DEFAULT_HEIGHT, DEFAULT_MODE, DEFAULT_TARGET_PORT, DEFAULT_WIDTH,
 };
 use miracast::discovery::{interactive_select_sink, scan_sinks};
 use miracast_launcher::detect_gpu_hardware;
@@ -64,6 +67,8 @@ pub struct CliArgs {
     pub bitrate_kbps: u32,
     /// Display mode: "extend" (create virtual display) or "clone" (mirror primary display) (default: "extend")
     pub mode: String,
+    /// Capture backend: "mutter" (default), "kernel" / "kms" (Linux Kernel DRM/KMS scanout), "x11" (X11 XShm)
+    pub capture: String,
     /// Scan local network (mDNS/SSDP) for Miracast sinks and list them
     pub scan: bool,
     /// Show help message flag
@@ -80,6 +85,7 @@ impl Default for CliArgs {
             fps: DEFAULT_FPS,
             bitrate_kbps: DEFAULT_BITRATE_KBPS,
             mode: DEFAULT_MODE.to_string(),
+            capture: DEFAULT_CAPTURE.to_string(),
             scan: false,
             show_help: false,
         }
@@ -213,6 +219,31 @@ impl CliArgs {
                 "--extend" => {
                     cli.mode = "extend".to_string();
                 }
+                "--capture" | "-c" => {
+                    let val = iter.next().ok_or_else(|| "--capture requires a value ('mutter', 'kernel', 'kms', or 'x11')".to_string())?;
+                    let c = val.to_lowercase();
+                    if c != "mutter" && c != "kernel" && c != "kms" && c != "x11" {
+                        return Err(format!("Invalid capture backend '{}'. Must be 'mutter', 'kernel', 'kms', or 'x11'", val));
+                    }
+                    cli.capture = c;
+                }
+                arg if arg.starts_with("--capture=") => {
+                    let val = &arg["--capture=".len()..];
+                    let c = val.to_lowercase();
+                    if c != "mutter" && c != "kernel" && c != "kms" && c != "x11" {
+                        return Err(format!("Invalid capture backend '{}'. Must be 'mutter', 'kernel', 'kms', or 'x11'", val));
+                    }
+                    cli.capture = c;
+                }
+                "--kernel" | "--kms" => {
+                    cli.capture = "kernel".to_string();
+                }
+                "--mutter" => {
+                    cli.capture = "mutter".to_string();
+                }
+                "--x11" => {
+                    cli.capture = "x11".to_string();
+                }
                 arg if arg.starts_with('-') => {
                     return Err(format!("Unknown option '{}'", arg));
                 }
@@ -247,6 +278,11 @@ pub fn print_help() {
     println!("    -m <extend|clone>       Short flag for --mode");
     println!("    --clone                 Shortcut for --mode clone");
     println!("    --extend                Shortcut for --mode extend");
+    println!("    --capture <mutter|kernel|x11>  Capture backend: 'mutter' (Wayland D-Bus), 'kernel'/'kms' (Kernel DRM/KMS scanout), 'x11' (X11 XShm)");
+    println!("    -c <mutter|kernel|x11>         Short flag for --capture");
+    println!("    --kernel, --kms                Shortcut for --capture kernel (Linux Kernel DRM/KMS scanout)");
+    println!("    --mutter                       Shortcut for --capture mutter (GNOME Mutter D-Bus)");
+    println!("    --x11                          Shortcut for --capture x11 (X11 XShm screen grabber)");
     println!("    --scan                  Scan local network (mDNS/SSDP) for Miracast sinks and list them");
     println!("    -h, --help              Print help information");
 }
@@ -325,11 +361,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_resolution(cli.width, cli.height)
         .with_fps(cli.fps)
         .with_bitrate(cli.bitrate_kbps)
-        .with_mode(cli.mode.clone());
+        .with_mode(cli.mode.clone())
+        .with_capture(cli.capture.clone());
 
     println!(
-        "\x1b[1;36m[miracast]\x1b[0m Launching session [mode: {}]: {}x{} @ {} FPS, {} kbps -> {}:{}",
-        cli.mode, cli.width, cli.height, cli.fps, cli.bitrate_kbps, target_ip, target_port
+        "\x1b[1;36m[miracast]\x1b[0m Launching session [mode: {}, capture: {}]: {}x{} @ {} FPS, {} kbps -> {}:{}",
+        cli.mode, cli.capture, cli.width, cli.height, cli.fps, cli.bitrate_kbps, target_ip, target_port
     );
 
     let mut session = match MiracastSession::start(config) {
@@ -519,5 +556,47 @@ mod tests {
         let err = CliArgs::parse_from(args);
         assert!(err.is_err());
         assert!(err.unwrap_err().contains("Invalid mode"));
+    }
+
+    #[test]
+    fn test_cli_args_capture_options() {
+        let args1 = ["ext-miracast", "--capture", "kernel"];
+        let cli1 = CliArgs::parse_from(args1).expect("Failed to parse --capture kernel");
+        assert_eq!(cli1.capture, "kernel");
+
+        let args2 = ["ext-miracast", "-c", "x11"];
+        let cli2 = CliArgs::parse_from(args2).expect("Failed to parse -c x11");
+        assert_eq!(cli2.capture, "x11");
+
+        let args3 = ["ext-miracast", "--capture=mutter"];
+        let cli3 = CliArgs::parse_from(args3).expect("Failed to parse --capture=mutter");
+        assert_eq!(cli3.capture, "mutter");
+    }
+
+    #[test]
+    fn test_cli_args_capture_flags() {
+        let args1 = ["ext-miracast", "--kernel"];
+        let cli1 = CliArgs::parse_from(args1).expect("Failed to parse --kernel");
+        assert_eq!(cli1.capture, "kernel");
+
+        let args2 = ["ext-miracast", "--kms"];
+        let cli2 = CliArgs::parse_from(args2).expect("Failed to parse --kms");
+        assert_eq!(cli2.capture, "kernel");
+
+        let args3 = ["ext-miracast", "--mutter"];
+        let cli3 = CliArgs::parse_from(args3).expect("Failed to parse --mutter");
+        assert_eq!(cli3.capture, "mutter");
+
+        let args4 = ["ext-miracast", "--x11"];
+        let cli4 = CliArgs::parse_from(args4).expect("Failed to parse --x11");
+        assert_eq!(cli4.capture, "x11");
+    }
+
+    #[test]
+    fn test_cli_args_invalid_capture() {
+        let args = ["ext-miracast", "--capture", "invalid_backend"];
+        let err = CliArgs::parse_from(args);
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("Invalid capture backend"));
     }
 }

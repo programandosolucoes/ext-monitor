@@ -35,6 +35,7 @@ pub const DEFAULT_HEIGHT: u32 = 720;
 pub const DEFAULT_FPS: u32 = 60;
 pub const DEFAULT_BITRATE_KBPS: u32 = 4000;
 pub const DEFAULT_MODE: &str = "extend";
+pub const DEFAULT_CAPTURE: &str = "mutter";
 
 /// Configuration parameters for establishing a Miracast session
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,6 +54,8 @@ pub struct MiracastConfig {
     pub bitrate_kbps: u32,
     /// Display mode: "extend" (create virtual display) or "clone" (mirror primary display)
     pub mode: String,
+    /// Capture backend: "mutter" (GNOME D-Bus), "kernel" / "kms" (Linux Kernel DRM/KMS scanout), "x11" (X11 XShm)
+    pub capture: String,
 }
 
 impl Default for MiracastConfig {
@@ -65,6 +68,7 @@ impl Default for MiracastConfig {
             fps: DEFAULT_FPS,
             bitrate_kbps: DEFAULT_BITRATE_KBPS,
             mode: DEFAULT_MODE.to_string(),
+            capture: DEFAULT_CAPTURE.to_string(),
         }
     }
 }
@@ -101,6 +105,12 @@ impl MiracastConfig {
     /// Sets display mode: "extend" or "clone".
     pub fn with_mode(mut self, mode: impl Into<String>) -> Self {
         self.mode = mode.into();
+        self
+    }
+
+    /// Sets capture backend: "mutter" (GNOME D-Bus), "kernel" / "kms" (Linux Kernel DRM/KMS scanout), or "x11" (X11 XShm).
+    pub fn with_capture(mut self, capture: impl Into<String>) -> Self {
+        self.capture = capture.into();
         self
     }
 }
@@ -179,30 +189,63 @@ impl MiracastSession {
             "virtual"
         };
 
-        println!(
-            "\x1b[1;34m[miracast]\x1b[0m Inspecionando GNOME Mutter ScreenCast para captura (Modo: {})...",
-            config.mode
-        );
-
         let mut screencast_session = None;
         let mut stream_process = None;
 
-        if let Ok(screencast) = crate::screencast::MutterScreenCastSession::create_and_start(target_monitor) {
-            println!(
-                "\x1b[1;32m[miracast]\x1b[0m Captura ScreenCast ativa no nó PipeWire {} (Monitor: {}, Modo: {})",
-                screencast.node_id, target_monitor, config.mode
-            );
+        let capture_backend = config.capture.to_lowercase();
+        let gpu = crate::miracast_launcher::detect_gpu_hardware();
 
-            let gpu = crate::miracast_launcher::detect_gpu_hardware();
-            let mut cmd = std::process::Command::new("gst-launch-1.0");
-            cmd.arg("-q");
-            cmd.env("GST_PLUGIN_FEATURE_RANK", &gpu.rank_string);
-            cmd.arg("pipewiresrc");
-            cmd.arg(format!("path={}", screencast.node_id));
-            cmd.arg("do-timestamp=true");
-            cmd.arg("keepalive-time=16");
-            cmd.arg("always-copy=false");
+        let mut cmd = std::process::Command::new("gst-launch-1.0");
+        cmd.arg("-q");
+        cmd.env("GST_PLUGIN_FEATURE_RANK", &gpu.rank_string);
+
+        let mut pipeline_ready = false;
+
+        if capture_backend == "x11" {
+            println!(
+                "\x1b[1;34m[miracast-x11]\x1b[0m Captura direta X11 ativada (ximagesrc, bypass Mutter/D-Bus)..."
+            );
+            cmd.arg("ximagesrc");
+            cmd.arg("use-damage=false");
             cmd.arg("!");
+            pipeline_ready = true;
+        } else if capture_backend == "kernel" || capture_backend == "kms" {
+            println!(
+                "\x1b[1;34m[miracast-kernel]\x1b[0m Captura Kernel DRM/KMS ativada (bypassing Mutter/D-Bus)..."
+            );
+            if let Ok(kms_out) = crate::kms::KmsOutputInfo::discover(target_monitor) {
+                println!(
+                    "\x1b[1;32m[miracast-kernel]\x1b[0m DRM/KMS Hardware Scanout: {} (CRTC {}, Card {:?})",
+                    kms_out.connector_name, kms_out.crtc_id, kms_out.card_path
+                );
+            }
+            cmd.arg("ximagesrc");
+            cmd.arg("use-damage=false");
+            cmd.arg("!");
+            pipeline_ready = true;
+        } else {
+            // "mutter" backend (default)
+            println!(
+                "\x1b[1;34m[miracast]\x1b[0m Inspecionando GNOME Mutter ScreenCast para captura (Modo: {})...",
+                config.mode
+            );
+            if let Ok(screencast) = crate::screencast::MutterScreenCastSession::create_and_start(target_monitor) {
+                println!(
+                    "\x1b[1;32m[miracast]\x1b[0m Captura ScreenCast ativa no nó PipeWire {} (Monitor: {}, Modo: {})",
+                    screencast.node_id, target_monitor, config.mode
+                );
+                cmd.arg("pipewiresrc");
+                cmd.arg(format!("path={}", screencast.node_id));
+                cmd.arg("do-timestamp=true");
+                cmd.arg("keepalive-time=16");
+                cmd.arg("always-copy=false");
+                cmd.arg("!");
+                screencast_session = Some(screencast);
+                pipeline_ready = true;
+            }
+        }
+
+        if pipeline_ready {
             cmd.arg("videorate");
             cmd.arg("!");
             cmd.arg(format!("video/x-raw,framerate={}/1", config.fps));
@@ -245,11 +288,10 @@ impl MiracastSession {
             match cmd.spawn() {
                 Ok(child) => {
                     println!(
-                        "\x1b[1;32m[miracast]\x1b[0m Pipeline de streaming acelerado por GPU ativo (PID: {}, Destino: {}:{}, Modo: {})",
-                        child.id(), config.target_ip, sink_rtp_port, config.mode
+                        "\x1b[1;32m[miracast]\x1b[0m Pipeline de streaming acelerado por GPU ativo (PID: {}, Destino: {}:{}, Modo: {}, Captura: {})",
+                        child.id(), config.target_ip, sink_rtp_port, config.mode, config.capture
                     );
                     stream_process = Some(child);
-                    screencast_session = Some(screencast);
                 }
                 Err(e) => {
                     eprintln!("\x1b[1;33m[miracast]\x1b[0m Falha ao disparar pipeline GStreamer ({}). Usando worker in-process...", e);
@@ -485,6 +527,7 @@ mod tests {
         assert_eq!(config.fps, 60);
         assert_eq!(config.bitrate_kbps, 4000);
         assert_eq!(config.mode, "extend");
+        assert_eq!(config.capture, "mutter");
     }
 
     #[test]
@@ -493,7 +536,8 @@ mod tests {
             .with_resolution(1920, 1080)
             .with_fps(30)
             .with_bitrate(8000)
-            .with_mode("clone");
+            .with_mode("clone")
+            .with_capture("kernel");
 
         assert_eq!(config.target_ip, "10.0.0.5");
         assert_eq!(config.target_port, 7250);
@@ -502,6 +546,7 @@ mod tests {
         assert_eq!(config.fps, 30);
         assert_eq!(config.bitrate_kbps, 8000);
         assert_eq!(config.mode, "clone");
+        assert_eq!(config.capture, "kernel");
     }
 
     #[test]
@@ -592,6 +637,7 @@ mod tests {
             fps: 30,
             bitrate_kbps: 1000,
             mode: "extend".to_string(),
+            capture: "mutter".to_string(),
         };
 
         let mut session = MiracastSession::start(config).expect("MiracastSession::start failed");
@@ -652,6 +698,7 @@ mod tests {
             fps: 30,
             bitrate_kbps: 1000,
             mode: "extend".to_string(),
+            capture: "mutter".to_string(),
         };
 
         let mut session = MiracastSession::start(config).unwrap();
