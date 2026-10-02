@@ -37,6 +37,7 @@ pub mod media_renderer;
 pub mod mdns;
 pub mod web_cast;
 pub mod cast_proxy;
+pub mod flow;
 
 use i18n::Language;
 use pipeline::{PipelineBackend, PipelineKind, PipelineManager};
