@@ -194,7 +194,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None
         }
         TransportKind::Miracast => {
-            println!("\x1b[1;32m[*] Transport Mode: Miracast / Wi-Fi Display (Managed by GNOME / Windows)\x1b[0m");
+            println!("\x1b[1;32m[*] Transport Mode: Miracast / Wi-Fi Display (Pure-Rust Client)\x1b[0m");
+            std::thread::spawn(|| {
+                crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+            });
             None
         }
     };
@@ -246,7 +249,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // 5. Main Supervisor Loop (Reconnects on Suspend/Resume or System Event)
-    let mut is_paused = false;
+    let mut is_paused = cfg.transport == TransportKind::Miracast;
 
     while running.load(Ordering::SeqCst) {
         let (_screencast_session, node_id, kms_info) = match cfg.capture {
@@ -371,12 +374,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match action {
                     ControlAction::StartStreaming => {
                         println!("\x1b[1;32m[+] Web Command: Iniciar / Retomar Transmissão recebido!\x1b[0m");
-                        is_paused = false;
-                        restart_pipeline = true;
+                        if cfg.transport == TransportKind::Miracast {
+                            println!("\x1b[1;35m[*] Mode 2 Miracast ativo: Disparando cliente Miracast nativo pure-Rust...\x1b[0m");
+                            is_paused = true;
+                            close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                            pipeline_builder.usb_pipe_fd = None;
+                            std::thread::spawn(|| {
+                                crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+                            });
+                        } else {
+                            is_paused = false;
+                            restart_pipeline = true;
+                        }
                     }
                     ControlAction::StopStreaming => {
                         println!("\x1b[1;33m[*] Web Command: Parar Transmissão / Standby recebido! Encerrando todos os transmissores...\x1b[0m");
-                        crate::miracast_launcher::stop_gnome_network_displays();
+                        crate::miracast_launcher::stop_miracast_client();
                         if let Some(mut c) = child.take() {
                             let _ = c.kill();
                             let _ = c.wait();
@@ -391,16 +404,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("\x1b[1;32m[*] Todos os transmissores de vídeo do Host foram finalizados. Modo Standby ativo.\x1b[0m");
                     }
                     ControlAction::SetMode(m) => {
-                        let target_mon = if m == "clone" { "eDP-1".to_string() } else { "HDMI-1".to_string() };
-                        if target_mon != monitor_to_record || m != cfg.mode {
-                            println!("\x1b[1;35m[*] Web Command: Troca de Modo '{}' -> '{}' (Monitor: {})\x1b[0m", cfg.mode, m, target_mon);
-                            cfg.mode = m;
-                            monitor_to_record = target_mon;
-                            switch_engine_or_monitor = true;
-                        } else {
-                            println!("\x1b[1;35m[*] Web Command: Reativando Modo '{}' (Monitor: {})\x1b[0m", m, target_mon);
-                            is_paused = false;
+                        if m == "miracast" || m == "wfd" || m == "mode2" || m == "2" {
+                            println!("\x1b[1;35m[*] Web Command: Troca de Modo para Miracast (Mode 2)\x1b[0m");
+                            is_paused = true;
+                            cfg.transport = TransportKind::Miracast;
+                            close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+                            pipeline_builder.usb_pipe_fd = None;
                             restart_pipeline = true;
+                            std::thread::spawn(|| {
+                                crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+                            });
+                        } else {
+                            let target_mon = if m == "clone" { "eDP-1".to_string() } else { "HDMI-1".to_string() };
+                            if target_mon != monitor_to_record || m != cfg.mode {
+                                println!("\x1b[1;35m[*] Web Command: Troca de Modo '{}' -> '{}' (Monitor: {})\x1b[0m", cfg.mode, m, target_mon);
+                                cfg.mode = m;
+                                monitor_to_record = target_mon;
+                                switch_engine_or_monitor = true;
+                            } else {
+                                println!("\x1b[1;35m[*] Web Command: Reativando Modo '{}' (Monitor: {})\x1b[0m", m, target_mon);
+                                is_paused = false;
+                                restart_pipeline = true;
+                            }
                         }
                     }
                     ControlAction::SetAudio(a) => {
@@ -491,14 +516,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     ControlAction::LaunchMiracast => {
-                        println!("\x1b[1;35m[*] Web Command: Lançar Miracast (GNOME Network Displays) com aceleração de GPU\x1b[0m");
+                        println!("\x1b[1;35m[*] Web Command: Lançar Miracast (cliente nativo pure-Rust)\x1b[0m");
                         is_paused = true;
                         cfg.transport = TransportKind::Miracast;
                         close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                         pipeline_builder.usb_pipe_fd = None;
                         restart_pipeline = true;
 
-                        std::thread::spawn(miracast_launcher::launch_gnome_network_displays);
+                        std::thread::spawn(|| {
+                            crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+                        });
                     }
                     ControlAction::SetTransport(new_trans) => {
                         println!("\x1b[1;35m[*] Web Command: Troca de Transporte {:?} -> {:?}\x1b[0m", cfg.transport, new_trans);
@@ -510,10 +537,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 pipeline_builder.usb_pipe_fd = None;
                                 restart_pipeline = true;
 
-                                // Auto-launch gnome-network-displays with GPU hardware acceleration
-                                std::thread::spawn(miracast_launcher::launch_gnome_network_displays);
+                                // Auto-launch native pure-Rust Miracast client with GPU hardware acceleration
+                                std::thread::spawn(|| {
+                                    crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+                                });
                             }
                             TransportKind::UsbBulk => {
+                                crate::miracast_launcher::stop_miracast_client();
                                 is_paused = false;
                                 cfg.transport = TransportKind::UsbBulk;
                                 close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
@@ -521,6 +551,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 restart_pipeline = true;
                             }
                             TransportKind::Network { ref ip, port } => {
+                                crate::miracast_launcher::stop_miracast_client();
                                 is_paused = false;
                                 cfg.transport = new_trans.clone();
                                 close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
@@ -705,6 +736,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         thread::sleep(Duration::from_secs(1));
     }
 
+    crate::miracast_launcher::stop_miracast_client();
     close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
     println!("\x1b[1;32m[*] ext-sender terminated cleanly.\x1b[0m");
     Ok(())

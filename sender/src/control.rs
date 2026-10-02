@@ -89,7 +89,33 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
         }
 
         if let Some(mode_str) = v.get("mode").and_then(|x| x.as_str()) {
-            actions.push(ControlAction::SetMode(mode_str.to_lowercase()));
+            let m_lower = mode_str.to_lowercase();
+            match m_lower.as_str() {
+                "miracast" | "wfd" | "mode2" | "2" | "mode2_miracast" => {
+                    if !actions.contains(&ControlAction::LaunchMiracast) {
+                        actions.push(ControlAction::LaunchMiracast);
+                    }
+                    if !actions.iter().any(|a| matches!(a, ControlAction::SetTransport(_))) {
+                        actions.push(ControlAction::SetTransport(TransportKind::Miracast));
+                    }
+                }
+                "usb_bulk" | "usb" | "bulk" | "mode3" | "3" | "mode3_usb_bulk" => {
+                    if !actions.iter().any(|a| matches!(a, ControlAction::SetTransport(_))) {
+                        actions.push(ControlAction::SetTransport(TransportKind::UsbBulk));
+                    }
+                }
+                "network" | "udp" | "mode1" | "1" | "mode1_udp" => {
+                    if !actions.iter().any(|a| matches!(a, ControlAction::SetTransport(_))) {
+                        actions.push(ControlAction::SetTransport(TransportKind::Network {
+                            ip: "192.168.7.2".to_string(),
+                            port: 5000,
+                        }));
+                    }
+                }
+                _ => {
+                    actions.push(ControlAction::SetMode(m_lower));
+                }
+            }
         }
 
         if let Some(audio_val) = v.get("audio").and_then(|x| x.as_bool()) {
@@ -145,11 +171,19 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
             }
         }
 
-        if let Some(trans_str) = v.get("transport").and_then(|x| x.as_str()) {
+        let trans_field = v
+            .get("transport")
+            .or_else(|| v.get("active_transport"))
+            .and_then(|x| x.as_str());
+        if let Some(trans_str) = trans_field {
             let tk = match trans_str {
-                "usb_bulk" | "usb" | "bulk" => TransportKind::UsbBulk,
-                "miracast" | "wfd" => {
-                    actions.push(ControlAction::LaunchMiracast);
+                "usb_bulk" | "usb" | "bulk" | "mode3" | "3" | "mode3_usb_bulk" => {
+                    TransportKind::UsbBulk
+                }
+                "miracast" | "wfd" | "mode2" | "2" | "mode2_miracast" => {
+                    if !actions.contains(&ControlAction::LaunchMiracast) {
+                        actions.push(ControlAction::LaunchMiracast);
+                    }
                     TransportKind::Miracast
                 }
                 _ => TransportKind::Network {
@@ -157,7 +191,14 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
                     port: 5000,
                 },
             };
-            actions.push(ControlAction::SetTransport(tk));
+            if let Some(pos) = actions
+                .iter()
+                .position(|a| matches!(a, ControlAction::SetTransport(_)))
+            {
+                actions[pos] = ControlAction::SetTransport(tk);
+            } else {
+                actions.push(ControlAction::SetTransport(tk));
+            }
         }
 
         if let Some(scale_str) = v.get("scale").and_then(|x| x.as_str()) {
@@ -238,5 +279,33 @@ mod tests {
         let actions2 = parse_control_payload(json2);
         assert!(actions2.contains(&ControlAction::SetScale(ScaleMode::Native720p)));
         assert!(actions2.contains(&ControlAction::SetCas(false)));
+    }
+
+    #[test]
+    fn test_parse_control_miracast_actions() {
+        let launch_json = br#"{"action":"launch_miracast"}"#;
+        let actions = parse_control_payload(launch_json);
+        assert_eq!(actions, vec![ControlAction::LaunchMiracast]);
+
+        let trans_miracast = br#"{"transport":"miracast"}"#;
+        let actions2 = parse_control_payload(trans_miracast);
+        assert!(actions2.contains(&ControlAction::LaunchMiracast));
+        assert!(actions2.contains(&ControlAction::SetTransport(TransportKind::Miracast)));
+
+        let mode_miracast = br#"{"mode":"miracast"}"#;
+        let actions3 = parse_control_payload(mode_miracast);
+        assert!(actions3.contains(&ControlAction::LaunchMiracast));
+        assert!(actions3.contains(&ControlAction::SetTransport(TransportKind::Miracast)));
+
+        let active_trans = br#"{"active_transport":"mode2_miracast"}"#;
+        let actions4 = parse_control_payload(active_trans);
+        assert!(actions4.contains(&ControlAction::LaunchMiracast));
+        assert!(actions4.contains(&ControlAction::SetTransport(TransportKind::Miracast)));
+
+        let start_miracast = br#"{"action":"start","transport":"miracast"}"#;
+        let actions5 = parse_control_payload(start_miracast);
+        assert!(actions5.contains(&ControlAction::StartStreaming));
+        assert!(actions5.contains(&ControlAction::LaunchMiracast));
+        assert!(actions5.contains(&ControlAction::SetTransport(TransportKind::Miracast)));
     }
 }

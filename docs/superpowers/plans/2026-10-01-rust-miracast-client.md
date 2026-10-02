@@ -284,18 +284,18 @@ git commit -m "feat(miracast): add standalone ext-miracast cli binary"
 - Modify: `sender/src/control.rs` (wire start/stop to `MiracastSession`)
 - Modify: `sender/src/main.rs` (handle Mode 2 cleanly)
 
-- [ ] **Step 1: Connect Miracast session into control loop**
+- [x] **Step 1: Connect Miracast session into control loop**
 
 - In `sender/src/control.rs`:
   - When `ControlAction::StartStreaming` specifies Mode 2 (`miracast`), launch `MiracastSession` directly in background thread instead of launching `gnome-network-displays`.
   - When `ControlAction::StopStreaming` is triggered (e.g. via Standby button in Web UI), call `MiracastSession::stop()` directly, sending atomic RTSP `TEARDOWN` without calling `pkill`.
 
-- [ ] **Step 2: Verify compilation and tests**
+- [x] **Step 2: Verify compilation and tests**
 
 Run: `cargo check -p ext-sender && cargo test -p ext-sender`
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add sender/src/miracast_launcher.rs sender/src/control.rs sender/src/main.rs
