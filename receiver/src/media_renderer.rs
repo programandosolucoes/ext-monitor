@@ -11,7 +11,7 @@
 
 use std::fs::OpenOptions;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -57,41 +57,114 @@ pub fn get_media_state() -> Arc<Mutex<MediaTrackInfo>> {
 }
 
 /// Start the background SSDP / UPnP multicast responder
+/// Start the background SSDP / UPnP multicast responder
 pub fn start_ssdp_responder(running: Arc<AtomicBool>, http_port: u16) {
     thread::Builder::new()
         .name("ssdp-responder".to_string())
         .spawn(move || {
-            let multicast_addr = Ipv4Addr::new(239, 255, 255, 250);
-            let bind_addr = SocketAddr::from(([0, 0, 0, 0], 1900));
+            // Ensure multicast route exists on Linux
+            let _ = std::process::Command::new("route")
+                .args(&["add", "-net", "224.0.0.0", "netmask", "240.0.0.0", "dev", "usb0"])
+                .output();
 
-            let socket = match UdpSocket::bind(bind_addr) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("\x1b[1;33m[ssdp]\x1b[0m Failed to bind UDP 1900 (SSDP): {}. Running without UPnP auto-discovery.", e);
+            let multicast_addr = Ipv4Addr::new(239, 255, 255, 250);
+
+            // Bind using libc with SO_REUSEADDR and SO_REUSEPORT to prevent port lockups
+            let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+            if fd < 0 {
+                eprintln!("\x1b[1;33m[ssdp]\x1b[0m Failed to create raw UDP socket for SSDP.");
+                return;
+            }
+
+            let opt: libc::c_int = 1;
+            unsafe {
+                libc::setsockopt(
+                    fd,
+                    libc::SOL_SOCKET,
+                    libc::SO_REUSEADDR,
+                    &opt as *const _ as *const libc::c_void,
+                    std::mem::size_of_val(&opt) as libc::socklen_t,
+                );
+                libc::setsockopt(
+                    fd,
+                    libc::SOL_SOCKET,
+                    libc::SO_REUSEPORT,
+                    &opt as *const _ as *const libc::c_void,
+                    std::mem::size_of_val(&opt) as libc::socklen_t,
+                );
+
+                let mut addr: libc::sockaddr_in = std::mem::zeroed();
+                addr.sin_family = libc::AF_INET as libc::sa_family_t;
+                addr.sin_port = (1900u16).to_be();
+                addr.sin_addr.s_addr = libc::INADDR_ANY;
+
+                if libc::bind(
+                    fd,
+                    &addr as *const _ as *const libc::sockaddr,
+                    std::mem::size_of_val(&addr) as libc::socklen_t,
+                ) != 0
+                {
+                    libc::close(fd);
+                    eprintln!("\x1b[1;33m[ssdp]\x1b[0m Failed to bind UDP 1900. Running without SSDP responder.");
                     return;
                 }
-            };
+            }
 
+            let socket = unsafe { UdpSocket::from_raw_fd(fd) };
+            let _ = socket.set_broadcast(true);
+            let _ = socket.join_multicast_v4(&multicast_addr, &Ipv4Addr::new(192, 168, 7, 2));
             let _ = socket.join_multicast_v4(&multicast_addr, &Ipv4Addr::UNSPECIFIED);
-            let _ = socket.set_read_timeout(Some(Duration::from_millis(1500)));
+            let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
 
-            println!("\x1b[1;32m[ssdp]\x1b[0m UPnP / DLNA MediaRenderer SSDP daemon active on 239.255.255.250:1900");
+            println!("\x1b[1;32m[ssdp]\x1b[0m UPnP / DLNA / DIAL MediaRenderer SSDP daemon active on 239.255.255.250:1900");
+
+            let notify_targets = [
+                SocketAddr::from(([239, 255, 255, 250], 1900)),
+                SocketAddr::from(([192, 168, 7, 1], 1900)),
+                SocketAddr::from(([192, 168, 7, 255], 1900)),
+            ];
 
             let mut buf = [0u8; 2048];
+            let mut last_notify = std::time::Instant::now();
+
+            // Initial announcement burst
+            send_ssdp_announcements(&socket, &notify_targets, http_port);
+
             while running.load(Ordering::Relaxed) {
+                // 1. Send periodic NOTIFY packets (every 5 seconds)
+                if last_notify.elapsed() >= Duration::from_secs(5) {
+                    last_notify = std::time::Instant::now();
+                    send_ssdp_announcements(&socket, &notify_targets, http_port);
+                }
+
+                // 2. Receive and handle M-SEARCH queries
                 if let Ok((len, src)) = socket.recv_from(&mut buf) {
                     let req = String::from_utf8_lossy(&buf[..len]);
                     if let Some((loc_path, st)) = parse_ssdp_msearch(&req) {
+                        let is_dial = st.contains("dial");
+                        let usn = if is_dial {
+                            format!("uuid:ext-monitor-dial-device::{}", st)
+                        } else {
+                            format!("uuid:ext-monitor-bcm2835-renderer::{}", st)
+                        };
+                        let app_url_header = if is_dial {
+                            format!("APPLICATION-URL: http://192.168.7.2:{}/apps/\r\n", http_port)
+                        } else {
+                            String::new()
+                        };
                         let response = format!(
                             "HTTP/1.1 200 OK\r\n\
                              CACHE-CONTROL: max-age=1800\r\n\
                              DATE: Tue, 29 Sep 2026 18:00:00 GMT\r\n\
                              EXT:\r\n\
                              LOCATION: http://192.168.7.2:{}{}\r\n\
-                             SERVER: Linux/6.6 UPnP/1.0 Ext-Monitor/2.3\r\n\
+                             {}SERVER: Linux/6.6 UPnP/1.0 Ext-Monitor/2.3\r\n\
                              ST: {}\r\n\
-                             USN: uuid:ext-monitor-bcm2835-renderer::{}\r\n\r\n",
-                            http_port, loc_path, st, st
+                             USN: {}\r\n\
+                             BOOTID.UPNP.ORG: 1\r\n\
+                             CONFIGID.UPNP.ORG: 1\r\n\
+                             SEARCHPORT.UPNP.ORG: 1900\r\n\r\n",
+                            http_port, loc_path, app_url_header, st, usn
                         );
                         let _ = socket.send_to(response.as_bytes(), src);
                     }
@@ -101,13 +174,52 @@ pub fn start_ssdp_responder(running: Arc<AtomicBool>, http_port: u16) {
         .expect("Failed to spawn ssdp thread");
 }
 
+/// Transmits periodic SSDP NOTIFY announcements to local network and host
+fn send_ssdp_announcements(socket: &UdpSocket, targets: &[SocketAddr], http_port: u16) {
+    let notifications = [
+        ("urn:dial-multiscreen-org:service:dial:1", "/dial/dd.xml", "uuid:ext-monitor-dial-device", true),
+        ("urn:dial-multiscreen-org:device:dial:1", "/dial/dd.xml", "uuid:ext-monitor-dial-device", true),
+        ("urn:schemas-upnp-org:device:MediaRenderer:1", "/upnp/desc.xml", "uuid:ext-monitor-bcm2835-renderer", false),
+        ("upnp:rootdevice", "/upnp/desc.xml", "uuid:ext-monitor-bcm2835-renderer", false),
+    ];
+
+    for &(nt, loc_path, udn, is_dial) in &notifications {
+        let app_url_header = if is_dial {
+            format!("APPLICATION-URL: http://192.168.7.2:{}/apps/\r\n", http_port)
+        } else {
+            String::new()
+        };
+        let msg = format!(
+            "NOTIFY * HTTP/1.1\r\n\
+             HOST: 239.255.255.250:1900\r\n\
+             CACHE-CONTROL: max-age=1800\r\n\
+             LOCATION: http://192.168.7.2:{}{}\r\n\
+             {}NT: {}\r\n\
+             NTS: ssdp:alive\r\n\
+             SERVER: Linux/6.6 UPnP/1.0 Ext-Monitor/2.3\r\n\
+             USN: {}::{}\r\n\
+             BOOTID.UPNP.ORG: 1\r\n\
+             CONFIGID.UPNP.ORG: 1\r\n\r\n",
+            http_port, loc_path, app_url_header, nt, udn, nt
+        );
+        for target in targets {
+            let _ = socket.send_to(msg.as_bytes(), target);
+        }
+    }
+}
+
 /// Parses an incoming SSDP M-SEARCH packet and returns the matching XML endpoint path and ST header
 pub fn parse_ssdp_msearch(req: &str) -> Option<(&'static str, &'static str)> {
-    if !req.starts_with("M-SEARCH") {
+    let trimmed = req.trim_start();
+    if !trimmed.starts_with("M-SEARCH") && !trimmed.starts_with("m-search") {
         return None;
     }
     if req.contains("dial-multiscreen-org") {
-        Some(("/dial/dd.xml", "urn:dial-multiscreen-org:service:dial:1"))
+        if req.contains("device:dial:1") {
+            Some(("/dial/dd.xml", "urn:dial-multiscreen-org:device:dial:1"))
+        } else {
+            Some(("/dial/dd.xml", "urn:dial-multiscreen-org:service:dial:1"))
+        }
     } else if req.contains("MediaRenderer") || req.contains("ssdp:all") || req.contains("upnp:rootdevice") {
         Some(("/upnp/desc.xml", "urn:schemas-upnp-org:device:MediaRenderer:1"))
     } else {
@@ -157,7 +269,7 @@ pub fn get_upnp_desc_xml(host_ip: &str, http_port: u16) -> String {
 }
 
 /// Generates DIAL (Discovery and Launch) XML description (for YouTube Cast)
-pub fn get_dial_dd_xml(host_ip: &str, _http_port: u16) -> String {
+pub fn get_dial_dd_xml(host_ip: &str, http_port: u16) -> String {
     format!(
         r#"<?xml version="1.0"?>
 <root xmlns="urn:schemas-upnp-org:device-1-0">
@@ -167,10 +279,20 @@ pub fn get_dial_dd_xml(host_ip: &str, _http_port: u16) -> String {
   </specVersion>
   <device>
     <deviceType>urn:dial-multiscreen-org:device:dial:1</deviceType>
-    <friendlyName>Ext-Monitor YouTube TV ({})</friendlyName>
+    <friendlyName>Ext-Monitor (Raspberry Pi - {})</friendlyName>
     <manufacturer>Carlos Alberto / Ext-Monitor Project</manufacturer>
     <modelName>Ext-Monitor Cast</modelName>
+    <modelURL>http://{}:{}/</modelURL>
     <UDN>uuid:ext-monitor-dial-device</UDN>
+    <iconList>
+      <icon>
+        <mimetype>image/png</mimetype>
+        <width>96</width>
+        <height>96</height>
+        <depth>32</depth>
+        <url>/setup/icon.png</url>
+      </icon>
+    </iconList>
     <serviceList>
       <service>
         <serviceType>urn:dial-multiscreen-org:service:dial:1</serviceType>
@@ -182,7 +304,7 @@ pub fn get_dial_dd_xml(host_ip: &str, _http_port: u16) -> String {
     </serviceList>
   </device>
 </root>"#,
-        host_ip
+        host_ip, host_ip, http_port
     )
 }
 
@@ -704,7 +826,7 @@ mod tests {
     fn test_dial_youtube_google_home_descriptor() {
         let xml = get_dial_dd_xml("192.168.7.2", 8080);
         assert!(xml.contains("urn:dial-multiscreen-org:device:dial:1"));
-        assert!(xml.contains("Ext-Monitor YouTube TV (192.168.7.2)"));
+        assert!(xml.contains("Ext-Monitor (Raspberry Pi - 192.168.7.2)"));
         assert!(xml.contains("urn:dial-multiscreen-org:service:dial:1"));
         assert!(xml.contains("<controlURL>/apps</controlURL>"));
         assert!(xml.contains("<SCPDURL>/dial/dial.xml</SCPDURL>"));

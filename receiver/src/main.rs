@@ -34,6 +34,7 @@ mod web;
 mod web_ui;
 mod wfd;
 pub mod media_renderer;
+pub mod mdns;
 
 use i18n::Language;
 use pipeline::{PipelineBackend, PipelineKind, PipelineManager};
@@ -138,6 +139,9 @@ fn main() {
 
     // 4.1 Start Ext-Monitor Wi-Fi/Ethernet auto-discovery beacon on UDP 5005
     discovery::start_discovery_beacon(running.clone(), 8080, udp_port);
+
+    // 4.2 Start pure-Rust mDNS Google Cast / Miracast responder on UDP 5353
+    mdns::start_mdns_responder(running.clone());
 
     // 5. Start HDMI dynamic visualizer engine (active when playing audio, multiplexed with video)
     media_renderer::VisualizerEngine::start(running.clone(), pipeline_mgr.clone());

@@ -155,6 +155,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Start local SSDP / DIAL bridge for instant Google Chrome casting discovery
+    discovery::start_host_ssdp_bridge(running.clone(), cfg.target_ip.clone(), 8080);
+
     // Optimize USB interface txqueuelen for ultra-low jitter (<15ms)
     if let Ok(output) = std::process::Command::new("ip").args(["-o", "link"]).output() {
         let s = String::from_utf8_lossy(&output.stdout);

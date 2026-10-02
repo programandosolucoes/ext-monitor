@@ -70,6 +70,33 @@ pub fn start_web_server(
         HTTP_PORT
     );
 
+    // Optional Google Cast port 8008 listener
+    if let Ok(cast_listener) = TcpListener::bind("0.0.0.0:8008") {
+        let _ = cast_listener.set_nonblocking(true);
+        println!("\x1b[1;32m[web-server]\x1b[0m Google Cast HTTP service active on http://0.0.0.0:8008");
+        let pipe_cast = pipeline_mgr.clone();
+        let run_cast = running.clone();
+        thread::spawn(move || {
+            while run_cast.load(Ordering::SeqCst) {
+                match cast_listener.accept() {
+                    Ok((stream, _addr)) => {
+                        let pipe = pipe_cast.clone();
+                        let run = run_cast.clone();
+                        thread::spawn(move || {
+                            handle_http_client(stream, pipe, run, default_udp_port);
+                        });
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(50));
+                    }
+                    Err(_) => {
+                        thread::sleep(Duration::from_millis(500));
+                    }
+                }
+            }
+        });
+    }
+
     let run_loop = running.clone();
     thread::spawn(move || {
         while run_loop.load(Ordering::SeqCst) {
@@ -418,7 +445,49 @@ fn handle_http_client(
         }
         ("GET", "/dial/dd.xml") => {
             let xml = crate::media_renderer::get_dial_dd_xml("192.168.7.2", 8080);
-            send_response(&mut stream, "200 OK", "text/xml; charset=utf-8", xml.as_bytes());
+            send_dial_response(&mut stream, "200 OK", "text/xml; charset=utf-8", xml.as_bytes(), "http://192.168.7.2:8080/apps/");
+        }
+        ("GET", "/setup/eureka_info") => {
+            let eureka_json = r#"{"name":"Ext-Monitor (Raspberry Pi)","version":8,"build_info":{"build_type":2,"system_build_number":"1.56.275994","cast_build_revision":"1.56.275994"},"device_info":{"model_name":"Ext-Monitor TV","manufacturer":"Carlos Alberto / Ext-Monitor Project","mac_address":"12:22:33:44:55:67","ssdp_udn":"uuid:ext-monitor-dial-device","capabilities":{"audio_in":false,"audio_out":true,"video_in":false,"video_out":true,"display_supported":true}},"net":{"ip_address":"192.168.7.2","online":true}}"#;
+            send_response(&mut stream, "200 OK", "application/json", eureka_json.as_bytes());
+        }
+        ("GET", "/setup/icon.png") => {
+            let fallback_png: [u8; 67] = [
+                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+                0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+                0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+                0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+                0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+                0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+            ];
+            let data = fs::read("/var/www/icon.png").unwrap_or_else(|_| fallback_png.to_vec());
+            send_response(&mut stream, "200 OK", "image/png", &data);
+        }
+        ("GET", p) if p.starts_with("/apps") => {
+            let app_name = p.strip_prefix("/apps/").unwrap_or("YouTube").split('/').next().unwrap_or("YouTube");
+            let xml = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<service xmlns="urn:dial-multiscreen-org:schemas:dial">
+  <name>{}</name>
+  <options allowStop="true"/>
+  <state>running</state>
+  <link rel="run" href="run"/>
+</service>"#,
+                app_name
+            );
+            send_dial_response(&mut stream, "200 OK", "text/xml; charset=utf-8", xml.as_bytes(), "http://192.168.7.2:8080/apps/");
+        }
+        ("POST", p) if p.starts_with("/apps") => {
+            let run_url = format!("http://192.168.7.2:8080{}/run", p);
+            let header = format!(
+                "HTTP/1.1 201 Created\r\nLocation: {}\r\nContent-Length: 0\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Expose-Headers: Location\r\nConnection: close\r\n\r\n",
+                run_url
+            );
+            let _ = stream.write_all(header.as_bytes());
+            let _ = stream.flush();
+        }
+        ("DELETE", p) if p.starts_with("/apps") => {
+            send_response(&mut stream, "200 OK", "text/plain", b"OK");
         }
         ("GET", "/api/media/status") => {
             let st = crate::media_renderer::get_media_state();
@@ -823,6 +892,19 @@ fn send_response(stream: &mut TcpStream, status: &str, content_type: &str, body:
         status,
         content_type,
         body.len()
+    );
+    let _ = stream.write_all(header.as_bytes());
+    let _ = stream.write_all(body);
+    let _ = stream.flush();
+}
+
+fn send_dial_response(stream: &mut TcpStream, status: &str, content_type: &str, body: &[u8], app_url: &str) {
+    let header = format!(
+        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nApplication-URL: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Expose-Headers: Location, Application-URL\r\nCache-Control: no-cache, no-store, must-revalidate, max-age=0\r\nPragma: no-cache\r\nExpires: 0\r\n\r\n",
+        status,
+        content_type,
+        body.len(),
+        app_url
     );
     let _ = stream.write_all(header.as_bytes());
     let _ = stream.write_all(body);
