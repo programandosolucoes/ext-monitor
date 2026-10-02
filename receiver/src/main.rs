@@ -123,6 +123,13 @@ fn main() {
         let val = backend_arg.strip_prefix("--backend=").or_else(|| backend_arg.strip_prefix("--engine=")).unwrap_or("");
         pipeline_mgr.set_backend(PipelineBackend::from_str(val));
     }
+    if let Some(rate_arg) = args.iter().find(|a| a.starts_with("--audio-rate=")) {
+        if let Some(rate_str) = rate_arg.strip_prefix("--audio-rate=") {
+            if let Ok(r) = rate_str.parse::<u32>() {
+                pipeline_mgr.set_audio_rate(r);
+            }
+        }
+    }
 
     // 1. Start embedded Web Control Server on HTTP port 8080 (always available for telemetry and control)
     if let Err(e) = web::start_web_server(running.clone(), pipeline_mgr.clone(), udp_port) {

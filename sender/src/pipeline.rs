@@ -512,7 +512,7 @@ fn fft_512(real: &mut [f32; 512], imag: &mut [f32; 512]) {
     }
 }
 
-pub fn ensure_audio_sink_exists() {
+pub fn ensure_audio_sink_exists(rate: u32) {
     let exists = Command::new("pactl")
         .args(["list", "sinks", "short"])
         .output()
@@ -526,6 +526,7 @@ pub fn ensure_audio_sink_exists() {
                 "module-null-sink",
                 "sink_name=Raspberry_Pi_HDMI_Audio",
                 "sink_properties=device.description=Raspberry_Pi_HDMI_Audio",
+                &format!("rate={}", rate),
             ])
             .output();
     }
@@ -534,18 +535,31 @@ pub fn ensure_audio_sink_exists() {
 pub fn spawn_opus_audio_streamer(
     target_ip: String,
     audio_port: u16,
+    audio_rate: u32,
     running: Arc<AtomicBool>,
 ) -> thread::JoinHandle<()> {
     thread::Builder::new()
-        .name("audio-opus-tx".to_string())
+        .name("audio-pcm-tx".to_string())
         .spawn(move || {
             while running.load(Ordering::Relaxed) {
-                ensure_audio_sink_exists();
+                ensure_audio_sink_exists(audio_rate);
 
                 println!(
-                    "\x1b[1;34m[*] Starting low-latency Opus audio streamer to {}:{} (source: Raspberry_Pi_HDMI_Audio.monitor)...\x1b[0m",
-                    target_ip, audio_port
+                    "\x1b[1;34m[*] Starting low-latency PCM audio streamer ({} Hz Hi-Res) to {}:{} (source: Raspberry_Pi_HDMI_Audio.monitor)...\x1b[0m",
+                    audio_rate, target_ip, audio_port
                 );
+
+                // Notify receiver of target sample rate so ALSA device configures hardware at exact rate
+                let client_ip = target_ip.clone();
+                thread::spawn(move || {
+                    let _ = Command::new("curl")
+                        .args([
+                            "-s", "-m", "2", "-X", "POST",
+                            &format!("http://{}:8080/api/audio/rate", client_ip),
+                            "-d", &format!("{{\"rate\":{}}}", audio_rate),
+                        ])
+                        .output();
+                });
 
                 let mut cmd = Command::new("gst-launch-1.0");
                 cmd.env("PULSE_SOURCE", "Raspberry_Pi_HDMI_Audio.monitor")
@@ -559,7 +573,7 @@ pub fn spawn_opus_audio_streamer(
                     .arg("!")
                     .arg("audioresample")
                     .arg("!")
-                    .arg("audio/x-raw,format=S16LE,rate=48000,channels=2")
+                    .arg(format!("audio/x-raw,format=S16LE,rate={},channels=2", audio_rate))
                     .arg("!")
                     .arg("udpsink")
                     .arg(format!("host={}", target_ip))
@@ -616,7 +630,7 @@ pub fn spawn_audio_spectrum_monitor(
             let mut packet = [0u8; 25];
 
             while running.load(Ordering::Relaxed) {
-                ensure_audio_sink_exists();
+                ensure_audio_sink_exists(96000);
 
                 let mut child = match Command::new("parec")
                     .env("PULSE_SOURCE", "Raspberry_Pi_HDMI_Audio.monitor")

@@ -147,6 +147,7 @@ pub struct SenderConfig {
     pub capture: CaptureEngine,
     pub audio: bool,
     pub audio_port: u16,
+    pub audio_rate: u32,
     pub scale: ScaleMode,
     pub cas: bool,
     pub contrast: f32,
@@ -449,6 +450,23 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             })
             .unwrap_or(5004);
 
+        let audio_rate = args
+            .iter()
+            .find_map(|a| {
+                if let Some(val) = a.strip_prefix("--audio-rate=") {
+                    match val.to_lowercase().as_str() {
+                        "high" | "96k" | "96000" => Some(96000),
+                        "max" | "192k" | "192000" => Some(192000),
+                        "standard" | "48k" | "48000" => Some(48000),
+                        "cd" | "44.1k" | "44100" => Some(44100),
+                        _ => val.parse::<u32>().ok(),
+                    }
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(96000);
+
         let color_profile = if args.iter().any(|a| {
             let s = a.to_lowercase();
             s == "256" || s == "--256" || s == "--colors=256" || s == "economy" || s == "--economy"
@@ -561,6 +579,7 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             capture,
             audio,
             audio_port,
+            audio_rate,
             scale,
             cas,
             contrast,

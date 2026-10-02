@@ -261,6 +261,18 @@ fn handle_http_client(
             }
             send_response(&mut stream, "400 Bad Request", "text/plain", b"Missing muted");
         }
+        ("POST", "/api/audio/rate") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = &req_str[idx + 4..];
+                if let Some(rate) = extract_json_u32(body, "rate") {
+                    pipeline_mgr.set_audio_rate(rate);
+                    let audio_st = pipeline_mgr.audio_status();
+                    send_response(&mut stream, "200 OK", "application/json", audio_st.to_json().as_bytes());
+                    return;
+                }
+            }
+            send_response(&mut stream, "400 Bad Request", "text/plain", b"Missing rate");
+        }
         ("GET", "/api/config") => {
             let json = if let Ok(cfg) = CONFIG.lock() {
                 let col = if cfg.color.is_empty() { "full" } else { &cfg.color };

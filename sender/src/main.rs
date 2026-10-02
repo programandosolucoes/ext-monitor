@@ -247,9 +247,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let audio_running = Arc::new(AtomicBool::new(cfg.audio));
     if cfg.audio {
-        println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Enabled (UDP RTP Opus {}:{}, Realtime Spectrum: 5006)", cfg.target_ip, cfg.audio_port);
+        println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Enabled (UDP Native PCM {}:{} @ {} Hz Hi-Res, Realtime Spectrum: 5006)", cfg.target_ip, cfg.audio_port, cfg.audio_rate);
         let _ = pipeline::spawn_audio_spectrum_monitor(cfg.target_ip.clone(), audio_running.clone());
-        let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, audio_running.clone());
+        let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_running.clone());
     } else {
         println!("\x1b[1;33m[*] Audio Subsystem:\x1b[0m Disabled (--no-audio)");
     }
@@ -475,7 +475,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             audio_running.store(a, Ordering::SeqCst);
                             if a {
                                 let _ = pipeline::spawn_audio_spectrum_monitor(cfg.target_ip.clone(), audio_running.clone());
-                                let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, audio_running.clone());
+                                let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_running.clone());
                             }
                         }
                     }

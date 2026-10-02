@@ -138,14 +138,28 @@ fn set_min(p: &mut SndPcmHwParams, param: usize, val: u32) {
     }
 }
 
+fn get_iec958_rate_code(rate: u32) -> u8 {
+    match rate {
+        32000 => 0x03,
+        44100 => 0x00,
+        48000 => 0x02,
+        88200 => 0x08,
+        96000 => 0x0A,
+        176400 => 0x0C,
+        192000 => 0x0E,
+        _ => 0x02,
+    }
+}
+
 /// Native ALSA PCM Device wrapper for BCM2835 HDMI sound output
 struct AlsaHdmiDevice {
     _file: File,
     fd: RawFd,
+    rate: u32,
 }
 
 impl AlsaHdmiDevice {
-    fn open() -> Result<Self, std::io::Error> {
+    fn open(rate: u32) -> Result<Self, std::io::Error> {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -157,8 +171,15 @@ impl AlsaHdmiDevice {
         set_mask(&mut hw_params, SNDRV_PCM_HW_PARAM_ACCESS, SNDRV_PCM_ACCESS_RW_INTERLEAVED);
         set_mask(&mut hw_params, SNDRV_PCM_HW_PARAM_FORMAT, SNDRV_PCM_FORMAT_IEC958_SUBFRAME_LE);
         set_int(&mut hw_params, SNDRV_PCM_HW_PARAM_CHANNELS, 2);
-        set_int(&mut hw_params, SNDRV_PCM_HW_PARAM_RATE, 48000);
-        set_min(&mut hw_params, SNDRV_PCM_HW_PARAM_PERIOD_SIZE, 1024);
+        set_int(&mut hw_params, SNDRV_PCM_HW_PARAM_RATE, rate);
+
+        let period_size: u32 = match rate {
+            192000 => 2048,
+            96000 => 2048,
+            88200 => 2048,
+            _ => 1024,
+        };
+        set_min(&mut hw_params, SNDRV_PCM_HW_PARAM_PERIOD_SIZE, period_size);
         set_int(&mut hw_params, SNDRV_PCM_HW_PARAM_PERIODS, 4);
 
         let ret = unsafe { libc::ioctl(fd, SNDRV_PCM_IOCTL_HW_PARAMS as _, &mut hw_params) };
@@ -167,9 +188,9 @@ impl AlsaHdmiDevice {
         }
 
         let mut sw_params: SndPcmSwParams = unsafe { std::mem::zeroed() };
-        sw_params.avail_min = 1024;
-        sw_params.start_threshold = 1024;
-        sw_params.stop_threshold = 4096;
+        sw_params.avail_min = period_size as libc::c_ulong;
+        sw_params.start_threshold = period_size as libc::c_ulong;
+        sw_params.stop_threshold = (period_size * 4) as libc::c_ulong;
 
         let ret = unsafe { libc::ioctl(fd, SNDRV_PCM_IOCTL_SW_PARAMS as _, &mut sw_params) };
         if ret < 0 {
@@ -181,7 +202,7 @@ impl AlsaHdmiDevice {
             return Err(std::io::Error::last_os_error());
         }
 
-        Ok(Self { _file: file, fd })
+        Ok(Self { _file: file, fd, rate })
     }
 
     fn write_frames(&mut self, frames: &[u32], frame_count: usize) -> Result<(), std::io::Error> {
@@ -220,13 +241,14 @@ pub struct AudioStatus {
     pub volume: u32,
     pub muted: bool,
     pub port: u16,
+    pub rate: u32,
 }
 
 impl AudioStatus {
     pub fn to_json(&self) -> String {
         format!(
-            "{{\"enabled\":{},\"active\":{},\"volume\":{},\"muted\":{},\"port\":{}}}",
-            self.enabled, self.active, self.volume, self.muted, self.port
+            "{{\"enabled\":{},\"active\":{},\"volume\":{},\"muted\":{},\"port\":{},\"rate\":{}}}",
+            self.enabled, self.active, self.volume, self.muted, self.port, self.rate
         )
     }
 }
@@ -237,6 +259,7 @@ pub struct AudioReceiver {
     active: Arc<AtomicBool>,
     volume: Arc<AtomicU32>,
     muted: Arc<AtomicBool>,
+    rate: Arc<AtomicU32>,
     port: u16,
     enabled: bool,
 }
@@ -249,9 +272,19 @@ impl AudioReceiver {
             active: Arc::new(AtomicBool::new(false)),
             volume: Arc::new(AtomicU32::new(100)),
             muted: Arc::new(AtomicBool::new(false)),
+            rate: Arc::new(AtomicU32::new(96000)),
             port,
             enabled: true,
         }
+    }
+
+    pub fn set_rate(&mut self, r: u32) {
+        println!("\x1b[1;36m[audio-native]\x1b[0m Audio target sample rate configured: {} Hz", r);
+        self.rate.store(r, Ordering::SeqCst);
+    }
+
+    pub fn rate(&self) -> u32 {
+        self.rate.load(Ordering::Relaxed)
     }
 
     pub fn start(&mut self) -> Result<(), std::io::Error> {
@@ -265,11 +298,12 @@ impl AudioReceiver {
         let active = self.active.clone();
         let volume = self.volume.clone();
         let muted = self.muted.clone();
+        let rate = self.rate.clone();
         let port = self.port;
 
         println!(
-            "\x1b[1;34m[audio-native]\x1b[0m Starting 100% Pure Rust HDMI ALSA Audio Receiver on UDP port {} (vol: {}%, muted: {})...",
-            port, volume.load(Ordering::Relaxed), muted.load(Ordering::Relaxed)
+            "\x1b[1;34m[audio-native]\x1b[0m Starting 100% Pure Rust HDMI ALSA Audio Receiver on UDP port {} (Hi-Res {} Hz, vol: {}%, muted: {})...",
+            port, rate.load(Ordering::Relaxed), volume.load(Ordering::Relaxed), muted.load(Ordering::Relaxed)
         );
 
         let handle = thread::Builder::new()
@@ -284,20 +318,11 @@ impl AudioReceiver {
                 };
                 let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
 
-                let status_bytes: [u8; 24] = [
-                    0x00, // Consumer mode, PCM audio, No emphasis
-                    0x00, // General category
-                    0x00, // Source / channel
-                    0x02, // 48000 Hz sampling frequency (IEC 60958-3)
-                    0x02, // 16-bit word length
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                ];
-
                 let mut pcm_device: Option<AlsaHdmiDevice> = None;
                 let mut frame_counter: usize = 0;
                 let mut last_active = Instant::now();
-                let mut udp_buf = [0u8; 8192];
-                let mut iec_buffer: Vec<u32> = Vec::with_capacity(2048);
+                let mut udp_buf = [0u8; 16384];
+                let mut iec_buffer: Vec<u32> = Vec::with_capacity(4096);
 
                 while running.load(Ordering::Relaxed) {
                     match socket.recv_from(&mut udp_buf) {
@@ -307,23 +332,53 @@ impl AudioReceiver {
                             }
                             let frame_count = len / 4;
 
-                            // Lazy open ALSA HDMI sound card when first audio packet arrives
+                            let current_rate = rate.load(Ordering::Relaxed);
+
+                            // If hardware device rate differs from requested target rate, reconfigure ALSA
+                            if let Some(ref dev) = pcm_device {
+                                if dev.rate != current_rate {
+                                    println!("\x1b[1;33m[audio-native] Switching ALSA hardware rate: {} Hz -> {} Hz\x1b[0m", dev.rate, current_rate);
+                                    pcm_device = None;
+                                }
+                            }
+
                             if pcm_device.is_none() {
-                                match AlsaHdmiDevice::open() {
+                                match AlsaHdmiDevice::open(current_rate) {
                                     Ok(dev) => {
-                                        println!("\x1b[1;32m[audio-native] Opened /dev/snd/pcmC0D0p (48kHz Stereo IEC958)\x1b[0m");
+                                        println!("\x1b[1;32m[audio-native] Opened /dev/snd/pcmC0D0p ({} Hz Hi-Res Stereo IEC958)\x1b[0m", current_rate);
                                         pcm_device = Some(dev);
                                     }
                                     Err(e) => {
-                                        eprintln!("\x1b[1;33m[audio-native] Cannot open /dev/snd/pcmC0D0p: {}. Retrying...\x1b[0m", e);
-                                        thread::sleep(Duration::from_millis(200));
-                                        continue;
+                                        eprintln!("\x1b[1;33m[audio-native] Cannot open /dev/snd/pcmC0D0p at {} Hz: {}. Retrying at 48000 Hz...\x1b[0m", current_rate, e);
+                                        if current_rate != 48000 {
+                                            rate.store(48000, Ordering::Relaxed);
+                                            if let Ok(dev) = AlsaHdmiDevice::open(48000) {
+                                                println!("\x1b[1;32m[audio-native] Fallback opened /dev/snd/pcmC0D0p at 48000 Hz\x1b[0m");
+                                                pcm_device = Some(dev);
+                                            }
+                                        }
+                                        if pcm_device.is_none() {
+                                            thread::sleep(Duration::from_millis(200));
+                                            continue;
+                                        }
                                     }
                                 }
                             }
 
                             active.store(true, Ordering::Relaxed);
                             last_active = Instant::now();
+
+                            let active_rate = pcm_device.as_ref().map(|d| d.rate).unwrap_or(current_rate);
+                            let rate_code = get_iec958_rate_code(active_rate);
+
+                            let status_bytes: [u8; 24] = [
+                                0x00, // Consumer mode, PCM audio, No emphasis
+                                0x00, // General category
+                                0x00, // Source / channel
+                                rate_code, // Sampling frequency (IEC 60958-3)
+                                0x02, // 16-bit word length
+                                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            ];
 
                             let vol = volume.load(Ordering::Relaxed);
                             let is_muted = muted.load(Ordering::Relaxed);
@@ -380,6 +435,10 @@ impl AudioReceiver {
                         Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
                             if active.load(Ordering::Relaxed) && last_active.elapsed() > Duration::from_millis(1500) {
                                 active.store(false, Ordering::Relaxed);
+                                if let Some(mut dev) = pcm_device.take() {
+                                    dev.drain();
+                                    dev.drop_playback();
+                                }
                             }
                         }
                         Err(e) => {
@@ -434,6 +493,7 @@ impl AudioReceiver {
             volume: self.volume.load(Ordering::Relaxed),
             muted: self.muted.load(Ordering::Relaxed),
             port: self.port,
+            rate: self.rate.load(Ordering::Relaxed),
         }
     }
 }

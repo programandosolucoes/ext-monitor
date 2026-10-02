@@ -369,6 +369,10 @@ impl PipelineManager {
         self.audio.lock().unwrap().set_enabled(enabled);
     }
 
+    pub fn set_audio_rate(&self, rate: u32) {
+        self.audio.lock().unwrap().set_rate(rate);
+    }
+
     pub fn start_audio(&self) {
         let _ = self.audio.lock().unwrap().start();
     }
