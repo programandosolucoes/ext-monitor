@@ -26,12 +26,13 @@ Este blueprint consolida a análise de causa raiz baseada nas lições dos Bluep
 
 ### 2.1 Quiescência do GNOME Mutter sob Wayland (O "Tirar o Mouse Congela")
 * **Mecanismo Físico:** No GNOME Wayland, o compositor Mutter adota *Damage-Driven Rendering*. Quando uma região do desktop não apresenta alterações gráficas (nenhum vídeo tocando e nenhum cursor se movendo), o Mutter suspende as chamadas `stage_painted()`, derrubando a taxa de quadros emitida no nó PipeWire para **0 FPS**.
-* **Solução Arquitetural (Blueprint 16):** O **Wayland Damage Pacer** (`scripts/wayland-damage-pacer.py`).
-  * Uma janela de 1x1 pixel 100% transparente com *input region* vazia (`cairo.Region()`), garantindo 100% de click-through (nunca intercepta cliques ou toques).
+* **Solução Arquitetural Definitiva (100% Rust Puro In-Process):** O **Wayland Damage Pacer** nativo (`sender/src/damage_pacer.rs`).
+  * Implementação em thread Rust sem dependências externas ou scripts Python.
+  * Cria dinamicamente via `libX11` uma janela de 1x1 pixel com `CW_OVERRIDE_REDIRECT = 1` e input shape vazio (`XShapeCombineRectangles(SHAPE_INPUT)` via `libXext`), garantindo 100% de click-through (transparente e sem interceptar cliques/foco).
   * Posicionada no canto inferior da tela secundária (`1920 + 1280 - 2, 720 - 2`).
-  * Emite um pulso de dano (`queue_draw`) a cada 16.6 ms (60 Hz).
-  * O compositor Mutter é forçado a manter o clock do PipeWire a 60 FPS estáveis, eliminando o congelamento quando o mouse repousa ou deixa o monitor.
-* **Implementação no Host:** Integrado auto-spawn automático no supervisor `ext-sender` sempre que rodando sob sessão Wayland.
+  * Emite um pulso de dano contínuo a 60 Hz alternando desenho de pixels (`0x00000000` / `0x00010101`) com `XFillRectangle` + `XFlush`, forçando o Mutter a comprometer buffers reais (`wl_surface.commit`) continuamente.
+  * O compositor Mutter mantém o clock do PipeWire a 60 FPS estáveis, eliminando o congelamento quando o mouse repousa ou deixa o monitor.
+* **Implementação no Host:** Integrado auto-spawn automático in-process no supervisor `ext-sender` sempre que rodando sob sessão Wayland.
 
 ### 2.2 Fila Vazante (`leaky=downstream`) no Bitstream Compactado
 * **O Erro Conceitual:** A inserção de `queue max-size-buffers=1 leaky=downstream` após o elemento `h264parse` e antes do `fdsink`.
@@ -83,7 +84,7 @@ Este blueprint consolida a análise de causa raiz baseada nas lições dos Bluep
 ```
 [Host Mutter Wayland]
         │
-        ├── [wayland-damage-pacer.py] ──> (Pulso 60 Hz 1x1 transparente)
+        ├── [damage_pacer (Rust In-Process)] ──> (Pulso 60 Hz 1x1 transparente)
         ▼
    [PipeWire Node] ──(60 FPS CFR)──> [vapostproc (VA-API)]
                                             │

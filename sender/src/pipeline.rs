@@ -225,10 +225,9 @@ impl PipelineBuilder {
             cmd.arg("h264parse")
                 .arg("!")
                 .arg("queue")
-                .arg("max-size-buffers=1")
+                .arg("max-size-buffers=4")
                 .arg("max-size-bytes=0")
                 .arg("max-size-time=0")
-                .arg("leaky=downstream")
                 .arg("!")
                 .arg("rtph264pay")
                 .arg("config-interval=1")
@@ -238,7 +237,7 @@ impl PipelineBuilder {
                 .arg("udpsink")
                 .arg(format!("host={}", self.target_ip))
                 .arg(format!("port={}", self.target_port))
-                .arg("buffer-size=262144")
+                .arg("buffer-size=524288")
                 .arg("sync=false");
         }
 
@@ -739,10 +738,9 @@ impl PipelineBuilder {
             args.push("config-interval=-1".to_string());
             args.push("!".to_string());
             args.push("queue".to_string());
-            args.push("max-size-buffers=1".to_string());
+            args.push("max-size-buffers=4".to_string());
             args.push("max-size-bytes=0".to_string());
             args.push("max-size-time=0".to_string());
-            args.push("leaky=downstream".to_string());
             args.push("!".to_string());
             args.push("fdsink".to_string());
             args.push(format!("fd={}", fd));
@@ -751,10 +749,9 @@ impl PipelineBuilder {
             args.push("h264parse".to_string());
             args.push("!".to_string());
             args.push("queue".to_string());
-            args.push("max-size-buffers=1".to_string());
+            args.push("max-size-buffers=4".to_string());
             args.push("max-size-bytes=0".to_string());
             args.push("max-size-time=0".to_string());
-            args.push("leaky=downstream".to_string());
             args.push("!".to_string());
             args.push("rtph264pay".to_string());
             args.push("config-interval=1".to_string());
@@ -764,7 +761,7 @@ impl PipelineBuilder {
             args.push("udpsink".to_string());
             args.push(format!("host={}", self.target_ip));
             args.push(format!("port={}", self.target_port));
-            args.push("buffer-size=262144".to_string());
+            args.push("buffer-size=524288".to_string());
             args.push("sync=false".to_string());
         }
         args

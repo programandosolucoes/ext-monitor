@@ -26,12 +26,13 @@ This blueprint consolidates the root cause analysis grounded in Blueprints 10, 1
 
 ### 2.1 GNOME Mutter Wayland Quiescence (The "Mouse Freeze")
 * **Mechanism:** GNOME Wayland (Mutter) uses *Damage-Driven Rendering*. When a desktop region is static (no video playing and no cursor moving), Mutter suspends `stage_painted()`, dropping the PipeWire stream rate to **0 FPS**.
-* **Architectural Solution (Blueprint 16):** The **Wayland Damage Pacer** (`scripts/wayland-damage-pacer.py`).
-  * A 1x1 pixel 100% transparent window with an empty input region (`cairo.Region()`), ensuring 100% click-through (never intercepts clicks or gestures).
+* **Definitive Architectural Solution (100% Pure Rust In-Process):** Native **Wayland Damage Pacer** (`sender/src/damage_pacer.rs`).
+  * Pure Rust thread implementation with zero external dependencies or Python scripts.
+  * Dynamically creates an X11 window via `libX11` with `CW_OVERRIDE_REDIRECT = 1` and empty input shape (`XShapeCombineRectangles(SHAPE_INPUT)` via `libXext`), guaranteeing 100% click-through (transparent, never intercepts focus or clicks).
   * Positioned in the bottom-right corner of the secondary monitor (`1920 + 1280 - 2, 720 - 2`).
-  * Emits a damage pulse (`queue_draw`) every 16.6 ms (60 Hz).
+  * Emits continuous 60 Hz damage pulses by drawing alternating pixels (`0x00000000` / `0x00010101`) via `XFillRectangle` + `XFlush`, committing genuine buffers (`wl_surface.commit`) to Mutter.
   * Forces Mutter to keep the PipeWire clock running at continuous 60 FPS, eliminating screen freeze when the mouse rests or leaves the display.
-* **Host Integration:** Automatic background spawn in `ext-sender` whenever a Wayland session is detected.
+* **Host Integration:** Automatic in-process spawn in `ext-sender` whenever a Wayland session is detected.
 
 ### 2.2 Leaky Queues (`leaky=downstream`) on Compressed Bitstream
 * **The Conceptual Error:** Inserting `queue max-size-buffers=1 leaky=downstream` after `h264parse` and before `fdsink`.
@@ -83,7 +84,7 @@ This blueprint consolidates the root cause analysis grounded in Blueprints 10, 1
 ```
 [Host Mutter Wayland]
         │
-        ├── [wayland-damage-pacer.py] ──> (60 Hz 1x1 transparent heartbeat)
+        ├── [damage_pacer (Rust In-Process)] ──> (60 Hz 1x1 transparent heartbeat)
         ▼
    [PipeWire Node] ──(60 FPS CFR)──> [vapostproc (VA-API)]
                                             │

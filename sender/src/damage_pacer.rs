@@ -18,11 +18,32 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-type Display = c_void;
-type Window = c_ulong;
-
 const SHAPE_INPUT: c_int = 2;
 const SHAPE_SET: c_int = 0;
+const CW_OVERRIDE_REDIRECT: c_ulong = 1 << 9;
+
+type Display = c_void;
+type Window = c_ulong;
+type GC = *mut c_void;
+
+#[repr(C)]
+struct XSetWindowAttributes {
+    background_pixmap: c_ulong,
+    background_pixel: c_ulong,
+    border_pixmap: c_ulong,
+    border_pixel: c_ulong,
+    bit_gravity: c_int,
+    win_gravity: c_int,
+    backing_store: c_int,
+    backing_planes: c_ulong,
+    backing_pixel: c_ulong,
+    save_under: c_int,
+    event_mask: libc::c_long,
+    do_not_propagate_mask: libc::c_long,
+    override_redirect: c_int,
+    colormap: c_ulong,
+    cursor: c_ulong,
+}
 
 type XOpenDisplayFn = unsafe extern "C" fn(*const c_char) -> *mut Display;
 type XCloseDisplayFn = unsafe extern "C" fn(*mut Display) -> c_int;
@@ -42,6 +63,24 @@ type XDestroyWindowFn = unsafe extern "C" fn(*mut Display, Window) -> c_int;
 type XMapWindowFn = unsafe extern "C" fn(*mut Display, Window) -> c_int;
 type XClearAreaFn = unsafe extern "C" fn(*mut Display, Window, c_int, c_int, c_int, c_int, c_int) -> c_int;
 type XFlushFn = unsafe extern "C" fn(*mut Display) -> c_int;
+type XChangeWindowAttributesFn = unsafe extern "C" fn(
+    *mut Display,
+    Window,
+    c_ulong,
+    *mut XSetWindowAttributes,
+) -> c_int;
+type XCreateGCFn = unsafe extern "C" fn(*mut Display, Window, c_ulong, *mut c_void) -> GC;
+type XFreeGCFn = unsafe extern "C" fn(*mut Display, GC) -> c_int;
+type XSetForegroundFn = unsafe extern "C" fn(*mut Display, GC, c_ulong) -> c_int;
+type XFillRectangleFn = unsafe extern "C" fn(
+    *mut Display,
+    Window,
+    GC,
+    c_int,
+    c_int,
+    libc::c_uint,
+    libc::c_uint,
+) -> c_int;
 type XShapeCombineRectanglesFn = unsafe extern "C" fn(
     *mut Display,
     Window,
@@ -65,6 +104,11 @@ struct X11Bindings {
     map_window: XMapWindowFn,
     clear_area: XClearAreaFn,
     flush: XFlushFn,
+    change_window_attributes: Option<XChangeWindowAttributesFn>,
+    create_gc: Option<XCreateGCFn>,
+    free_gc: Option<XFreeGCFn>,
+    set_foreground: Option<XSetForegroundFn>,
+    fill_rectangle: Option<XFillRectangleFn>,
     shape_combine_rectangles: Option<XShapeCombineRectanglesFn>,
 }
 
@@ -95,6 +139,16 @@ impl X11Bindings {
             let map_window: XMapWindowFn = std::mem::transmute(load_sym(lib_x11, "XMapWindow")?);
             let clear_area: XClearAreaFn = std::mem::transmute(load_sym(lib_x11, "XClearArea")?);
             let flush: XFlushFn = std::mem::transmute(load_sym(lib_x11, "XFlush")?);
+            let change_window_attributes: Option<XChangeWindowAttributesFn> =
+                load_sym(lib_x11, "XChangeWindowAttributes").map(|sym| std::mem::transmute(sym));
+            let create_gc: Option<XCreateGCFn> =
+                load_sym(lib_x11, "XCreateGC").map(|sym| std::mem::transmute(sym));
+            let free_gc: Option<XFreeGCFn> =
+                load_sym(lib_x11, "XFreeGC").map(|sym| std::mem::transmute(sym));
+            let set_foreground: Option<XSetForegroundFn> =
+                load_sym(lib_x11, "XSetForeground").map(|sym| std::mem::transmute(sym));
+            let fill_rectangle: Option<XFillRectangleFn> =
+                load_sym(lib_x11, "XFillRectangle").map(|sym| std::mem::transmute(sym));
 
             // Xext is optional for click-through input shape
             let lib_xext_name = CString::new("libXext.so.6").ok();
@@ -119,6 +173,11 @@ impl X11Bindings {
                 map_window,
                 clear_area,
                 flush,
+                change_window_attributes,
+                create_gc,
+                free_gc,
+                set_foreground,
+                fill_rectangle,
                 shape_combine_rectangles,
             })
         }
@@ -148,10 +207,23 @@ pub fn spawn_damage_pacer(
                 display, root, target_x, target_y, 1, 1, 0, 0, 0,
             );
 
+            // Set override_redirect = 1 so window manager leaves it alone without borders or input focus
+            if let Some(change_attr) = x11.change_window_attributes {
+                let mut attr: XSetWindowAttributes = std::mem::zeroed();
+                attr.override_redirect = 1;
+                change_attr(display, window, CW_OVERRIDE_REDIRECT, &mut attr);
+            }
+
             // Configure 100% click-through empty input shape
             if let Some(shape_fn) = x11.shape_combine_rectangles {
                 shape_fn(display, window, SHAPE_INPUT, 0, 0, ptr::null(), 0, SHAPE_SET, 0);
             }
+
+            let gc = if let Some(create_gc) = x11.create_gc {
+                create_gc(display, window, 0, ptr::null_mut())
+            } else {
+                ptr::null_mut()
+            };
 
             (x11.map_window)(display, window);
             (x11.flush)(display);
@@ -161,13 +233,27 @@ pub fn spawn_damage_pacer(
                 target_x, target_y
             );
 
+            let mut tick: c_ulong = 0;
             // 60 Hz damage pulse loop (every 16.6ms)
             while running.load(Ordering::SeqCst) {
+                tick = tick.wrapping_add(1);
+                if !gc.is_null() {
+                    if let (Some(set_fg), Some(fill_rect)) = (x11.set_foreground, x11.fill_rectangle) {
+                        let color = if tick % 2 == 0 { 0x00000000 } else { 0x00010101 };
+                        set_fg(display, gc, color);
+                        fill_rect(display, window, gc, 0, 0, 1, 1);
+                    }
+                }
                 (x11.clear_area)(display, window, 0, 0, 1, 1, 1);
                 (x11.flush)(display);
                 thread::sleep(Duration::from_millis(16));
             }
 
+            if !gc.is_null() {
+                if let Some(free_gc) = x11.free_gc {
+                    free_gc(display, gc);
+                }
+            }
             (x11.destroy_window)(display, window);
             (x11.close_display)(display);
             println!("\x1b[1;34m[pacer-rust]\x1b[0m Pure Rust Wayland Damage Pacer stopped.");

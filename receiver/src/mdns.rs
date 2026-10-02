@@ -187,6 +187,15 @@ pub fn start_mdns_responder(running: Arc<AtomicBool>) {
                     std::mem::size_of_val(&opt) as libc::socklen_t,
                 );
 
+                let loop_opt: libc::c_int = 0;
+                libc::setsockopt(
+                    fd,
+                    libc::IPPROTO_IP,
+                    libc::IP_MULTICAST_LOOP,
+                    &loop_opt as *const _ as *const libc::c_void,
+                    std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+                );
+
                 let mut addr: libc::sockaddr_in = std::mem::zeroed();
                 addr.sin_family = libc::AF_INET as libc::sa_family_t;
                 addr.sin_port = MDNS_PORT.to_be();
@@ -242,16 +251,22 @@ pub fn start_mdns_responder(running: Arc<AtomicBool>) {
 
                 // Answer incoming queries
                 if let Ok((len, src)) = socket.recv_from(&mut buf) {
-                    let req_slice = &buf[..len];
-                    // Check if query is looking for googlecast, display, or miracast
-                    let req_str = String::from_utf8_lossy(req_slice);
-                    if req_str.contains("googlecast")
-                        || req_str.contains("display")
-                        || req_str.contains("miracast")
-                        || req_str.contains("pi-zero")
-                    {
-                        let _ = socket.send_to(&response_packet, src);
-                        let _ = socket.send_to(&response_packet, ("224.0.0.251", MDNS_PORT));
+                    if len >= 12 {
+                        let flags = u16::from_be_bytes([buf[2], buf[3]]);
+                        let is_query = (flags & 0x8000) == 0;
+                        if !is_query {
+                            continue; // Ignore DNS responses to prevent infinite multicast echo loop
+                        }
+
+                        let req_slice = &buf[..len];
+                        let req_str = String::from_utf8_lossy(req_slice);
+                        if req_str.contains("googlecast")
+                            || req_str.contains("display")
+                            || req_str.contains("miracast")
+                            || req_str.contains("pi-zero")
+                        {
+                            let _ = socket.send_to(&response_packet, src);
+                        }
                     }
                 }
             }

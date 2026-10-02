@@ -277,20 +277,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Transmissao ativa para o monitor secundario (Pi Zero)",
     );
 
-    // 4.1 Wayland Damage Pacer (100% Pure Rust): maintains continuous 60 FPS clock on HDMI-1,
-    // preventing GNOME Mutter quiescence freeze when mouse is stationary or outside the screen (Blueprint 16 & 28)
-    let _pacer_handle = if std::env::var("WAYLAND_DISPLAY").is_ok()
-        || std::env::var("XDG_SESSION_TYPE").map(|s| s == "wayland").unwrap_or(false)
-    {
-        let (pacer_x, pacer_y) = if monitor_to_record == "HDMI-1" {
-            (1920 + 1280 - 2, 720 - 2)
-        } else {
-            (1280 - 2, 720 - 2)
-        };
-        damage_pacer::spawn_damage_pacer(running.clone(), pacer_x, pacer_y)
+    // 4.1 Wayland Damage Pacer (100% Pure Rust - Blueprint 16 & 28): maintains continuous 60 FPS clock on HDMI-1,
+    // preventing GNOME Mutter quiescence freeze when mouse is stationary or outside the screen
+    let (pacer_x, pacer_y) = if monitor_to_record == "HDMI-1" {
+        (1920 + 1280 - 2, 720 - 2)
     } else {
-        None
+        (1280 - 2, 720 - 2)
     };
+
+    let _pacer_handle = damage_pacer::spawn_damage_pacer(running.clone(), pacer_x, pacer_y);
 
     // 5. Main Supervisor Loop (Reconnects on Suspend/Resume or System Event)
     let mut is_paused = cfg.transport == TransportKind::Miracast;
