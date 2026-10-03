@@ -121,12 +121,14 @@ Type=simple
 ExecStart={} --service-daemon
 Restart=on-failure
 RestartSec=2s
+StandardOutput=journal
+StandardError=journal
 Environment=RUST_LOG=info
 Environment=WAYLAND_DISPLAY=wayland-0
 Environment=XDG_RUNTIME_DIR=%t
 
 [Install]
-WantedBy=graphical-session.target default.target
+WantedBy=graphical-session.target
 "#,
         binary_path
     );

@@ -447,6 +447,7 @@ fn handle_http_client(
                         let mode_name = extract_json_str(body, "mode").unwrap_or("extend");
                         match transport.as_str() {
                             "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
+                                let is_already_usb = cur_trans == "mode3_usb_bulk";
                                 let _ = crate::flow::ARBITER.request_level0(crate::flow::DesktopMode::Mode3UsbBulk, 86);
                                 if let Ok(mut cfg) = CONFIG.lock() {
                                     cfg.active_transport = "mode3_usb_bulk".to_string();
@@ -460,15 +461,20 @@ fn handle_http_client(
                                     audio_flag.map(|a| format!(",\"audio\":{}", a)).unwrap_or_default()
                                 );
                                 forward_config_to_sender(&fwd_payload);
-                                let run = running.clone();
-                                let pipe = pipeline_mgr.clone();
-                                thread::spawn(move || {
-                                    if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
-                                        eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
-                                    }
-                                });
+                                if !is_already_usb {
+                                    let run = running.clone();
+                                    let pipe = pipeline_mgr.clone();
+                                    thread::spawn(move || {
+                                        if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
+                                            eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
+                                        }
+                                    });
+                                } else {
+                                    println!("\x1b[1;32m[web-server]\x1b[0m USB Bulk receiver endpoint already active. Skipping duplicate activation.");
+                                }
                             }
                             "mode1_udp" | "network" | "udp" | "mode1" => {
+                                let is_already_udp = cur_trans == "mode1_udp";
                                 let _ = crate::flow::ARBITER.request_level0(crate::flow::DesktopMode::Mode1NetworkUdp, 86);
                                 if let Ok(mut cfg) = CONFIG.lock() {
                                     cfg.active_transport = "mode1_udp".to_string();
@@ -482,11 +488,15 @@ fn handle_http_client(
                                     audio_flag.map(|a| format!(",\"audio\":{}", a)).unwrap_or_default()
                                 );
                                 forward_config_to_sender(&fwd_payload);
-                                let pipe = pipeline_mgr.clone();
-                                thread::spawn(move || {
-                                    let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
-                                    let _ = pipe.resume(default_kind);
-                                });
+                                if !is_already_udp {
+                                    let pipe = pipeline_mgr.clone();
+                                    thread::spawn(move || {
+                                        let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                                        let _ = pipe.resume(default_kind);
+                                    });
+                                } else {
+                                    println!("\x1b[1;32m[web-server]\x1b[0m UDP Network receiver already active. Skipping duplicate activation.");
+                                }
                             }
                             "mode2_miracast" | "miracast" | "mode2" => {
                                 let _ = crate::flow::ARBITER.request_level0(crate::flow::DesktopMode::Mode2Miracast, 86);

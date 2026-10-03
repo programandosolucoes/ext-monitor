@@ -763,108 +763,12 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- Appliance Listener Daemons & Service Publishing -->
-            <div class="glass-card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span>📡</span>
-                        <span data-i18n="servicesHeader">Appliance Listener Daemons & Services</span>
-                    </div>
-                    <span class="card-badge badge-purple" data-i18n="servicesBadge">Hardware Listeners</span>
-                </div>
-                <div class="btn-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
-                    <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode1_udp', currentTopology)">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-                            <div class="dl-title" style="margin: 0;">🐧 Mode 1: Linux Wayland</div>
-                            <label class="switch" title="Toggle Mode 1">
-                                <input type="checkbox" id="toggleMode1" checked onchange="toggleMode('mode1', this.checked)">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="dl-desc" data-i18n="m1Desc">Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (&lt; 15ms).</div>
-                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span id="badgeMode1" class="stat-badge badge-cyan" data-i18n="badgeMode1On">Enabled (UDP 5000)</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Linux Wayland</span>
-                            </div>
-                            <button class="btn-toggle active" id="btnMode1Connect" style="padding: 0.5rem; font-size: 0.85rem; border-color: var(--accent-cyan); color: var(--accent-cyan); width: 100%;" onclick="activateModeWithTopology('mode1_udp', currentTopology); event.stopPropagation();">
-                                ▶ Iniciar Modo 1 (Rede UDP)
-                            </button>
-                        </div>
-                    </div>
-                    <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode2_miracast', 'miracast')">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-                            <div class="dl-title" style="margin: 0;">🪟 Mode 2: Windows Miracast</div>
-                            <label class="switch" title="Toggle Mode 2">
-                                <input type="checkbox" id="toggleMode2" checked onchange="toggleMode('mode2', this.checked)">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="dl-desc" data-i18n="m2Desc">Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.</div>
-                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span id="badgeMode2" class="stat-badge badge-green" data-i18n="badgeMode2On">Enabled (TCP 7236)</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Windows & Linux</span>
-                            </div>
-                            <button class="btn-toggle tip-wrap" id="btnMode2Connect" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm); border-color: var(--accent-emerald); color: var(--accent-emerald);" onclick="activateModeWithTopology('mode2_miracast', 'miracast'); event.stopPropagation();" title="Exec=env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays" data-i18n="btnSelectMode2">
-                                🪟 Conectar Miracast (Win+K / Linux GPU)
-                            </button>
-                            <div class="gpu-miracast-box" style="padding: 0.5rem 0.6rem; background: rgba(0, 255, 102, 0.05); border: 1px solid rgba(0, 255, 102, 0.25); border-radius: var(--radius-sm); font-size: 0.74rem;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                                    <span class="tip-wrap" style="cursor: help;">
-                                        <span style="font-weight: 700; color: var(--accent-emerald); font-size: 0.76rem;">🚀 GPU Host (AMD / Intel / NVIDIA)</span>
-                                        <span class="tip-icon" style="margin-left: 4px;">?</span>
-                                        <span class="tip-box" style="width: 320px; font-family: monospace; font-size: 0.73rem; text-align: left; line-height: 1.4; left: 0;">
-                                            <strong>🚀 Comandos de Aceleração por GPU:</strong><br>
-                                            • <strong>AMD:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays</code><br>
-                                            • <strong>Intel:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,qsvh264enc:MAX gnome-network-displays</code><br>
-                                            • <strong>NVIDIA:</strong> <code>env GST_PLUGIN_FEATURE_RANK=nvh264enc:MAX,vaapih264enc:MAX gnome-network-displays</code><br>
-                                            • <strong>Auto:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,nvh264enc:MAX,qsvh264enc:MAX gnome-network-displays</code>
-                                        </span>
-                                    </span>
-                                    <button class="btn-micro" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; border-radius: 4px; border: 1px solid var(--accent-emerald); background: rgba(0,255,102,0.15); color: var(--accent-emerald); cursor: pointer;" onclick="copyGpuLaunchCommand(); event.stopPropagation();" title="Copiar comando">📋 Copiar</button>
-                                </div>
-                                <div style="font-family: monospace; font-size: 0.70rem; color: #a3e635; word-break: break-all; user-select: all; padding: 0.25rem 0.35rem; background: rgba(0,0,0,0.35); border-radius: 4px;" id="gpuLaunchCmdPreview">
-                                    env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays
-                                </div>
-                                <div style="display: flex; gap: 0.25rem; margin-top: 0.35rem;">
-                                    <button class="btn-chip active" id="chipGpuAmd" onclick="selectGpuCmd('amd'); event.stopPropagation();">AMD</button>
-                                    <button class="btn-chip" id="chipGpuIntel" onclick="selectGpuCmd('intel'); event.stopPropagation();">Intel</button>
-                                    <button class="btn-chip" id="chipGpuNvidia" onclick="selectGpuCmd('nvidia'); event.stopPropagation();">NVIDIA</button>
-                                    <button class="btn-chip" id="chipGpuAll" onclick="selectGpuCmd('all'); event.stopPropagation();">Auto</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode3_usb_bulk', currentTopology)">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-                            <div class="dl-title" style="margin: 0;">⚡ Mode 3: USB Bulk Direct</div>
-                            <label class="switch" title="Toggle Mode 3">
-                                <input type="checkbox" id="toggleMode3" checked onchange="toggleMode('mode3', this.checked)">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="dl-desc" data-i18n="m3Desc">Direct 480 Mbps raw hardware pipe via USB FunctionFS without network stack overhead (&lt; 1ms).</div>
-                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span id="badgeMode3" class="stat-badge badge-purple" data-i18n="badgeMode3On">Enabled (USB Bulk)</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">USB FunctionFS</span>
-                            </div>
-                            <button class="btn-toggle" id="btnMode3Connect" style="padding: 0.5rem; font-size: 0.85rem; border-color: var(--accent-purple); color: var(--accent-purple); width: 100%;" onclick="activateModeWithTopology('mode3_usb_bulk', currentTopology); event.stopPropagation();">
-                                ⚡ Iniciar Modo 3 (USB Bulk Direct)
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Hi-Res Digital Audio & Hardware DAC Card -->
-            <!-- Hi-Res Digital Audio & Hardware DAC Card with Integrated Streaming Controls -->
+            <!-- Gestão Unificada de Transmissão, Modos 1-2-3 & Áudio Digital HDMI -->
             <div class="glass-card" id="cardAudioDac" style="margin-top: 1.5rem; margin-bottom: 1.5rem; border: 1px solid rgba(179, 136, 255, 0.4); background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(22, 17, 40, 0.98) 100%);">
                 <div class="card-header" style="margin-bottom: 0.8rem;">
                     <div class="card-title">
-                        <span>🔊</span>
-                        <span data-i18n="audioHeader">Áudio Digital HDMI, DAC de Alta Fidelidade & Transmissão Integrada</span>
+                        <span>📡</span>
+                        <span data-i18n="audioHeader">Gestão Unificada de Transmissão, Modos 1-2-3 & Áudio Digital HDMI</span>
                     </div>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                         <span class="card-badge badge-purple" id="badgeAudioStatus" data-i18n="audioBadge">ALSA Hardware PCM</span>
@@ -872,12 +776,12 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     </div>
                 </div>
                 <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.2rem; line-height: 1.4;" data-i18n="audioCardDesc">
-                    Controle centralizado e integrado: selecione o canal de transmissão ativo (Modo 1, 2 ou 3), a topologia de tela (Estender ou Clonar), ajuste o volume de áudio digital, gerencie o visualizador de espectro FFT e configure o clock mestre do hardware ALSA HDMI.
+                    Controle centralizado e integrado: selecione o modo de transmissão (Modo 1, 2 ou 3), a topologia de tela (Estender ou Clonar), ative áudio simultâneo para a TV e configure o mixer ALSA HDMI e visualizador de espectro.
                 </p>
 
-                <!-- 1. Central Integrated Transmission Mode (Mode 1, 2, 3 & Standby) -->
-                <div class="control-group" style="margin-bottom: 1.2rem; padding: 1rem; background: rgba(0, 0, 0, 0.25); border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.06);">
-                    <div class="control-label">
+                <!-- 1. Central Mode Selection Cards: Mode 1, 2, 3 & Standby -->
+                <div class="control-group" style="margin-bottom: 1.2rem;">
+                    <div class="control-label" style="margin-bottom: 0.8rem;">
                         <span class="tip-wrap">
                             <span data-i18n="audioModeLabel">Canal de Transmissão Ativo (Vídeo + Áudio HDMI)</span>
                             <span class="tip-icon">?</span>
@@ -885,22 +789,104 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         </span>
                         <span class="control-value" id="valIntegratedMode">⚡ Modo 3: USB Bulk Direct (&lt; 1ms)</span>
                     </div>
-                    <div class="btn-grid" id="integratedModeGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                        <button class="btn-toggle" id="btnTransport_mode1" onclick="setActiveTransport('mode1_udp')">
-                            <div style="font-weight: 700; margin-bottom: 0.2rem;">🐧 Modo 1: Rede UDP</div>
-                            <div style="font-size: 0.74rem; opacity: 0.85;" id="subTransport_mode1">Porta 5000 • &lt; 15ms • <span style="color:#ffd54f;">🔇 Vídeo Puro</span></div>
-                        </button>
-                        <button class="btn-toggle" id="btnTransport_mode2" onclick="setActiveTransport('mode2_miracast')">
-                            <div style="font-weight: 700; margin-bottom: 0.2rem;">🪟 Modo 2: Miracast</div>
-                            <div style="font-size: 0.74rem; opacity: 0.85;" id="subTransport_mode2">Win+K / Linux • TCP 7236 • 🔊 Som Integrado</div>
-                        </button>
-                        <button class="btn-toggle active" id="btnTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
-                            <div style="font-weight: 700; margin-bottom: 0.2rem;">⚡ Modo 3: USB Bulk Direct</div>
-                            <div style="font-size: 0.74rem; opacity: 0.85;" id="subTransport_mode3">FunctionFS 480Mbps • &lt; 1ms • <span style="color:#ffd54f;">🔇 Vídeo Puro</span></div>
-                        </button>
-                        <button class="btn-toggle" id="btnActionStop" onclick="setExtensionAction('stop')" style="border-color: rgba(255, 82, 82, 0.6);">
-                            <div style="font-weight: 700; margin-bottom: 0.2rem; color: #ff5252;">⏹️ Standby / Parar</div>
-                            <div style="font-size: 0.74rem; opacity: 0.8;">Tela de Prontidão e Silêncio</div>
+                    <div class="btn-grid" id="integratedModeGrid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+                        <!-- Mode 1 Card & Activation -->
+                        <div class="dl-card mode-card" id="cardMode1" style="border-color: var(--accent-cyan); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode1_udp', currentTopology)">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <div class="dl-title" style="margin: 0; font-size: 1rem;">🐧 Modo 1: Rede UDP</div>
+                                <label class="switch" title="Toggle Mode 1">
+                                    <input type="checkbox" id="toggleMode1" checked onchange="toggleMode('mode1', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="dl-desc" data-i18n="m1Desc">Direct low-latency RTP H.264 stream on UDP port 5000 with AMD VA-API zero-copy offload (&lt; 15ms).</div>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span id="badgeMode1" class="stat-badge badge-cyan" data-i18n="badgeMode1On">Enabled (UDP 5000)</span>
+                                    <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">Linux Wayland</span>
+                                </div>
+                                <button class="btn-toggle active" id="btnTransport_mode1" style="padding: 0.55rem; font-size: 0.85rem; border-color: var(--accent-cyan); color: var(--accent-cyan); width: 100%;" onclick="activateModeWithTopology('mode1_udp', currentTopology); event.stopPropagation();">
+                                    <div style="font-weight: 700; margin-bottom: 0.15rem;">▶ Iniciar Modo 1 (Rede UDP)</div>
+                                    <div style="font-size: 0.72rem; opacity: 0.85;" id="subTransport_mode1">Porta 5000 • &lt; 15ms • <span style="color:#ffd54f;">🔇 Vídeo Puro</span></div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Mode 2 Card & Activation -->
+                        <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode2_miracast', 'miracast')">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <div class="dl-title" style="margin: 0; font-size: 1rem;">🪟 Modo 2: Miracast</div>
+                                <label class="switch" title="Toggle Mode 2">
+                                    <input type="checkbox" id="toggleMode2" checked onchange="toggleMode('mode2', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="dl-desc" data-i18n="m2Desc">Native Windows 10/11 wireless projection via Win + K on RTSP port 7236. Zero host drivers needed.</div>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span id="badgeMode2" class="stat-badge badge-green" data-i18n="badgeMode2On">Enabled (TCP 7236)</span>
+                                    <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">Windows &amp; Linux</span>
+                                </div>
+                                <button class="btn-toggle tip-wrap" id="btnTransport_mode2" style="padding: 0.55rem; font-size: 0.85rem; border-color: var(--accent-emerald); color: var(--accent-emerald); width: 100%;" onclick="activateModeWithTopology('mode2_miracast', 'miracast'); event.stopPropagation();" title="Exec=env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays" data-i18n="btnSelectMode2">
+                                    <div style="font-weight: 700; margin-bottom: 0.15rem;">🪟 Conectar Miracast (Win+K / Linux)</div>
+                                    <div style="font-size: 0.72rem; opacity: 0.85;" id="subTransport_mode2">Win+K / Linux • TCP 7236 • 🔊 Som Integrado</div>
+                                </button>
+                                <div class="gpu-miracast-box" style="padding: 0.45rem 0.55rem; background: rgba(0, 255, 102, 0.05); border: 1px solid rgba(0, 255, 102, 0.25); border-radius: var(--radius-sm); font-size: 0.73rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+                                        <span class="tip-wrap" style="cursor: help;">
+                                            <span style="font-weight: 700; color: var(--accent-emerald); font-size: 0.75rem;">🚀 GPU Host</span>
+                                            <span class="tip-icon" style="margin-left: 4px;">?</span>
+                                            <span class="tip-box" style="width: 300px; font-family: monospace; font-size: 0.72rem; text-align: left; line-height: 1.35; left: 0;">
+                                                <strong>🚀 Comandos de Aceleração por GPU:</strong><br>
+                                                • <strong>AMD:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays</code><br>
+                                                • <strong>Intel:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,qsvh264enc:MAX gnome-network-displays</code><br>
+                                                • <strong>NVIDIA:</strong> <code>env GST_PLUGIN_FEATURE_RANK=nvh264enc:MAX,vaapih264enc:MAX gnome-network-displays</code><br>
+                                                • <strong>Auto:</strong> <code>env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,nvh264enc:MAX,qsvh264enc:MAX gnome-network-displays</code>
+                                            </span>
+                                        </span>
+                                        <button class="btn-micro" style="padding: 0.12rem 0.35rem; font-size: 0.68rem; border-radius: 4px; border: 1px solid var(--accent-emerald); background: rgba(0,255,102,0.15); color: var(--accent-emerald); cursor: pointer;" onclick="copyGpuLaunchCommand(); event.stopPropagation();" title="Copiar comando">📋 Copiar</button>
+                                    </div>
+                                    <div style="font-family: monospace; font-size: 0.68rem; color: #a3e635; word-break: break-all; user-select: all; padding: 0.2rem 0.3rem; background: rgba(0,0,0,0.35); border-radius: 4px;" id="gpuLaunchCmdPreview">
+                                        env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays
+                                    </div>
+                                    <div style="display: flex; gap: 0.2rem; margin-top: 0.3rem;">
+                                        <button class="btn-chip active" id="chipGpuAmd" onclick="selectGpuCmd('amd'); event.stopPropagation();">AMD</button>
+                                        <button class="btn-chip" id="chipGpuIntel" onclick="selectGpuCmd('intel'); event.stopPropagation();">Intel</button>
+                                        <button class="btn-chip" id="chipGpuNvidia" onclick="selectGpuCmd('nvidia'); event.stopPropagation();">NVIDIA</button>
+                                        <button class="btn-chip" id="chipGpuAll" onclick="selectGpuCmd('all'); event.stopPropagation();">Auto</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mode 3 Card & Activation -->
+                        <div class="dl-card mode-card" id="cardMode3" style="border-color: var(--accent-purple); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode3_usb_bulk', currentTopology)">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <div class="dl-title" style="margin: 0; font-size: 1rem;">⚡ Modo 3: USB Bulk Direct</div>
+                                <label class="switch" title="Toggle Mode 3">
+                                    <input type="checkbox" id="toggleMode3" checked onchange="toggleMode('mode3', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="dl-desc" data-i18n="m3Desc">Direct 480 Mbps raw hardware pipe via USB FunctionFS without network stack overhead (&lt; 1ms).</div>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span id="badgeMode3" class="stat-badge badge-purple" data-i18n="badgeMode3On">Enabled (USB Bulk)</span>
+                                    <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">USB FunctionFS</span>
+                                </div>
+                                <button class="btn-toggle" id="btnTransport_mode3" style="padding: 0.55rem; font-size: 0.85rem; border-color: var(--accent-purple); color: var(--accent-purple); width: 100%;" onclick="activateModeWithTopology('mode3_usb_bulk', currentTopology); event.stopPropagation();">
+                                    <div style="font-weight: 700; margin-bottom: 0.15rem;">⚡ Iniciar Modo 3 (USB Bulk Direct)</div>
+                                    <div style="font-size: 0.72rem; opacity: 0.85;" id="subTransport_mode3">FunctionFS 480Mbps • &lt; 1ms • <span style="color:#ffd54f;">🔇 Vídeo Puro</span></div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Standby / Parar Transmissão Control Bar -->
+                    <div style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+                        <button class="btn-toggle" id="btnActionStop" onclick="setExtensionAction('stop')" style="border-color: rgba(255, 82, 82, 0.6); padding: 0.65rem 1.4rem; min-width: 240px; background: rgba(255, 82, 82, 0.08);">
+                            <div style="font-weight: 700; margin-bottom: 0.15rem; color: #ff5252;">⏹️ Standby / Parar Transmissão</div>
+                            <div style="font-size: 0.74rem; opacity: 0.8;">Tela de Prontidão e Silêncio • Desconectar Vídeo</div>
                         </button>
                     </div>
                 </div>
@@ -3312,41 +3298,60 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }).catch(() => {});
         }
 
-        function activateModeWithTopology(transport, topology) {
-            currentTransport = transport;
-            if (topology && topology !== 'miracast') {
-                currentTopology = topology;
-            }
+        let isModeSwitchInProgress = false;
 
-            if (transport === 'mode2_miracast') {
-                setActiveTransport('mode2_miracast');
+        function activateModeWithTopology(transport, topology) {
+            if (isModeSwitchInProgress) {
                 return;
             }
 
-            const targetMode = (currentTopology === 'clone') ? 'clone' : 'extend';
-            currentTopology = targetMode;
-            const modeLabel = targetMode === 'clone' ? 'Clonar (eDP-1)' : 'Estender (HDMI-1)';
-            const transLabel = transport.includes('usb') ? 'USB Bulk Direct' : 'Rede UDP';
-            const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
+            const targetMode = (topology && topology !== 'miracast') ? topology : ((currentTopology === 'clone') ? 'clone' : 'extend');
             const withAudio = isSimultaneousAudioEnabled();
-            const audioBadge = withAudio ? ' [🔊 Áudio TV]' : ' [🔇 Vídeo Puro]';
-            showToast(`🚀 Ativando ${transLabel} no modo ${modeLabel}${audioBadge}...`);
 
-            // 1. Tell receiver to switch transport with audio flag
-            fetch('/api/transport/active', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start', audio: withAudio, mode: targetMode })
-            }).catch(() => {});
+            // Idempotence Guard: If this exact mode and topology is already running, prevent freeze
+            const valState = document.getElementById('valState');
+            const isStandby = valState && valState.textContent.includes('STANDBY');
+            const isAlreadyActive = (currentTransport === transport && currentTopology === targetMode);
 
-            // 2. Tell host sender to switch transport, mode, and simultaneous audio flag
-            sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans, audio: withAudio });
-            fetch('/api/stream/start', { method: 'POST' }).then(() => {
-                setTimeout(pollTelemetry, 250);
-                setTimeout(pollTelemetry, 800);
-            });
+            if (isAlreadyActive && !isStandby) {
+                const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
+                showToast('ℹ️ ' + shortKey.toUpperCase() + ' já está ativo e transmitindo em tempo real.');
+                return;
+            }
+
+            isModeSwitchInProgress = true;
+            setTimeout(() => { isModeSwitchInProgress = false; }, 1000);
+
+            currentTransport = transport;
+            currentTopology = targetMode;
+
+            const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
+            const activeTrans = transport.includes('usb') ? 'usb_bulk' : (transport.includes('miracast') ? 'miracast' : 'network');
+            const audioLabel = withAudio ? ' [🔊 Com Áudio]' : ' [🔇 Vídeo Puro]';
+            const topoLabel = (targetMode === 'clone') ? 'Clonar (eDP-1)' : 'Estender (HDMI-1)';
+
+            if (transport === 'mode2_miracast') {
+                showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • Abrindo GNOME Displays com GPU no Laptop...');
+                sendHostControl({ action: 'launch_miracast', transport: 'miracast' });
+                fetch('/api/transport/active', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start', audio: withAudio, mode: 'miracast' })
+                }).catch(() => {});
+            } else {
+                showToast('🚀 Ativando ' + shortKey.toUpperCase() + ' (' + topoLabel + ')' + audioLabel + '...');
+                sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans, audio: withAudio });
+                fetch('/api/transport/active', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start', audio: withAudio, mode: targetMode })
+                }).catch(() => {});
+                fetch('/api/stream/start', { method: 'POST' }).catch(() => {});
+            }
 
             updateModeAndTopologyButtons();
+            setTimeout(pollTelemetry, 300);
+            setTimeout(pollTelemetry, 1000);
         }
 
         const gpuCommands = {
@@ -3386,42 +3391,16 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         }
 
         function setActiveTransport(transport) {
-            currentTransport = transport;
-            const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
-
-            if (transport === 'mode2_miracast') {
-                showToast('🪟 ' + (t('m2Title') || 'Miracast') + ' • Abrindo GNOME Displays com GPU no Laptop...');
-                sendHostControl({ action: 'launch_miracast', transport: 'miracast' });
-                fetch('/api/mode', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode: 'mode2_miracast' })
-                }).catch(() => {});
-            } else {
-                const targetMode = (currentTopology === 'clone') ? 'clone' : 'extend';
-                currentTopology = targetMode;
-                const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
-                const withAudio = isSimultaneousAudioEnabled();
-                const audioLabel = withAudio ? ' [🔊 Com Áudio]' : ' [🔇 Vídeo Puro]';
-                showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (targetMode === 'clone' ? 'Clonar' : 'Estender') + ')' + audioLabel + '...');
-                sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans, audio: withAudio });
-                fetch('/api/stream/start', { method: 'POST' }).catch(() => {});
-            }
-
-            fetch('/api/transport/active', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start', audio: isSimultaneousAudioEnabled(), mode: currentTopology })
-            }).then(() => {
-                setTimeout(pollTelemetry, 250);
-                setTimeout(pollTelemetry, 800);
-            }).catch(() => {});
-
-            updateModeAndTopologyButtons();
+            activateModeWithTopology(transport, currentTopology);
         }
 
         // Display Extension Actions: Extend (HDMI-1), Clone (eDP-1), or Stop / Standby
         function setExtensionAction(action) {
+            if (action === currentTopology) {
+                showToast('ℹ️ ' + (action === 'stop' ? 'Standby' : (action === 'clone' ? 'Clonar' : 'Estender')) + ' já ativo.');
+                return;
+            }
+
             currentTopology = action;
             const activeTrans = currentTransport.includes('usb') ? 'usb_bulk' : 'network';
             const withAudio = isSimultaneousAudioEnabled();
@@ -3579,10 +3558,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 }
             }
 
-            // 3. Update Listener Daemon Card action buttons
-            const btnM1 = document.getElementById('btnMode1Connect');
-            const btnM2 = document.getElementById('btnMode2Connect');
-            const btnM3 = document.getElementById('btnMode3Connect');
+            // 3. Update Unified Mode Card action buttons
+            const btnM1 = document.getElementById('btnTransport_mode1') || document.getElementById('btnMode1Connect');
+            const btnM2 = document.getElementById('btnTransport_mode2') || document.getElementById('btnMode2Connect');
+            const btnM3 = document.getElementById('btnTransport_mode3') || document.getElementById('btnMode3Connect');
 
             if (btnM1) btnM1.classList.toggle('active', currentTransport === 'mode1_udp' && currentTopology !== 'stop');
             if (btnM2) btnM2.classList.toggle('active', currentTransport === 'mode2_miracast' && currentTopology !== 'stop');

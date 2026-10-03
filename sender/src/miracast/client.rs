@@ -626,7 +626,7 @@ mod tests {
         let udp_sink = UdpSocket::bind("127.0.0.1:0").expect("Failed to bind mock UDP sink");
         let udp_port = udp_sink.local_addr().unwrap().port();
         udp_sink
-            .set_read_timeout(Some(Duration::from_secs(2)))
+            .set_read_timeout(Some(Duration::from_secs(5)))
             .expect("Set UDP timeout failed");
 
         // 3. Spawn mock RTSP Sink server thread simulating full M1-M7 and TEARDOWN

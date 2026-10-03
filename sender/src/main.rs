@@ -532,6 +532,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match action {
                     ControlAction::StartStreaming => {
                         println!("\x1b[1;32m[+] Web Command: Iniciar / Retomar Transmissão recebido!\x1b[0m");
+                        if !is_paused && child.is_some() {
+                            println!("\x1b[1;32m[+] Transmissão já ativa e em execução. Ignorando start redundante.\x1b[0m");
+                            continue;
+                        }
                         if monitor_to_record == "HDMI-1" {
                             pipewire::ensure_kernel_hdmi_connected();
                             pipewire::ensure_gnome_displays(cfg.scale);
@@ -628,10 +632,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 cfg.mode = m;
                                 monitor_to_record = target_mon;
                                 switch_engine_or_monitor = true;
-                            } else {
-                                println!("\x1b[1;35m[*] Web Command: Reativando Modo '{}' (Monitor: {})\x1b[0m", m, target_mon);
+                            } else if is_paused || child.is_none() {
+                                println!("\x1b[1;35m[*] Web Command: Retomando Modo '{}' (Monitor: {})\x1b[0m", m, target_mon);
                                 is_paused = false;
                                 restart_pipeline = true;
+                            } else {
+                                println!("\x1b[1;32m[+] Web Command: Modo '{}' já ativo e transmitindo. Ignorando comando redundante.\x1b[0m", m);
                             }
                         }
                     }
@@ -747,6 +753,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         });
                     }
                     ControlAction::SetTransport(new_trans) => {
+                        if new_trans == cfg.transport && !is_paused && child.is_some() {
+                            println!("\x1b[1;32m[+] Web Command: Transporte '{:?}' já ativo e transmitindo. Ignorando comando redundante.\x1b[0m", new_trans);
+                            continue;
+                        }
                         println!("\x1b[1;35m[*] Web Command: Troca de Transporte {:?} -> {:?}\x1b[0m", cfg.transport, new_trans);
                         match new_trans {
                             TransportKind::Miracast => {
