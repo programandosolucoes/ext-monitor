@@ -77,6 +77,14 @@ During continuous high-fidelity video streaming (movies and series such as Star 
   * **IP fragmentation dropped to ZERO**.
   * Optimized unity-gain (100% volume) sample path to pure integer operations without floating-point math on ARM11.
 
+### 2.5 IEC 60958-3 Status Bits Compliance (Philips TV Anti-Mute) & PipeWire Stream Routing
+* **Symptom:** Selecting `Raspberry_Pi_HDMI_Audio` in GNOME Sound Settings produced total silence on the TV.
+* **Root Causes Identified:**
+  1. **SCMS Copy-Protection Flag Asserted:** In `receiver/src/audio.rs`, status byte 0 was initialized to `0x00`. In IEC 60958-3 / CEA-861, bit 2 corresponds to `IEC958_AES0_CON_NOT_COPYRIGHT`. When set to 0, commercial TV DACs (specifically Philips 50PUG6102) interpret the digital stream as restricted-copy and engage hardware protection muting.
+     * *Fix:* Configured `status_bytes[0] = 0x04` (`IEC958_AES0_CON_NOT_COPYRIGHT`) and `status_bytes[1] = 0x82` (`IEC958_AES1_CON_ORIGINAL | IEC958_AES1_CON_PCM_CODER`), mirroring official ALSA `cards/vc4-hdmi.conf`.
+  2. **Active Stream Persistence in PipeWire:** When changing the default audio sink in GNOME, existing active application streams (e.g., Google Chrome playing Star Trek) remained bound to the laptop's internal speakers due to `module-stream-restore`.
+     * *Fix:* Dynamically re-routed the active sink-input directly to `Raspberry_Pi_HDMI_Audio` (`pactl move-sink-input <id> Raspberry_Pi_HDMI_Audio`) and synchronized the target sample rate.
+
 ---
 
 ## 3. Audio Profiles Matrix and Web UI Integration

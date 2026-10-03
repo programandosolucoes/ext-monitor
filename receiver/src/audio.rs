@@ -379,11 +379,11 @@ impl AudioReceiver {
                             let rate_code = get_iec958_rate_code(active_rate);
 
                             let status_bytes: [u8; 24] = [
-                                0x00, // Consumer mode, PCM audio, No emphasis
-                                0x00, // General category
-                                0x00, // Source / channel
-                                rate_code, // Sampling frequency (IEC 60958-3)
-                                0x02, // 16-bit word length
+                                0x04, // Consumer mode, PCM audio, No emphasis, NOT COPYRIGHT (IEC958_AES0_CON_NOT_COPYRIGHT = 0x04)
+                                0x82, // Category: PCM Coder (0x02) | Original generation (0x80) (IEC958_AES1_CON_ORIGINAL | PCM_CODER)
+                                0x00, // Source / channel unspecified
+                                rate_code, // Sampling frequency (IEC 60958-3: 0x02=48k, 0x0A=96k)
+                                0x02, // 16-bit word length (IEC958_AES4_CON_WORDLEN_20_16)
                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                             ];
 

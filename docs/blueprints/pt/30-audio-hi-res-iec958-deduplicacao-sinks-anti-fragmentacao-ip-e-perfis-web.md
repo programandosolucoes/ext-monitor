@@ -93,6 +93,14 @@ Durante a reprodução contínua de streaming de vídeo de alta fidelidade (sér
   * Como $1052 < 1500\text{ MTU}$, a **taxa de fragmentação IP caiu para ZERO**.
   * Otimização da rotina de ganho unitário (volume 100%) no receiver para evitar aritmética de ponto flutuante no laço crítico de amostras.
 
+### 2.5 Conformidade dos Bits de Status IEC 60958-3 (Anti-Mute SCMS em TVs Philips) e Roteamento PipeWire
+* **Sintoma:** Ao selecionar o dispositivo `Raspberry_Pi_HDMI_Audio` no painel de som do GNOME, a TV permanecia em silêncio absoluto.
+* **Causas Raízes Identificadas:**
+  1. **Flag de Proteção de Cópia / SCMS Ativada por Padrão:** Nos subframes IEC 60958 construídos manualmente em `receiver/src/audio.rs`, o byte 0 do Channel Status estava configurado como `0x00`. Na especificação IEC 60958-3 / CEA-861, o bit 2 representa `IEC958_AES0_CON_NOT_COPYRIGHT`. Quando este bit é 0, o fluxo sinaliza "Cópia Protegida com Restrição SCMS". Receptores HDMI de televisores comerciais (especialmente Philips 50PUG6102) acionam mute de segurança no conversor DAC para evitar violação de proteção de conteúdo sem handshake HDCP.
+     * *Correção:* Configuração explícita de `status_bytes[0] = 0x04` (`IEC958_AES0_CON_NOT_COPYRIGHT`) e `status_bytes[1] = 0x82` (`IEC958_AES1_CON_ORIGINAL | IEC958_AES1_CON_PCM_CODER`), idêntico à configuração oficial ALSA de `cards/vc4-hdmi.conf`.
+  2. **Persistência de Roteamento de Streams Ativos no PipeWire:** Ao trocar o dispositivo padrão no GNOME, streams de mídia já em execução contínua (ex: aba do Google Chrome com Star Trek) permaneciam atrelados ao sink anterior (`alsa_output...HiFi__Speaker__sink`) devido à tabela `module-stream-restore`.
+     * *Correção:* Roteamento forçado do sink-input ativo diretamente para o sink virtual `Raspberry_Pi_HDMI_Audio` (`pactl move-sink-input <id> Raspberry_Pi_HDMI_Audio`) e alinhamento da taxa negociada em 48.000 Hz / 96.000 Hz.
+
 ---
 
 ## 3. Matriz de Perfis de Áudio e Integração no Painel Web
