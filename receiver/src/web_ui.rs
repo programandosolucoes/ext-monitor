@@ -732,61 +732,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- Active Extension Connection (Active Transport Selector) -->
-            <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(0, 229, 255, 0.4); background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(13, 20, 36, 0.98) 100%);">
-                <div class="card-header" style="margin-bottom: 0.8rem;">
-                    <div class="card-title">
-                        <span>🔀</span>
-                        <span data-i18n="connHeader">Active Extension Connection (Active Transport)</span>
-                    </div>
-                    <span class="card-badge badge-cyan" id="badgeActiveTransport" data-i18n="connBadge">Hot-Switchable</span>
-                </div>
-                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1rem; line-height: 1.4;" data-i18n="connDesc">
-                    Select the active transmission pipeline between your PC and this screen. Switches immediately on the fly without rebooting.
-                </p>
-                <div class="btn-grid" id="activeTransportGrid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
-                    <button class="btn-toggle active" id="btnTransport_mode1" onclick="setActiveTransport('mode1_udp')">
-                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">🐧 Mode 1: Network UDP</div>
-                        <div style="font-size: 0.76rem; opacity: 0.8;">UDP Port 5000 • &lt; 15ms latency</div>
-                    </button>
-                    <button class="btn-toggle" id="btnTransport_mode2" onclick="setActiveTransport('mode2_miracast')">
-                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">🪟 Mode 2: Miracast</div>
-                        <div style="font-size: 0.76rem; opacity: 0.8;">Windows Win+K • TCP 7236</div>
-                    </button>
-                    <button class="btn-toggle" id="btnTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
-                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">⚡ Mode 3: USB Bulk Direct</div>
-                        <div style="font-size: 0.76rem; opacity: 0.8;">480 Mbps FunctionFS • &lt; 1ms latency</div>
-                    </button>
-                </div>
-            </div>
 
-            <!-- Display Extension & Topology Control (Extend / Clone / Stop) -->
-            <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(0, 230, 118, 0.4); background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(13, 20, 36, 0.98) 100%);">
-                <div class="card-header" style="margin-bottom: 0.8rem;">
-                    <div class="card-title">
-                        <span>🖥️</span>
-                        <span data-i18n="extHeader">Display Extension Action & Topology</span>
-                    </div>
-                    <span class="card-badge badge-green" id="badgeExtState" data-i18n="extBadge">Active Screen</span>
-                </div>
-                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1rem; line-height: 1.4;" data-i18n="extDesc">
-                    Extend desktop area onto HDMI-1, clone primary notebook display (eDP-1), or turn off the extension to put the screen on standby.
-                </p>
-                <div class="btn-grid" id="extActionGrid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
-                    <button class="btn-toggle active" id="btnActionExtend" onclick="setExtensionAction('extend')">
-                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;" data-i18n="btnActionExtend">🖥️ Extended Display (HDMI-1)</div>
-                        <div style="font-size: 0.76rem; opacity: 0.8;" data-i18n="btnActionExtendDesc">Virtual second monitor on TV</div>
-                    </button>
-                    <button class="btn-toggle" id="btnActionClone" onclick="setExtensionAction('clone')">
-                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;" data-i18n="btnActionClone">💻 Clone Screen (eDP-1)</div>
-                        <div style="font-size: 0.76rem; opacity: 0.8;" data-i18n="btnActionCloneDesc">Mirror primary notebook screen</div>
-                    </button>
-                    <button class="btn-toggle" id="btnActionStop" onclick="setExtensionAction('stop')" style="border-color: rgba(255, 82, 82, 0.6);">
-                        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem; color: #ff5252;" data-i18n="btnActionStop">⏹ Disable Extension / Standby</div>
-                        <div style="font-size: 0.76rem; opacity: 0.8;" data-i18n="btnActionStopDesc">Stop transmission & put TV on standby</div>
-                    </button>
-                </div>
-            </div>
 
             <!-- Dynamic Displays Container (Renders a section per HDMI/DP video output) -->
             <div id="displaysSectionContainer" style="margin-bottom: 1.5rem;">
@@ -842,16 +788,11 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span id="badgeMode1" class="stat-badge badge-cyan" data-i18n="badgeMode1On">Enabled (UDP 5000)</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;" data-i18n="lblScreenMode">Display Mode:</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Linux Wayland</span>
                             </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <button class="btn-toggle active" id="btnMode1Extend" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode1_udp', 'extend'); event.stopPropagation();" data-i18n="btnM1Extend">
-                                    🖥️ Estender
-                                </button>
-                                <button class="btn-toggle" id="btnMode1Clone" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode1_udp', 'clone'); event.stopPropagation();" data-i18n="btnM1Clone">
-                                    💻 Clonar
-                                </button>
-                            </div>
+                            <button class="btn-toggle active" id="btnMode1Connect" style="padding: 0.5rem; font-size: 0.85rem; border-color: var(--accent-cyan); color: var(--accent-cyan); width: 100%;" onclick="activateModeWithTopology('mode1_udp', currentTopology); event.stopPropagation();">
+                                ▶ Iniciar Modo 1 (Rede UDP)
+                            </button>
                         </div>
                     </div>
                     <div class="dl-card mode-card" id="cardMode2" style="border-color: var(--accent-emerald); cursor: pointer;" onclick="if(!event.target.closest('.switch') && !event.target.closest('button')) activateModeWithTopology('mode2_miracast', 'miracast')">
@@ -910,37 +851,86 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span id="badgeMode3" class="stat-badge badge-purple" data-i18n="badgeMode3On">Enabled (USB Bulk)</span>
-                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;" data-i18n="lblScreenMode">Display Mode:</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">USB FunctionFS</span>
                             </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <button class="btn-toggle" id="btnMode3Extend" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode3_usb_bulk', 'extend'); event.stopPropagation();" data-i18n="btnM3Extend">
-                                    🖥️ Estender
-                                </button>
-                                <button class="btn-toggle" id="btnMode3Clone" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode3_usb_bulk', 'clone'); event.stopPropagation();" data-i18n="btnM3Clone">
-                                    💻 Clonar
-                                </button>
-                            </div>
+                            <button class="btn-toggle" id="btnMode3Connect" style="padding: 0.5rem; font-size: 0.85rem; border-color: var(--accent-purple); color: var(--accent-purple); width: 100%;" onclick="activateModeWithTopology('mode3_usb_bulk', currentTopology); event.stopPropagation();">
+                                ⚡ Iniciar Modo 3 (USB Bulk Direct)
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Hi-Res Digital Audio & Hardware DAC Card -->
+            <!-- Hi-Res Digital Audio & Hardware DAC Card with Integrated Streaming Controls -->
             <div class="glass-card" id="cardAudioDac" style="margin-top: 1.5rem; margin-bottom: 1.5rem; border: 1px solid rgba(179, 136, 255, 0.4); background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(22, 17, 40, 0.98) 100%);">
                 <div class="card-header" style="margin-bottom: 0.8rem;">
                     <div class="card-title">
                         <span>🔊</span>
-                        <span data-i18n="audioHeader">Hi-Res Digital Audio & Hardware DAC</span>
+                        <span data-i18n="audioHeader">Áudio Digital HDMI, DAC de Alta Fidelidade & Transmissão Integrada</span>
                     </div>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                         <span class="card-badge badge-purple" id="badgeAudioStatus" data-i18n="audioBadge">ALSA Hardware PCM</span>
+                        <span class="card-badge badge-cyan" id="badgeIntegratedState">Modo 3: USB Bulk</span>
                     </div>
                 </div>
-                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1rem; line-height: 1.4;" data-i18n="audioCardDesc">
-                    Configure volume, master sample rate clocks, and physical transport channels for HDMI digital audio. Low-latency playback with automatic A/V synchronization.
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.2rem; line-height: 1.4;" data-i18n="audioCardDesc">
+                    Controle centralizado e integrado: selecione o canal de transmissão ativo (Modo 1, 2 ou 3), a topologia de tela (Estender ou Clonar), ajuste o volume de áudio digital, gerencie o visualizador de espectro FFT e configure o clock mestre do hardware ALSA HDMI.
                 </p>
 
-                <!-- Audio Volume Slider & Action Row -->
+                <!-- 1. Central Integrated Transmission Mode (Mode 1, 2, 3 & Standby) -->
+                <div class="control-group" style="margin-bottom: 1.2rem; padding: 1rem; background: rgba(0, 0, 0, 0.25); border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.06);">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="audioModeLabel">Canal de Transmissão Ativo (Vídeo + Áudio HDMI)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipAudioMode">Alterna o canal físico de streaming entre o computador e o Raspberry Pi. Troca a quente sem reiniciar o sistema.</span>
+                        </span>
+                        <span class="control-value" id="valIntegratedMode">⚡ Modo 3: USB Bulk Direct (&lt; 1ms)</span>
+                    </div>
+                    <div class="btn-grid" id="integratedModeGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                        <button class="btn-toggle" id="btnTransport_mode1" onclick="setActiveTransport('mode1_udp')">
+                            <div style="font-weight: 700; margin-bottom: 0.2rem;">🐧 Modo 1: Rede UDP</div>
+                            <div style="font-size: 0.74rem; opacity: 0.8;">Porta 5000/5004 • &lt; 15ms</div>
+                        </button>
+                        <button class="btn-toggle" id="btnTransport_mode2" onclick="setActiveTransport('mode2_miracast')">
+                            <div style="font-weight: 700; margin-bottom: 0.2rem;">🪟 Modo 2: Miracast</div>
+                            <div style="font-size: 0.74rem; opacity: 0.8;">Win+K / Linux • TCP 7236</div>
+                        </button>
+                        <button class="btn-toggle active" id="btnTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
+                            <div style="font-weight: 700; margin-bottom: 0.2rem;">⚡ Modo 3: USB Bulk Direct</div>
+                            <div style="font-size: 0.74rem; opacity: 0.8;">FunctionFS 480Mbps • &lt; 1ms</div>
+                        </button>
+                        <button class="btn-toggle" id="btnActionStop" onclick="setExtensionAction('stop')" style="border-color: rgba(255, 82, 82, 0.6);">
+                            <div style="font-weight: 700; margin-bottom: 0.2rem; color: #ff5252;">⏹️ Standby / Parar</div>
+                            <div style="font-size: 0.74rem; opacity: 0.8;">Tela de Prontidão e Silêncio</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. Screen Topology Selector (Extend / Clone) -->
+                <div class="control-group" style="margin-bottom: 1.2rem; padding: 1rem; background: rgba(0, 0, 0, 0.25); border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.06);">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="audioTopologyLabel">Topologia de Tela no Laptop (Wayland / Mutter)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipAudioTopology">Estender a área de trabalho para a TV como segundo monitor virtual (HDMI-1) ou espelhar a tela principal do notebook (eDP-1).</span>
+                        </span>
+                        <span class="control-value" id="valIntegratedTopology">🖥️ Estendida (HDMI-1)</span>
+                    </div>
+                    <div class="btn-grid" id="integratedTopologyGrid" style="grid-template-columns: 1fr 1fr;">
+                        <button class="btn-toggle active" id="btnActionExtend" onclick="setExtensionAction('extend')">
+                            <div style="font-weight: 700; margin-bottom: 0.2rem;">🖥️ Estender Área de Trabalho</div>
+                            <div style="font-size: 0.74rem; opacity: 0.8;">Segundo monitor virtual na TV (HDMI-1)</div>
+                        </button>
+                        <button class="btn-toggle" id="btnActionClone" onclick="setExtensionAction('clone')">
+                            <div style="font-weight: 700; margin-bottom: 0.2rem;">💻 Clonar Tela do Notebook</div>
+                            <div style="font-size: 0.74rem; opacity: 0.8;">Espelhar display principal (eDP-1)</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. Audio Volume Slider & Action Row -->
                 <div class="control-group">
                     <div class="control-label">
                         <span class="tip-wrap">
@@ -966,7 +956,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     </div>
                 </div>
 
-                <!-- Live Hardware Audio Spectrum Visualizer (30 FPS Canvas) -->
+                <!-- 4. Live Hardware Audio Spectrum Visualizer (30 FPS Canvas) -->
                 <div class="control-group">
                     <div class="control-label">
                         <span class="tip-wrap">
@@ -983,8 +973,8 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     </div>
                 </div>
 
-                <!-- HDMI Audio Hardware Profiles & Master Clock -->
-                <div class="control-group">
+                <!-- 5. HDMI Audio Hardware Profiles & Master Clock -->
+                <div class="control-group" style="margin-bottom: 0;">
                     <div class="control-label">
                         <span class="tip-wrap">
                             <span data-i18n="audioProfileLabel">HDMI Master Audio Profile & Sample Rate</span>
@@ -998,26 +988,6 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <button class="btn-toggle" id="btnRate192k" onclick="setAudioRate(192000)" data-rate="192000">🚀 Ultra Hi-Res (192 kHz / 24-bit)</button>
                         <button class="btn-toggle" id="btnRate48k" onclick="setAudioRate(48000)" data-rate="48000">🎬 Cinema Standard (48 kHz / 16-bit)</button>
                         <button class="btn-toggle" id="btnRate44k" onclick="setAudioRate(44100)" data-rate="44100">💿 CD Fidelity (44.1 kHz / 16-bit)</button>
-                    </div>
-                </div>
-
-                <!-- Audio Transport Architecture: Network UDP vs UAC2 Gadget vs USB Bulk Mux -->
-                <div class="control-group" style="margin-bottom: 0;">
-                    <div class="control-label">
-                        <span class="tip-wrap">
-                            <span data-i18n="audioTransportLabel">Audio Transport Architecture</span>
-                            <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipAudioTransport">Select how digital audio is carried from PC to Pi Zero: Mode 1 UDP Network Stream (Port 5004), Mode 2 USB Audio Class (UAC2 Gadget), or Mode 3 USB Bulk Multiplexed.</span>
-                        </span>
-                        <span class="control-value" id="valAudioTransport">Mode 1: UDP Stream (Port 5004 - Active)</span>
-                    </div>
-                    <div class="btn-grid" id="audioTransportGrid">
-                        <button class="btn-toggle active" id="btnAudioTransUdp" onclick="setAudioTransport('network_udp')" data-transport="network_udp">🌐 Mode 1: UDP Network (Low-Latency)</button>
-                        <button class="btn-toggle" id="btnAudioTransUac2" onclick="setAudioTransport('uac2_gadget')" data-transport="uac2_gadget">🔌 Mode 2: USB Audio Class (UAC2)</button>
-                        <button class="btn-toggle" id="btnAudioTransBulk" onclick="setAudioTransport('usb_bulk_mux')" data-transport="usb_bulk_mux">📦 Mode 3: USB Bulk Mux (Offline)</button>
-                    </div>
-                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.5rem; line-height: 1.4;" id="descAudioTransport" data-i18n="audioTransportDesc">
-                        Mode 1 UDP Network: Audio stream arrives via UDP port 5004 in 1024-byte unfragmented packets. True sub-5ms delay with automatic A/V synchronization.
                     </div>
                 </div>
             </div>
@@ -2121,9 +2091,13 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostShowHud: "📊 Show HUD on TV (60s)",
                 btnHostHideHud: "❌ Hide HUD",
                 mediaHeader: "IoT Media Center & HDMI Visualizer (Chromecast / DLNA)",
-                audioHeader: "Hi-Res Digital Audio & Hardware DAC",
+                audioHeader: "Hi-Res Digital Audio, DAC & Integrated Streaming",
                 audioBadge: "ALSA Hardware PCM",
-                audioCardDesc: "Configure volume, master sample rate clocks, and physical transport channels for HDMI digital audio. Low-latency playback with automatic A/V synchronization.",
+                audioCardDesc: "Centralized control: select active transmission channel (Mode 1, 2, or 3), screen topology (Extend or Clone), adjust digital audio volume, manage FFT spectrum visualizer, and configure ALSA master clock.",
+                audioModeLabel: "Active Transmission Channel (Video + HDMI Audio)",
+                tipAudioMode: "Switches physical streaming pipeline between PC and Raspberry Pi. Instant on-the-fly switching without rebooting.",
+                audioTopologyLabel: "Screen Topology on Laptop (Wayland / Mutter)",
+                tipAudioTopology: "Extend desktop to TV as second virtual monitor (HDMI-1) or mirror notebook primary display (eDP-1).",
                 castHeader: "Web Sharing & Chromecast-Style Casting (Google Cast)",
                 castDesc: "Mirror your browser tabs, windows, video URLs or mobile screen directly to the TV just like a real Chromecast device.",
                 webCastTitle: "Cast Browser Tab or Screen (Web Cast)",
@@ -2438,9 +2412,13 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostShowHud: "📊 Exibir HUD na TV (60s)",
                 btnHostHideHud: "❌ Ocultar HUD",
                 mediaHeader: "Central de Mídia IoT & Visualizador HDMI (Chromecast / DLNA)",
-                audioHeader: "Áudio Digital HDMI & DAC de Alta Fidelidade",
+                audioHeader: "Áudio Digital HDMI, DAC de Alta Fidelidade & Transmissão Integrada",
                 audioBadge: "ALSA Hardware PCM",
-                audioCardDesc: "Configure o volume, clocks mestres de amostragem e canais físicos de transporte para o áudio digital HDMI com sincronismo A/V.",
+                audioCardDesc: "Controle centralizado e integrado: selecione o canal de transmissão ativo (Modo 1, 2 ou 3), a topologia de tela (Estender ou Clonar), ajuste o volume de áudio digital, gerencie o visualizador de espectro FFT e configure o clock mestre do hardware ALSA HDMI.",
+                audioModeLabel: "Canal de Transmissão Ativo (Vídeo + Áudio HDMI)",
+                tipAudioMode: "Alterna o canal físico de streaming entre o computador e o Raspberry Pi. Troca a quente sem reiniciar o sistema.",
+                audioTopologyLabel: "Topologia de Tela no Laptop (Wayland / Mutter)",
+                tipAudioTopology: "Estender a área de trabalho para a TV como segundo monitor virtual (HDMI-1) ou espelhar a tela principal do notebook (eDP-1).",
                 castHeader: "Transmissão Web & Compartilhamento Estilo Chromecast (Google Cast)",
                 castDesc: "Espelhe suas abas do navegador, janelas, URLs de vídeo ou tela do celular diretamente na TV, exatamente como um Chromecast real.",
                 webCastTitle: "Transmitir Esta Aba ou Tela (Web Cast)",
@@ -2750,9 +2728,13 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostShowHud: "📊 Mostra HUD su TV (60s)",
                 btnHostHideHud: "❌ Nascondi HUD",
                 mediaHeader: "Centro Multimediale IoT & Visualizzatore HDMI (Chromecast / DLNA)",
-                audioHeader: "Audio Digitale HDMI & DAC Hardware ad Alta Fedeltà",
+                audioHeader: "Audio Digitale HDMI, DAC Hardware & Streaming Integrato",
                 audioBadge: "ALSA Hardware PCM",
-                audioCardDesc: "Configura volume, frequenze di campionamento master e canali fisici di trasporto per l'audio digitale HDMI con sincronizzazione A/V.",
+                audioCardDesc: "Controllo centralizzato: seleziona il canale di trasmissione attivo (Modo 1, 2 o 3), la topologia dello schermo (Estendi o Duplica), regola il volume e configura il clock ALSA HDMI.",
+                audioModeLabel: "Canale di Trasmissione Attivo (Video + Audio HDMI)",
+                tipAudioMode: "Cambia la pipeline di streaming fisica tra PC e Raspberry Pi istantaneamente.",
+                audioTopologyLabel: "Topologia Schermo su Laptop (Wayland / Mutter)",
+                tipAudioTopology: "Estendi il desktop sulla TV come secondo monitor virtuale (HDMI-1) o duplica lo schermo primario (eDP-1).",
                 castHeader: "Condivisione Web & Trasmissione Stile Chromecast (Google Cast)",
                 castDesc: "Trasmetti schede del browser, finestre, URL video o smartphone direttamente alla TV come un vero dispositivo Chromecast.",
                 webCastTitle: "Trasmetti Scheda o Schermo (Web Cast)",
@@ -3062,9 +3044,13 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostShowHud: "📊 在电视上显示 HUD (60秒)",
                 btnHostHideHud: "❌ 隐藏 HUD",
                 mediaHeader: "IoT 媒体中心与 HDMI 音频频谱可视化 (Chromecast / DLNA)",
-                audioHeader: "HDMI 数字高保真音频与硬件 DAC",
+                audioHeader: "HDMI 数字高保真音频、硬件 DAC 与集成传输控制",
                 audioBadge: "ALSA 硬件 PCM",
-                audioCardDesc: "配置 HDMI 数字音频的音量、主采样时钟及物理传输通道，具备毫秒级超低延迟与音画同步。",
+                audioCardDesc: "集中式集成控制：选择活动传输通道 (模式 1、2 或 3)、屏幕拓扑 (扩展或镜像)、调节数字音频音量并配置 ALSA 硬件主时钟。",
+                audioModeLabel: "活动传输通道 (视频 + HDMI 音频)",
+                tipAudioMode: "在电脑与树莓派之间快速热切换物理传输管线，无需重启。",
+                audioTopologyLabel: "笔记本屏幕拓扑 (Wayland / Mutter)",
+                tipAudioTopology: "将桌面扩展到电视作为第二虚拟显示器 (HDMI-1)，或镜像笔记本主屏幕 (eDP-1)。",
                 castHeader: "网页共享与 Chromecast 风格投屏 (Google Cast)",
                 castDesc: "像真正的 Chromecast 一样，将浏览器标签页、窗口、视频链接或手机屏幕直接镜像到电视。",
                 webCastTitle: "投射此标签页或屏幕 (Web Cast)",
@@ -3350,6 +3336,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             currentTopology = targetMode;
             const modeLabel = targetMode === 'clone' ? 'Clonar (eDP-1)' : 'Estender (HDMI-1)';
             const transLabel = transport.includes('usb') ? 'USB Bulk Direct' : 'Rede UDP';
+            const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
             showToast(`🚀 Ativando ${transLabel} no modo ${modeLabel}...`);
 
             // 1. Tell receiver to switch transport
@@ -3477,15 +3464,56 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         function updateModeAndTopologyButtons() {
             const shortKey = currentTransport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
 
-            // 1. Update Transport buttons across Tab 1 & Tab 2
-            document.querySelectorAll('#activeTransportGrid .btn-toggle, #hostTransportGrid .btn-toggle').forEach(b => {
+            // 1. Update Transport buttons across Tab 1 & Tab 2 (including integrated card)
+            document.querySelectorAll('#activeTransportGrid .btn-toggle, #hostTransportGrid .btn-toggle, #integratedModeGrid .btn-toggle').forEach(b => {
                 const isCurrent = b.id === 'btnTransport_' + shortKey || b.id === 'btnHostTransport_' + shortKey;
-                b.classList.toggle('active', isCurrent);
+                b.classList.toggle('active', isCurrent && currentTopology !== 'stop');
             });
             const valHostTransport = document.getElementById('valHostTransport');
             if (valHostTransport) {
                 valHostTransport.textContent = currentTransport.includes('mode3') ? 'USB Bulk Direct (Mode 3)' :
                     (currentTransport.includes('mode2') ? 'Windows Miracast (Mode 2)' : 'Network UDP (Mode 1)');
+            }
+
+            // 1.1 Update Integrated Audio & Streaming Card Feedback
+            const valIntMode = document.getElementById('valIntegratedMode');
+            const badgeInt = document.getElementById('badgeIntegratedState');
+            if (valIntMode) {
+                if (currentTopology === 'stop') {
+                    valIntMode.textContent = '⏹️ Standby / Tela de Prontidão (Ocioso)';
+                } else if (currentTransport.includes('mode3')) {
+                    valIntMode.textContent = '⚡ Modo 3: USB Bulk Direct (< 1ms)';
+                } else if (currentTransport.includes('mode2')) {
+                    valIntMode.textContent = '🪟 Modo 2: Windows Miracast (TCP 7236)';
+                } else {
+                    valIntMode.textContent = '🐧 Modo 1: Rede UDP (< 15ms)';
+                }
+            }
+            if (badgeInt) {
+                if (currentTopology === 'stop') {
+                    badgeInt.textContent = 'Standby';
+                    badgeInt.className = 'card-badge badge-amber';
+                } else if (currentTransport.includes('mode3')) {
+                    badgeInt.textContent = 'Modo 3: USB Bulk';
+                    badgeInt.className = 'card-badge badge-purple';
+                } else if (currentTransport.includes('mode2')) {
+                    badgeInt.textContent = 'Modo 2: Miracast';
+                    badgeInt.className = 'card-badge badge-green';
+                } else {
+                    badgeInt.textContent = 'Modo 1: Rede UDP';
+                    badgeInt.className = 'card-badge badge-cyan';
+                }
+            }
+
+            const valIntTopo = document.getElementById('valIntegratedTopology');
+            if (valIntTopo) {
+                if (currentTopology === 'stop') {
+                    valIntTopo.textContent = '⏹️ Desativada (Standby)';
+                } else if (currentTopology === 'clone') {
+                    valIntTopo.textContent = '💻 Clonada (eDP-1)';
+                } else {
+                    valIntTopo.textContent = '🖥️ Estendida (HDMI-1)';
+                }
             }
 
             // 2. Update Topology buttons across Tab 1 & Tab 2
@@ -3542,18 +3570,14 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 }
             }
 
-            // 3. Update Individual Mode Card action buttons
-            const m1Ext = document.getElementById('btnMode1Extend');
-            const m1Cln = document.getElementById('btnMode1Clone');
-            const m3Ext = document.getElementById('btnMode3Extend');
-            const m3Cln = document.getElementById('btnMode3Clone');
-            const m2Conn = document.getElementById('btnMode2Connect');
+            // 3. Update Listener Daemon Card action buttons
+            const btnM1 = document.getElementById('btnMode1Connect');
+            const btnM2 = document.getElementById('btnMode2Connect');
+            const btnM3 = document.getElementById('btnMode3Connect');
 
-            if (m1Ext) m1Ext.classList.toggle('active', currentTransport === 'mode1_udp' && currentTopology === 'extend');
-            if (m1Cln) m1Cln.classList.toggle('active', currentTransport === 'mode1_udp' && currentTopology === 'clone');
-            if (m3Ext) m3Ext.classList.toggle('active', currentTransport === 'mode3_usb_bulk' && currentTopology === 'extend');
-            if (m3Cln) m3Cln.classList.toggle('active', currentTransport === 'mode3_usb_bulk' && currentTopology === 'clone');
-            if (m2Conn) m2Conn.classList.toggle('active', currentTransport === 'mode2_miracast');
+            if (btnM1) btnM1.classList.toggle('active', currentTransport === 'mode1_udp' && currentTopology !== 'stop');
+            if (btnM2) btnM2.classList.toggle('active', currentTransport === 'mode2_miracast' && currentTopology !== 'stop');
+            if (btnM3) btnM3.classList.toggle('active', currentTransport === 'mode3_usb_bulk' && currentTopology !== 'stop');
         }
 
         // Operating Modes State & Toggle
