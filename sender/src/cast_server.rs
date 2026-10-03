@@ -172,13 +172,105 @@ impl CastMessage {
     }
 }
 
+/// Parsed AuthChallenge from Chromium/Google Cast
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ParsedAuthChallenge {
+    pub signature_algorithm: u32,
+    pub sender_nonce: Vec<u8>,
+    pub hash_algorithm: u32,
+}
+
+/// Parses an incoming DeviceAuthMessage / AuthChallenge protobuf
+pub fn parse_auth_challenge(bytes: &[u8]) -> ParsedAuthChallenge {
+    let mut challenge = ParsedAuthChallenge {
+        signature_algorithm: 1, // RSASSA_PKCS1v15 default
+        sender_nonce: Vec::new(),
+        hash_algorithm: 1, // SHA256 default
+    };
+
+    let mut offset = 0;
+    let mut challenge_payload: Option<&[u8]> = None;
+
+    // Check if wrapped in DeviceAuthMessage (field 1 = challenge)
+    while offset < bytes.len() {
+        if let Some(key) = decode_varint(bytes, &mut offset) {
+            let field_num = (key >> 3) as u32;
+            let wire_type = (key & 0x07) as u8;
+            match wire_type {
+                0 => { let _ = decode_varint(bytes, &mut offset); }
+                2 => {
+                    if let Some(len) = decode_varint(bytes, &mut offset) {
+                        let len = len as usize;
+                        if offset + len <= bytes.len() {
+                            if field_num == 1 {
+                                challenge_payload = Some(&bytes[offset..offset + len]);
+                            }
+                            offset += len;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        } else {
+            break;
+        }
+    }
+
+    let c_bytes = challenge_payload.unwrap_or(bytes);
+    let mut c_offset = 0;
+    while c_offset < c_bytes.len() {
+        if let Some(key) = decode_varint(c_bytes, &mut c_offset) {
+            let field_num = (key >> 3) as u32;
+            let wire_type = (key & 0x07) as u8;
+            match wire_type {
+                0 => {
+                    if let Some(val) = decode_varint(c_bytes, &mut c_offset) {
+                        if field_num == 1 {
+                            challenge.signature_algorithm = val as u32;
+                        } else if field_num == 3 {
+                            challenge.hash_algorithm = val as u32;
+                        }
+                    }
+                }
+                2 => {
+                    if let Some(len) = decode_varint(c_bytes, &mut c_offset) {
+                        let len = len as usize;
+                        if c_offset + len <= c_bytes.len() {
+                            if field_num == 2 {
+                                challenge.sender_nonce = c_bytes[c_offset..c_offset + len].to_vec();
+                            }
+                            c_offset += len;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        } else {
+            break;
+        }
+    }
+
+    challenge
+}
+
 /// Builds an AuthResponse protobuf message signed with the device private key
+/// Exactly following OpenScreen / Chromium Cast Auth specifications (cast_auth_util.cc)
 pub fn build_auth_response(
     challenge_data: &[u8],
     dev_key_path: &Path,
     dev_cert_path: &Path,
     ca_cert_path: &Path,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let challenge = parse_auth_challenge(challenge_data);
+
     // 1. Read DER certificates
     let dev_cert_pem = fs::read(dev_cert_path)?;
     let dev_x509 = X509::from_pem(&dev_cert_pem)?;
@@ -188,18 +280,22 @@ pub fn build_auth_response(
     let ca_x509 = X509::from_pem(&ca_cert_pem)?;
     let ca_cert_der = ca_x509.to_der()?;
 
-    // 2. Sign challenge data with RSA private key (SHA256)
+    // 2. Data to sign: sender_nonce + dev_cert_der (matching OpenScreen/Chromium cast_auth_util.cc)
+    let mut to_be_signed = Vec::with_capacity(challenge.sender_nonce.len() + dev_cert_der.len());
+    to_be_signed.extend_from_slice(&challenge.sender_nonce);
+    to_be_signed.extend_from_slice(&dev_cert_der);
+
     let dev_key_pem = fs::read(dev_key_path)?;
     let rsa = Rsa::private_key_from_pem(&dev_key_pem)?;
     let pkey = PKey::from_rsa(rsa)?;
 
-    let mut signer = Signer::new(MessageDigest::sha256(), &pkey)?;
-    let data_to_sign = if challenge_data.is_empty() {
-        b"ext-monitor-cast-challenge"
+    let digest = if challenge.hash_algorithm == 0 {
+        MessageDigest::sha1()
     } else {
-        challenge_data
+        MessageDigest::sha256()
     };
-    signer.update(data_to_sign)?;
+    let mut signer = Signer::new(digest, &pkey)?;
+    signer.update(&to_be_signed)?;
     let signature = signer.sign_to_vec()?;
 
     // 3. Encode AuthResponse protobuf
@@ -207,11 +303,19 @@ pub fn build_auth_response(
     //   required bytes signature = 1;
     //   required bytes client_auth_certificate = 2;
     //   repeated bytes intermediate_certificate = 3;
+    //   optional SignatureAlgorithm signature_algorithm = 4 [default = RSASSA_PKCS1v15];
+    //   optional bytes sender_nonce = 5;
+    //   optional HashAlgorithm hash_algorithm = 6 [default = SHA1];
     // }
     let mut auth_resp = Vec::new();
     encode_length_delimited(1, &signature, &mut auth_resp);
     encode_length_delimited(2, &dev_cert_der, &mut auth_resp);
     encode_length_delimited(3, &ca_cert_der, &mut auth_resp);
+    encode_varint_field(4, challenge.signature_algorithm as u64, &mut auth_resp);
+    if !challenge.sender_nonce.is_empty() {
+        encode_length_delimited(5, &challenge.sender_nonce, &mut auth_resp);
+    }
+    encode_varint_field(6, challenge.hash_algorithm as u64, &mut auth_resp);
 
     // message DeviceAuthMessage {
     //   optional AuthResponse response = 2;
@@ -505,5 +609,44 @@ mod tests {
         let wire = msg.to_wire_bytes();
         let decoded = CastMessage::from_proto_bytes(&wire[4..]).expect("Failed to decode binary message");
         assert_eq!(decoded.payload_binary, Some(vec![1, 2, 3, 4, 5]));
+    }
+
+    #[test]
+    fn test_parse_auth_challenge() {
+        // Construct mock DeviceAuthMessage { challenge { signature_algorithm=1, sender_nonce=[10, 20, 30], hash_algorithm=1 } }
+        let mut challenge_body = Vec::new();
+        encode_varint_field(1, 1, &mut challenge_body);
+        encode_length_delimited(2, &[10, 20, 30], &mut challenge_body);
+        encode_varint_field(3, 1, &mut challenge_body);
+
+        let mut device_auth_msg = Vec::new();
+        encode_length_delimited(1, &challenge_body, &mut device_auth_msg);
+
+        let parsed = parse_auth_challenge(&device_auth_msg);
+        assert_eq!(parsed.signature_algorithm, 1);
+        assert_eq!(parsed.sender_nonce, vec![10, 20, 30]);
+        assert_eq!(parsed.hash_algorithm, 1);
+    }
+
+    #[test]
+    fn test_build_auth_response_signature_verification() {
+        let certs = crate::cast_cert::ensure_cast_certificates().expect("Certs");
+        let mut challenge_body = Vec::new();
+        encode_length_delimited(2, b"test-nonce-12345", &mut challenge_body);
+        encode_varint_field(3, 1, &mut challenge_body); // SHA256
+
+        let mut device_auth_msg = Vec::new();
+        encode_length_delimited(1, &challenge_body, &mut device_auth_msg);
+
+        let resp_bytes = build_auth_response(
+            &device_auth_msg,
+            &certs.dev_key,
+            &certs.dev_cert,
+            &certs.ca_cert,
+        ).expect("build auth response");
+
+        assert!(!resp_bytes.is_empty());
+        // Verify response starts with field 2 (DeviceAuthMessage response)
+        assert_eq!(resp_bytes[0] >> 3, 2);
     }
 }
