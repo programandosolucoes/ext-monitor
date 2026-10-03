@@ -235,12 +235,8 @@ fn handle_http_client(
 
     match (method, path) {
         ("GET", "/cast") | ("GET", "/cast/") | ("HEAD", "/cast") | ("HEAD", "/cast/") => {
-            let body = if method == "HEAD" {
-                &[][..]
-            } else {
-                crate::web_cast::CAST_HTML.as_bytes()
-            };
-            send_response(&mut stream, "200 OK", "text/html; charset=utf-8", body);
+            // Web Cast removed in favor of native Google Cast / Chromecast: redirect cleanly to dashboard
+            send_response(&mut stream, "301 Moved Permanently\r\nLocation: /", "text/plain", b"Redirecting to /");
         }
         ("GET", "/") | ("GET", "/index.html") | ("HEAD", "/") | ("HEAD", "/index.html") => {
             let body = if method == "HEAD" {
@@ -447,6 +443,8 @@ fn handle_http_client(
                             *lock = None;
                         }
                         println!("\x1b[1;36m[web-server]\x1b[0m Direct Active Transport switch requested: {}", transport);
+                        let audio_flag = extract_json_bool(body, "audio");
+                        let mode_name = extract_json_str(body, "mode").unwrap_or("extend");
                         match transport.as_str() {
                             "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
                                 let _ = crate::flow::ARBITER.request_level0(crate::flow::DesktopMode::Mode3UsbBulk, 86);
@@ -456,7 +454,12 @@ fn handle_http_client(
                                     cfg.mode1 = false;
                                     cfg.mode2 = false;
                                 }
-                                forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
+                                let fwd_payload = format!(
+                                    "{{\"action\":\"start\",\"transport\":\"usb_bulk\",\"mode\":\"{}\"{}}}",
+                                    mode_name,
+                                    audio_flag.map(|a| format!(",\"audio\":{}", a)).unwrap_or_default()
+                                );
+                                forward_config_to_sender(&fwd_payload);
                                 let run = running.clone();
                                 let pipe = pipeline_mgr.clone();
                                 thread::spawn(move || {
@@ -473,7 +476,12 @@ fn handle_http_client(
                                     cfg.mode2 = false;
                                     cfg.mode3 = false;
                                 }
-                                forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
+                                let fwd_payload = format!(
+                                    "{{\"action\":\"start\",\"transport\":\"network\",\"mode\":\"{}\"{}}}",
+                                    mode_name,
+                                    audio_flag.map(|a| format!(",\"audio\":{}", a)).unwrap_or_default()
+                                );
+                                forward_config_to_sender(&fwd_payload);
                                 let pipe = pipeline_mgr.clone();
                                 thread::spawn(move || {
                                     let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };

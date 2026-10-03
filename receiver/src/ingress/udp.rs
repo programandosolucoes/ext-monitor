@@ -113,9 +113,7 @@ impl UdpRtpIngress {
             port
         );
 
-        let mut last_packet_time = std::time::Instant::now();
-        let mut splash_active = false;
-        let mut total_packets = 0u64;
+
 
         while running.load(Ordering::SeqCst) {
             let ret = unsafe { libc::poll(&mut pfd, 1, 15) };
@@ -144,11 +142,6 @@ impl UdpRtpIngress {
             // Drain all available UDP packets from the socket buffer in a tight userspace loop
             while let Ok(n) = sock.recv(&mut buffer) {
                 if n > 12 {
-                    last_packet_time = std::time::Instant::now();
-                    total_packets += 1;
-                    if splash_active {
-                        splash_active = false;
-                    }
                     depayloader.depayload_packet(&buffer[..n], &mut completed_frames);
                 }
             }

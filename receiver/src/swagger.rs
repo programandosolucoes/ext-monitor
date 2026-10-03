@@ -333,26 +333,7 @@ pub const OPENAPI_JSON: &str = r##"{
           }
         }
       }
-    },
-    "/cast": {
-      "get": {
-        "tags": ["Web Dashboard & Documentation"],
-        "summary": "Web Cast Browser Streaming Interface",
-        "description": "Serves the browser Web Cast client interface that renders live H.264 video streams over WebSocket.",
-        "operationId": "getWebCastPage",
-        "responses": {
-          "200": {
-            "description": "Web Cast HTML page",
-            "content": {
-              "text/html; charset=utf-8": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
+
     },
     "/api/mode": {
       "post": {

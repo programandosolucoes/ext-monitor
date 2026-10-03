@@ -622,9 +622,6 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
         <button class="tab-btn" onclick="switchTab('manual')" id="tabBtn_manual">
             <span>📖</span> <span data-i18n="tabManual">Operation Manual</span>
         </button>
-        <a href="/cast" target="_blank" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:0.5rem; border: 1px solid var(--accent-cyan); background: rgba(0, 229, 255, 0.12); color: var(--accent-cyan); font-weight: bold;" id="tabBtn_cast">
-            <span>📺</span> <span>Web Cast (Aba / Tela)</span>
-        </a>
         <a href="/swagger" target="_blank" class="tab-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:0.5rem;" id="tabBtn_swagger">
             <span>⚡</span> <span>Swagger API</span>
         </a>
@@ -891,15 +888,15 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     <div class="btn-grid" id="integratedModeGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
                         <button class="btn-toggle" id="btnTransport_mode1" onclick="setActiveTransport('mode1_udp')">
                             <div style="font-weight: 700; margin-bottom: 0.2rem;">🐧 Modo 1: Rede UDP</div>
-                            <div style="font-size: 0.74rem; opacity: 0.8;">Porta 5000/5004 • &lt; 15ms</div>
+                            <div style="font-size: 0.74rem; opacity: 0.85;" id="subTransport_mode1">Porta 5000 • &lt; 15ms • <span style="color:#ffd54f;">🔇 Vídeo Puro</span></div>
                         </button>
                         <button class="btn-toggle" id="btnTransport_mode2" onclick="setActiveTransport('mode2_miracast')">
                             <div style="font-weight: 700; margin-bottom: 0.2rem;">🪟 Modo 2: Miracast</div>
-                            <div style="font-size: 0.74rem; opacity: 0.8;">Win+K / Linux • TCP 7236</div>
+                            <div style="font-size: 0.74rem; opacity: 0.85;" id="subTransport_mode2">Win+K / Linux • TCP 7236 • 🔊 Som Integrado</div>
                         </button>
                         <button class="btn-toggle active" id="btnTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
                             <div style="font-weight: 700; margin-bottom: 0.2rem;">⚡ Modo 3: USB Bulk Direct</div>
-                            <div style="font-size: 0.74rem; opacity: 0.8;">FunctionFS 480Mbps • &lt; 1ms</div>
+                            <div style="font-size: 0.74rem; opacity: 0.85;" id="subTransport_mode3">FunctionFS 480Mbps • &lt; 1ms • <span style="color:#ffd54f;">🔇 Vídeo Puro</span></div>
                         </button>
                         <button class="btn-toggle" id="btnActionStop" onclick="setExtensionAction('stop')" style="border-color: rgba(255, 82, 82, 0.6);">
                             <div style="font-weight: 700; margin-bottom: 0.2rem; color: #ff5252;">⏹️ Standby / Parar</div>
@@ -932,20 +929,23 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
 
                 <!-- 3. Simultaneous Audio Streaming Toggle & HDMI Output Capability -->
                 <div class="control-group" style="margin-bottom: 1.2rem; padding: 1rem; background: rgba(0, 0, 0, 0.25); border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.06);">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 0.6rem;">
-                            <span style="font-size: 1.25rem;">🔊</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem;">
+                        <div style="display: flex; align-items: center; gap: 0.6rem; max-width: 580px;">
+                            <span style="font-size: 1.35rem;">🔊</span>
                             <div>
                                 <div style="font-weight: 700; font-size: 0.95rem;">Transmitir Áudio Simultaneamente para a TV</div>
                                 <div style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.15rem;">
-                                    Desacoplado por padrão: extensão e clone operam com vídeo puro. Ative aqui para rotear o som do PC simultaneamente via HDMI.
+                                    Desacoplado por padrão: extensão e clone operam com vídeo puro (som permanece no notebook). Ative aqui para rotear o som do PC simultaneamente via HDMI para a TV.
                                 </div>
                             </div>
                         </div>
-                        <label class="switch" style="flex-shrink: 0; margin-left: 1rem;" title="Ativar Som Simultaneamente">
-                            <input type="checkbox" id="toggleSimultaneousAudio" onchange="onSimultaneousAudioToggle(this.checked)">
-                            <span class="toggle-slider"></span>
-                        </label>
+                        <div style="display: flex; align-items: center; gap: 0.8rem;">
+                            <span id="badgeAudioModeFlag" class="stat-badge badge-amber" style="font-weight: 700; font-size: 0.78rem; padding: 0.35rem 0.75rem;">🔇 VÍDEO PURO (ÁUDIO NO NOTEBOOK)</span>
+                            <label class="switch" style="flex-shrink: 0;" title="Ativar Som Simultaneamente">
+                                <input type="checkbox" id="toggleSimultaneousAudio" onchange="onSimultaneousAudioToggle(this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.05);">
                         <span style="font-size: 0.78rem; color: var(--text-muted);">Capacidade de Saída de Áudio:</span>
@@ -1031,37 +1031,22 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     Mirror your browser tabs, windows, video URLs or mobile screen directly to the TV just like a real Chromecast device.
                 </p>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.2rem;">
-                    <!-- Option 1: 1-Click Web Cast (Tab / Window / Entire Screen) -->
-                    <div style="background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: var(--radius-md); padding: 1.1rem; display: flex; flex-direction: column; justify-content: space-between;">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <span style="font-size: 1.3rem;">🌐</span>
-                                <strong style="color: var(--accent-cyan); font-size: 1rem;" data-i18n="webCastTitle">Cast Browser Tab or Screen (Web Cast)</strong>
-                            </div>
-                            <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.8rem;" data-i18n="webCastDesc">
-                                Stream any Chrome/Firefox tab, Meet/Teams call, or entire display with low-latency WebCodecs hardware encoding.
-                            </p>
+                <!-- Native Google Cast (Chrome, Android, YouTube, Pluto TV) Full-Width -->
+                <div style="background: rgba(179, 136, 255, 0.08); border: 1px solid rgba(179, 136, 255, 0.35); border-radius: var(--radius-md); padding: 1.25rem 1.4rem; margin-bottom: 1.2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div style="max-width: 680px;">
+                        <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem;">
+                            <span style="font-size: 1.6rem;">📱</span>
+                            <strong style="color: var(--accent-purple); font-size: 1.1rem;" data-i18n="googleCastTitle">Google Cast (Chromecast Nativo V2)</strong>
+                            <span class="stat-badge badge-green" style="font-size: 0.72rem;">mDNS & SSDP Ativo</span>
                         </div>
-                        <a href="/cast" target="_blank" class="btn-primary" style="text-decoration: none; text-align: center; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: linear-gradient(135deg, #00b0ff, #00e5ff); color: #000; font-weight: 700; padding: 0.65rem 1rem;" data-i18n="btnOpenWebCast">
-                            🔴 Open Web Caster (/cast)
-                        </a>
+                        <p style="font-size: 0.86rem; color: var(--text-secondary); line-height: 1.45; margin: 0;" data-i18n="googleCastDesc">
+                            No menu do Chrome/Edge (Transmitir...) ou em smartphones e tablets (YouTube, Netflix, Pluto TV), selecione 'Ext-Monitor (Raspberry Pi)' para reprodução direta com aceleração de hardware.
+                        </p>
                     </div>
-
-                    <!-- Option 2: Native Google Cast (Chrome, Android, YouTube, Pluto TV) -->
-                    <div style="background: rgba(179, 136, 255, 0.06); border: 1px solid rgba(179, 136, 255, 0.3); border-radius: var(--radius-md); padding: 1.1rem; display: flex; flex-direction: column; justify-content: space-between;">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <span style="font-size: 1.3rem;">📱</span>
-                                <strong style="color: var(--accent-purple); font-size: 1rem;" data-i18n="googleCastTitle">Google Cast (Native Chromecast)</strong>
-                            </div>
-                            <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.8rem;" data-i18n="googleCastDesc">
-                                In Chrome/Edge menu (Cast...) or phone apps (YouTube, Netflix, Pluto TV), select 'Ext-Monitor (Raspberry Pi)' to cast directly.
-                            </p>
+                    <div>
+                        <div class="stat-badge badge-purple" style="font-family: monospace; font-size: 0.82rem; padding: 0.5rem 0.9rem;">
+                            ✓ Portas 8008 (HTTP DIAL) / 8009 (TLS Cast V2)
                         </div>
-                        <button class="btn-toggle" style="width: 100%; border-color: var(--accent-purple); color: var(--accent-purple); font-size: 0.82rem; cursor: default;" data-i18n="googleCastReady">
-                            ✓ mDNS & Cast V2 Active (Ports 8008 / 8009)
-                        </button>
                     </div>
                 </div>
 
@@ -1089,7 +1074,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <span class="control-value" id="valMediaState" style="color: #00e5ff; font-size: 0.82rem;">Idle / Ready</span>
                     </div>
                     <div style="font-size: 1.05rem; font-weight: 700; color: #fff; margin-top: 0.25rem;" id="mediaTitle">Ext-Monitor Cast & Media Player</div>
-                    <div style="font-size: 0.86rem; color: #00e5ff; margin-top: 0.2rem;" id="mediaArtist">Google Cast V2 (8009) • Web Cast (/cast) • DLNA / UPnP</div>
+                    <div style="font-size: 0.86rem; color: #00e5ff; margin-top: 0.2rem;" id="mediaArtist">Google Cast V2 (Portas 8008/8009) • DLNA / UPnP • DIAL</div>
                     <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.1rem;" id="mediaAlbum">Broadcom VideoCore IV HDMI Output (1280x720 60 FPS)</div>
                 </div>
             </div>
@@ -1099,68 +1084,24 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
         <!-- TAB 2: CONFIGURAÇÕES & AJUSTES FINOS                              -->
         <!-- ================================================================= -->
         <section id="tab-config" class="tab-content">
-            <!-- Host PC Remote Control Card -->
+            <!-- Host PC Transmitter Link & Settings Card -->
             <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(0, 229, 255, 0.25);">
                 <div class="card-header">
                     <div class="card-title">
-                        <span>🚀</span>
-                        <span data-i18n="hostHeader">Transmitter Remote Control (Host PC)</span>
+                        <span>⚙️</span>
+                        <span data-i18n="hostHeader">Transmitter Link & Tuning Settings (Host PC)</span>
                     </div>
                     <span class="card-badge badge-cyan" data-i18n="hostBadge">Bidirectional UDP 5001</span>
                 </div>
 
-                <!-- Live Transmission Actions -->
-                <div class="control-group">
+                <!-- Host Connection Status (Read-only Telemetry) -->
+                <div class="control-group" style="padding-bottom: 0.8rem;">
                     <div class="control-label">
-                        <span data-i18n="hostStatusLabel">Transmission Status & Actions</span>
+                        <span data-i18n="hostStatusLabel">Transmitter Host Link Status</span>
                         <span class="control-value" id="valHostStatus">Ready / Online</span>
                     </div>
-                    <div class="btn-grid">
-                        <button class="btn-toggle active" id="btnHostStart" onclick="sendHostControl({ action: 'start', mode: hostConfiguredMode })" style="border-color: #00e676; color: #00e676;" data-i18n="btnHostStart">▶ Start / Restart Stream</button>
-                        <button class="btn-toggle" id="btnHostStop" onclick="sendHostControl({ action: 'stop' })" style="border-color: #ff5252; color: #ff5252;" data-i18n="btnHostStop">⏹ Stop Stream</button>
-                    </div>
-                </div>
-
-                <!-- Active Screen Transport / Transmission Protocol -->
-                <div class="control-group">
-                    <div class="control-label">
-                        <span class="tip-wrap">
-                            <span data-i18n="hostTransportLabel">Active Transport / Transmission Mode</span>
-                            <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipHostTransport">Switch transmission protocol on the fly: USB Bulk Direct (&lt; 1ms raw pipe), Network UDP (port 5000), or Windows Miracast (Win+K RTSP).</span>
-                        </span>
-                        <span class="control-value" id="valHostTransport">Network UDP (Mode 1)</span>
-                    </div>
-                    <div class="btn-grid" id="hostTransportGrid">
-                        <button class="btn-toggle active" id="btnHostTransport_mode1" onclick="setActiveTransport('mode1_udp')">
-                            <div style="font-weight: 700;">🐧 Mode 1: Network UDP</div>
-                            <div style="font-size: 0.76rem; opacity: 0.8;">UDP Port 5000 • &lt; 15ms</div>
-                        </button>
-                        <button class="btn-toggle" id="btnHostTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
-                            <div style="font-weight: 700;">⚡ Mode 3: USB Bulk Direct</div>
-                            <div style="font-size: 0.76rem; opacity: 0.8;">480 Mbps FunctionFS • &lt; 1ms</div>
-                        </button>
-                        <button class="btn-toggle tip-wrap" id="btnHostTransport_mode2" onclick="setActiveTransport('mode2_miracast')" title="Exec=env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays">
-                            <div style="font-weight: 700;">🪟 Mode 2: Miracast</div>
-                            <div style="font-size: 0.76rem; opacity: 0.8;">Windows Win+K • Linux GPU</div>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Display Mode Selection: Extend vs Clone -->
-                <div class="control-group">
-                    <div class="control-label">
-                        <span class="tip-wrap">
-                            <span data-i18n="hostModeLabel">Display Mode / Chrome Cast Behavior</span>
-                            <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipHostMode">HDMI-1: Virtual extended second screen on TV. eDP-1: Clones notebook primary screen. Dialog prompt applies exclusively when casting from Google Chrome.</span>
-                        </span>
-                        <span class="control-value" id="valHostMode">🌐 Cast: Prompt on Screen</span>
-                    </div>
-                    <div class="btn-grid" id="hostModeGrid">
-                        <button class="btn-toggle active" id="btnModeAsk" onclick="setHostMode('ask')" data-i18n="btnModeAsk">🌐 Cast: Prompt on Screen</button>
-                        <button class="btn-toggle" id="btnModeExtend" onclick="setHostMode('extend')" data-i18n="btnModeExtend">🖥️ Extended (HDMI-1 TV)</button>
-                        <button class="btn-toggle" id="btnModeClone" onclick="setHostMode('clone')" data-i18n="btnModeClone">💻 Cloned (eDP-1 Notebook)</button>
+                    <div style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.45; margin-top: 0.3rem;">
+                        A ativação e gerenciamento dos canais de transmissão (Modo 1: Rede UDP, Modo 2: Miracast, Modo 3: USB Bulk) e topologia de tela (Estender HDMI-1 / Clonar eDP-1) estão centralizados na aba <strong>📊 Monitoramento & Telemetria</strong>. Esta aba concentra ajustes finos de hardware, áudio híbrido, telemetria HUD, interfaces de rede e encoders de vídeo.
                     </div>
                 </div>
 
@@ -2121,12 +2062,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 tipAudioMode: "Switches physical streaming pipeline between PC and Raspberry Pi. Instant on-the-fly switching without rebooting.",
                 audioTopologyLabel: "Screen Topology on Laptop (Wayland / Mutter)",
                 tipAudioTopology: "Extend desktop to TV as second virtual monitor (HDMI-1) or mirror notebook primary display (eDP-1).",
-                castHeader: "Web Sharing & Chromecast-Style Casting (Google Cast)",
-                castDesc: "Mirror your browser tabs, windows, video URLs or mobile screen directly to the TV just like a real Chromecast device.",
-                webCastTitle: "Cast Browser Tab or Screen (Web Cast)",
-                webCastDesc: "Stream any Chrome/Firefox tab, Meet/Teams call, or entire display with low-latency WebCodecs hardware encoding.",
-                btnOpenWebCast: "🔴 Open Web Caster (/cast)",
-                googleCastTitle: "Google Cast (Native Chromecast)",
+                castHeader: "Google Cast & Media Streaming (Native Chromecast)",
+                castDesc: "Cast tabs from Chrome/Edge, YouTube, Pluto TV, Netflix, video URLs or mobile screen directly to the TV just like a real Chromecast device.",
+                googleCastTitle: "Google Cast (Native Chromecast V2)",
                 googleCastDesc: "In Chrome/Edge menu (Cast...) or phone apps (YouTube, Netflix, Pluto TV), select 'Ext-Monitor (Raspberry Pi)' to cast directly.",
                 googleCastReady: "✓ mDNS & Cast V2 Active (Ports 8008 / 8009)",
                 castUrlLabel: "Direct Video URL Cast (Play on TV)",
@@ -2442,12 +2380,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 tipAudioMode: "Alterna o canal físico de streaming entre o computador e o Raspberry Pi. Troca a quente sem reiniciar o sistema.",
                 audioTopologyLabel: "Topologia de Tela no Laptop (Wayland / Mutter)",
                 tipAudioTopology: "Estender a área de trabalho para a TV como segundo monitor virtual (HDMI-1) ou espelhar a tela principal do notebook (eDP-1).",
-                castHeader: "Transmissão Web & Compartilhamento Estilo Chromecast (Google Cast)",
-                castDesc: "Espelhe suas abas do navegador, janelas, URLs de vídeo ou tela do celular diretamente na TV, exatamente como um Chromecast real.",
-                webCastTitle: "Transmitir Esta Aba ou Tela (Web Cast)",
-                webCastDesc: "Transmita qualquer aba do Chrome/Firefox, reuniões ou tela inteira com aceleração de hardware WebCodecs de baixa latência.",
-                btnOpenWebCast: "🔴 Abrir Transmissor Web (/cast)",
-                googleCastTitle: "Google Cast (Chromecast Nativo)",
+                castHeader: "Google Cast & Transmissão de Mídia (Chromecast Nativo)",
+                castDesc: "Transmita abas do Chrome/Edge, YouTube, Pluto TV, Netflix, URLs de vídeo ou tela do celular diretamente para a TV como um dispositivo Chromecast real.",
+                googleCastTitle: "Google Cast (Chromecast Nativo V2)",
                 googleCastDesc: "No menu do Chrome/Edge (Transmitir...) ou em celulares (YouTube, Netflix, Pluto TV), selecione 'Ext-Monitor (Raspberry Pi)'.",
                 googleCastReady: "✓ Descoberta mDNS & Cast V2 Ativos (Portas 8008 / 8009)",
                 castUrlLabel: "Transmitir URL de Vídeo Direto na TV (Play URL)",
@@ -2758,12 +2693,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 tipAudioMode: "Cambia la pipeline di streaming fisica tra PC e Raspberry Pi istantaneamente.",
                 audioTopologyLabel: "Topologia Schermo su Laptop (Wayland / Mutter)",
                 tipAudioTopology: "Estendi il desktop sulla TV come secondo monitor virtuale (HDMI-1) o duplica lo schermo primario (eDP-1).",
-                castHeader: "Condivisione Web & Trasmissione Stile Chromecast (Google Cast)",
-                castDesc: "Trasmetti schede del browser, finestre, URL video o smartphone direttamente alla TV come un vero dispositivo Chromecast.",
-                webCastTitle: "Trasmetti Scheda o Schermo (Web Cast)",
-                webCastDesc: "Trasmetti qualsiasi scheda Chrome/Firefox, riunione o intero schermo con codifica WebCodecs a bassa latenza.",
-                btnOpenWebCast: "🔴 Apri Trasmettitore Web (/cast)",
-                googleCastTitle: "Google Cast (Chromecast Nativo)",
+                castHeader: "Google Cast & Streaming Multimediale (Chromecast Nativo)",
+                castDesc: "Trasmetti schede di Chrome/Edge, YouTube, Pluto TV, Netflix, URL video o smartphone direttamente alla TV come un vero dispositivo Chromecast.",
+                googleCastTitle: "Google Cast (Chromecast Nativo V2)",
                 googleCastDesc: "Nel menu di Chrome/Edge (Trasmetti...) o nelle app mobili (YouTube, Netflix, Pluto TV), seleziona 'Ext-Monitor (Raspberry Pi)'.",
                 googleCastReady: "✓ Rilevamento mDNS & Cast V2 Attivi (Porte 8008 / 8009)",
                 castUrlLabel: "Trasmetti URL Video Diretto sulla TV (Play URL)",
@@ -3074,12 +3006,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 tipAudioMode: "在电脑与树莓派之间快速热切换物理传输管线，无需重启。",
                 audioTopologyLabel: "笔记本屏幕拓扑 (Wayland / Mutter)",
                 tipAudioTopology: "将桌面扩展到电视作为第二虚拟显示器 (HDMI-1)，或镜像笔记本主屏幕 (eDP-1)。",
-                castHeader: "网页共享与 Chromecast 风格投屏 (Google Cast)",
-                castDesc: "像真正的 Chromecast 一样，将浏览器标签页、窗口、视频链接或手机屏幕直接镜像到电视。",
-                webCastTitle: "投射此标签页或屏幕 (Web Cast)",
-                webCastDesc: "通过低延迟 WebCodecs 硬件编码，投射任何 Chrome/Firefox 标签页、会议或整个屏幕。",
-                btnOpenWebCast: "🔴 打开网页投屏器 (/cast)",
-                googleCastTitle: "Google Cast (原生 Chromecast)",
+                castHeader: "Google Cast 与媒体投屏 (原生 Chromecast)",
+                castDesc: "像真正的 Chromecast 一样，将 Chrome/Edge 标签页、YouTube、Pluto TV、Netflix、视频链接或手机屏幕直接投射到电视。",
+                googleCastTitle: "Google Cast (原生 Chromecast V2)",
                 googleCastDesc: "在 Chrome/Edge 菜单（投射...）或手机应用（YouTube、Netflix、Pluto TV）中选择 'Ext-Monitor (Raspberry Pi)'。",
                 googleCastReady: "✓ mDNS 与 Cast V2 活跃 (端口 8008 / 8009)",
                 castUrlLabel: "直接在电视上播放视频链接 (Play URL)",
@@ -3349,10 +3278,38 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             return toggle ? toggle.checked : false;
         }
 
+        function updateAudioFlagUI(checked) {
+            const badgeFlag = document.getElementById('badgeAudioModeFlag');
+            if (badgeFlag) {
+                if (checked) {
+                    badgeFlag.textContent = '🔊 ÁUDIO SIMULTÂNEO (HDMI NA TV ATIVO)';
+                    badgeFlag.className = 'stat-badge badge-green';
+                } else {
+                    badgeFlag.textContent = '🔇 VÍDEO PURO (ÁUDIO NO NOTEBOOK)';
+                    badgeFlag.className = 'stat-badge badge-amber';
+                }
+            }
+            const subM1 = document.getElementById('subTransport_mode1');
+            if (subM1) {
+                subM1.innerHTML = 'Porta 5000 • &lt; 15ms • ' + (checked ? '<span style="color:#00e676;font-weight:700;">🔊 Com Áudio</span>' : '<span style="color:#ffd54f;font-weight:700;">🔇 Vídeo Puro</span>');
+            }
+            const subM3 = document.getElementById('subTransport_mode3');
+            if (subM3) {
+                subM3.innerHTML = 'FunctionFS 480Mbps • &lt; 1ms • ' + (checked ? '<span style="color:#00e676;font-weight:700;">🔊 Com Áudio</span>' : '<span style="color:#ffd54f;font-weight:700;">🔇 Vídeo Puro</span>');
+            }
+            updateModeAndTopologyButtons();
+        }
+
         function onSimultaneousAudioToggle(checked) {
             localStorage.setItem('ext_simultaneous_audio', checked ? 'true' : 'false');
-            showToast(checked ? '🔊 Áudio simultâneo para TV ATIVADO' : '🔇 Áudio simultâneo DESATIVADO (Vídeo puro)');
+            updateAudioFlagUI(checked);
+            showToast(checked ? '🔊 Áudio simultâneo para TV ATIVADO (Som via HDMI)' : '🔇 Áudio simultâneo DESATIVADO (Vídeo puro, som no notebook)');
             sendHostControl({ audio: checked });
+            fetch('/api/transport/active', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active_transport: currentTransport, transport: currentTransport, action: 'start', audio: checked, mode: currentTopology })
+            }).catch(() => {});
         }
 
         function activateModeWithTopology(transport, topology) {
@@ -3372,13 +3329,14 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             const transLabel = transport.includes('usb') ? 'USB Bulk Direct' : 'Rede UDP';
             const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
             const withAudio = isSimultaneousAudioEnabled();
-            showToast(`🚀 Ativando ${transLabel} no modo ${modeLabel}${withAudio ? ' com Áudio' : ''}...`);
+            const audioBadge = withAudio ? ' [🔊 Áudio TV]' : ' [🔇 Vídeo Puro]';
+            showToast(`🚀 Ativando ${transLabel} no modo ${modeLabel}${audioBadge}...`);
 
-            // 1. Tell receiver to switch transport
+            // 1. Tell receiver to switch transport with audio flag
             fetch('/api/transport/active', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start' })
+                body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start', audio: withAudio, mode: targetMode })
             }).catch(() => {});
 
             // 2. Tell host sender to switch transport, mode, and simultaneous audio flag
@@ -3442,9 +3400,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             } else {
                 const targetMode = (currentTopology === 'clone') ? 'clone' : 'extend';
                 currentTopology = targetMode;
-                showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (targetMode === 'clone' ? 'Clonar' : 'Estender') + ')...');
                 const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
                 const withAudio = isSimultaneousAudioEnabled();
+                const audioLabel = withAudio ? ' [🔊 Com Áudio]' : ' [🔇 Vídeo Puro]';
+                showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (targetMode === 'clone' ? 'Clonar' : 'Estender') + ')' + audioLabel + '...');
                 sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans, audio: withAudio });
                 fetch('/api/stream/start', { method: 'POST' }).catch(() => {});
             }
@@ -3452,7 +3411,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             fetch('/api/transport/active', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start' })
+                body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start', audio: isSimultaneousAudioEnabled(), mode: currentTopology })
             }).then(() => {
                 setTimeout(pollTelemetry, 250);
                 setTimeout(pollTelemetry, 800);
@@ -3466,18 +3425,29 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             currentTopology = action;
             const activeTrans = currentTransport.includes('usb') ? 'usb_bulk' : 'network';
             const withAudio = isSimultaneousAudioEnabled();
+            const audioLabel = withAudio ? ' [🔊 Som na TV]' : ' [🔇 Som no PC]';
 
             if (action === 'stop') {
                 showToast(t('toastExtStopped') || '⏹ Extension disabled (Standby)');
                 sendHostControl({ action: 'stop' });
                 fetch('/api/stream/stop', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             } else if (action === 'clone') {
-                showToast(t('toastExtCloned') || '💻 Mirroring notebook display (eDP-1)...');
+                showToast((t('toastExtCloned') || '💻 Mirroring notebook display (eDP-1)...') + audioLabel);
                 sendHostControl({ action: 'start', mode: 'clone', transport: activeTrans, audio: withAudio });
+                fetch('/api/transport/active', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ active_transport: currentTransport, transport: currentTransport, action: 'start', audio: withAudio, mode: 'clone' })
+                }).catch(() => {});
                 fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             } else {
-                showToast(t('toastExtExtended') || '🖥️ Extending desktop to TV (HDMI-1)...');
+                showToast((t('toastExtExtended') || '🖥️ Extending desktop to TV (HDMI-1)...') + audioLabel);
                 sendHostControl({ action: 'start', mode: 'extend', transport: activeTrans, audio: withAudio });
+                fetch('/api/transport/active', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ active_transport: currentTransport, transport: currentTransport, action: 'start', audio: withAudio, mode: 'extend' })
+                }).catch(() => {});
                 fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             }
 
@@ -3501,29 +3471,48 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         function updateModeAndTopologyButtons() {
             const shortKey = currentTransport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
 
-            // 1. Update Transport buttons across Tab 1 & Tab 2 (including integrated card)
-            document.querySelectorAll('#activeTransportGrid .btn-toggle, #hostTransportGrid .btn-toggle, #integratedModeGrid .btn-toggle').forEach(b => {
-                const isCurrent = b.id === 'btnTransport_' + shortKey || b.id === 'btnHostTransport_' + shortKey;
+            // 1. Update Transport buttons in Tab 1 Central Card
+            document.querySelectorAll('#activeTransportGrid .btn-toggle, #integratedModeGrid .btn-toggle').forEach(b => {
+                const isCurrent = b.id === 'btnTransport_' + shortKey;
                 b.classList.toggle('active', isCurrent && currentTopology !== 'stop');
             });
-            const valHostTransport = document.getElementById('valHostTransport');
-            if (valHostTransport) {
-                valHostTransport.textContent = currentTransport.includes('mode3') ? 'USB Bulk Direct (Mode 3)' :
-                    (currentTransport.includes('mode2') ? 'Windows Miracast (Mode 2)' : 'Network UDP (Mode 1)');
+
+            // 1.1 Update Audio Flag Indicator Badge and Sublabels
+            const withAudio = isSimultaneousAudioEnabled();
+            const badgeFlag = document.getElementById('badgeAudioModeFlag');
+            if (badgeFlag) {
+                if (withAudio) {
+                    badgeFlag.textContent = '🔊 ÁUDIO SIMULTÂNEO (HDMI NA TV ATIVO)';
+                    badgeFlag.className = 'stat-badge badge-green';
+                } else {
+                    badgeFlag.textContent = '🔇 VÍDEO PURO (ÁUDIO NO NOTEBOOK)';
+                    badgeFlag.className = 'stat-badge badge-amber';
+                }
+            }
+            const subM1 = document.getElementById('subTransport_mode1');
+            if (subM1) {
+                subM1.innerHTML = 'Porta 5000 • &lt; 15ms • ' + (withAudio ? '<span style="color:#00e676;font-weight:700;">🔊 Com Áudio</span>' : '<span style="color:#ffd54f;font-weight:700;">🔇 Vídeo Puro</span>');
+            }
+            const subM3 = document.getElementById('subTransport_mode3');
+            if (subM3) {
+                subM3.innerHTML = 'FunctionFS 480Mbps • &lt; 1ms • ' + (withAudio ? '<span style="color:#00e676;font-weight:700;">🔊 Com Áudio</span>' : '<span style="color:#ffd54f;font-weight:700;">🔇 Vídeo Puro</span>');
             }
 
-            // 1.1 Update Integrated Audio & Streaming Card Feedback
+            // 1.2 Update Integrated Audio & Streaming Card Feedback
             const valIntMode = document.getElementById('valIntegratedMode');
             const badgeInt = document.getElementById('badgeIntegratedState');
+            const audioText = withAudio ? ' • 🔊 Áudio HDMI Ativo' : ' • 🔇 Vídeo Puro (Som no PC)';
+            const audioSuffix = withAudio ? ' [🔊 Áudio]' : ' [🔇 Vídeo]';
+
             if (valIntMode) {
                 if (currentTopology === 'stop') {
                     valIntMode.textContent = '⏹️ Standby / Tela de Prontidão (Ocioso)';
                 } else if (currentTransport.includes('mode3')) {
-                    valIntMode.textContent = '⚡ Modo 3: USB Bulk Direct (< 1ms)';
+                    valIntMode.textContent = '⚡ Modo 3: USB Bulk Direct (< 1ms)' + audioText;
                 } else if (currentTransport.includes('mode2')) {
                     valIntMode.textContent = '🪟 Modo 2: Windows Miracast (TCP 7236)';
                 } else {
-                    valIntMode.textContent = '🐧 Modo 1: Rede UDP (< 15ms)';
+                    valIntMode.textContent = '🐧 Modo 1: Rede UDP (< 15ms)' + audioText;
                 }
             }
             if (badgeInt) {
@@ -3531,13 +3520,13 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                     badgeInt.textContent = 'Standby';
                     badgeInt.className = 'card-badge badge-amber';
                 } else if (currentTransport.includes('mode3')) {
-                    badgeInt.textContent = 'Modo 3: USB Bulk';
+                    badgeInt.textContent = 'Modo 3: USB Bulk' + audioSuffix;
                     badgeInt.className = 'card-badge badge-purple';
                 } else if (currentTransport.includes('mode2')) {
                     badgeInt.textContent = 'Modo 2: Miracast';
                     badgeInt.className = 'card-badge badge-green';
                 } else {
-                    badgeInt.textContent = 'Modo 1: Rede UDP';
+                    badgeInt.textContent = 'Modo 1: Rede UDP' + audioSuffix;
                     badgeInt.className = 'card-badge badge-cyan';
                 }
             }
@@ -3553,15 +3542,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 }
             }
 
-            // 2. Update Topology buttons across Tab 1 & Tab 2
+            // 2. Update Topology buttons in Tab 1
             const btnExt = document.getElementById('btnActionExtend');
             const btnCln = document.getElementById('btnActionClone');
             const btnStop = document.getElementById('btnActionStop');
             const badge = document.getElementById('badgeExtState');
-            const hostAsk = document.getElementById('btnModeAsk');
-            const hostExt = document.getElementById('btnModeExtend');
-            const hostCln = document.getElementById('btnModeClone');
-            const valHostMode = document.getElementById('valHostMode');
 
             if (currentTopology === 'stop') {
                 if (btnExt) btnExt.classList.remove('active');
@@ -3591,19 +3576,6 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                         badge.textContent = t('extBadgeActive');
                         badge.className = 'card-badge badge-green';
                     }
-                }
-            }
-
-            if (hostAsk) hostAsk.classList.toggle('active', hostConfiguredMode === 'ask');
-            if (hostExt) hostExt.classList.toggle('active', hostConfiguredMode === 'extend');
-            if (hostCln) hostCln.classList.toggle('active', hostConfiguredMode === 'clone');
-            if (valHostMode) {
-                if (hostConfiguredMode === 'ask') {
-                    valHostMode.textContent = t('btnModeAsk') || '❓ Perguntar Sempre (Diálogo)';
-                } else if (hostConfiguredMode === 'clone') {
-                    valHostMode.textContent = t('btnModeClone') || '💻 Cloned (eDP-1)';
-                } else {
-                    valHostMode.textContent = t('btnModeExtend') || '🖥️ Extended (HDMI-1)';
                 }
             }
 
@@ -4356,22 +4328,25 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
                         if (elIcon) elIcon.textContent = am.icon || '📺';
 
+                        const withAudio = isSimultaneousAudioEnabled();
+                        const audioTag = withAudio ? ' • 🔊 Áudio HDMI Ativo' : ' • 🔇 Vídeo Puro (Som no PC)';
+
                         if (am.id === 'mode1_udp') {
                             if (elTitle) elTitle.textContent = t('m1Title') || am.name;
-                            if (elDesc) elDesc.textContent = t('m1Details') || am.details;
-                            if (elBadge) { elBadge.textContent = '● ' + t('tbM1Method') + ' (60 FPS)'; elBadge.className = 'stat-badge badge-cyan'; }
+                            if (elDesc) elDesc.textContent = (t('m1Details') || am.details) + audioTag;
+                            if (elBadge) { elBadge.textContent = '● ' + t('tbM1Method') + ' (60 FPS)' + (withAudio ? ' + Som' : ''); elBadge.className = 'stat-badge badge-cyan'; }
                             if (banner) { banner.style.borderColor = 'var(--accent-cyan)'; banner.style.boxShadow = '0 0 25px rgba(0, 229, 255, 0.25)'; }
                             highlightActiveCard('cardMode1');
                         } else if (am.id === 'mode2_miracast') {
                             if (elTitle) elTitle.textContent = t('m2Title') || am.name;
-                            if (elDesc) elDesc.textContent = t('m2Details') || am.details;
+                            if (elDesc) elDesc.textContent = (t('m2Details') || am.details) + ' • 🔊 Som Integrado';
                             if (elBadge) { elBadge.textContent = '● ' + t('tbM2Method') + ' (60 FPS)'; elBadge.className = 'stat-badge badge-green'; }
                             if (banner) { banner.style.borderColor = 'var(--accent-emerald)'; banner.style.boxShadow = '0 0 25px rgba(0, 255, 102, 0.25)'; }
                             highlightActiveCard('cardMode2');
                         } else if (am.id === 'mode3_usb_bulk') {
                             if (elTitle) elTitle.textContent = t('m3Title') || am.name;
-                            if (elDesc) elDesc.textContent = t('m3Details') || am.details;
-                            if (elBadge) { elBadge.textContent = '● ' + t('tbM3Method') + ' (480 Mbps)'; elBadge.className = 'stat-badge badge-purple'; }
+                            if (elDesc) elDesc.textContent = (t('m3Details') || am.details) + audioTag;
+                            if (elBadge) { elBadge.textContent = '● ' + t('tbM3Method') + ' (480 Mbps)' + (withAudio ? ' + Som' : ''); elBadge.className = 'stat-badge badge-purple'; }
                             if (banner) { banner.style.borderColor = 'var(--accent-purple)'; banner.style.boxShadow = '0 0 25px rgba(179, 136, 255, 0.25)'; }
                             highlightActiveCard('cardMode3');
                         } else {
@@ -4737,6 +4712,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         const savedSimAudio = localStorage.getItem('ext_simultaneous_audio') === 'true';
         const toggleSim = document.getElementById('toggleSimultaneousAudio');
         if (toggleSim) toggleSim.checked = savedSimAudio;
+        updateAudioFlagUI(savedSimAudio);
 
         pollNetworkStatus();
         updateModeAndTopologyButtons();

@@ -68,8 +68,7 @@ impl UsbBulkIngress {
 
         let mut total_bytes = 0u64;
         let mut last_log = std::time::Instant::now();
-        let mut last_packet_time = std::time::Instant::now();
-        let mut splash_active = false;
+
 
         let mut buffer = [0u8; 65536];
         let mut pfd = libc::pollfd {
@@ -120,10 +119,7 @@ impl UsbBulkIngress {
 
             if n > 0 {
                 let chunk = &buffer[..n as usize];
-                last_packet_time = std::time::Instant::now();
-                if splash_active {
-                    splash_active = false;
-                }
+
 
                 match framing_mode {
                     IngressFramingMode::AutoDetect | IngressFramingMode::AnnexB => {
