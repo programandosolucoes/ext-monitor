@@ -33,8 +33,42 @@ pub fn ensure_kernel_hdmi_connected() {
     thread::sleep(Duration::from_millis(500));
 }
 
+use std::sync::atomic::{AtomicU8, Ordering};
+
+// 0: Unknown / Unchecked, 1: Collapsed (eDP-1 only), 2: Extended (eDP-1 + HDMI-1)
+static CURRENT_GNOME_LAYOUT: AtomicU8 = AtomicU8::new(0);
+// 0: Unknown, 1: 720p, 2: 900p
+static CURRENT_GNOME_SCALE: AtomicU8 = AtomicU8::new(0);
+
+fn is_hdmi_in_logical_monitors(stdout: &str) -> bool {
+    // In GetCurrentState return tuple:
+    // (uint32 serial, [available_monitors], [logical_monitors], properties)
+    // The logical_monitors array starts after `], [(`
+    if let Some(pos) = stdout.rfind("], [(") {
+        let logical_slice = &stdout[pos + 3..];
+        return logical_slice.contains("'HDMI-1'");
+    }
+    false
+}
+
 /// Applies GNOME extended display layout (side-by-side 1280x720@60)
 pub fn ensure_gnome_displays(scale: crate::config::ScaleMode) {
+    let scale_id = match scale {
+        crate::config::ScaleMode::Scale1600x900 => 2,
+        _ => 1,
+    };
+
+    if CURRENT_GNOME_LAYOUT.load(Ordering::SeqCst) == 2
+        && CURRENT_GNOME_SCALE.load(Ordering::SeqCst) == scale_id
+    {
+        return;
+    }
+
+    let target_mode = match scale {
+        crate::config::ScaleMode::Scale1600x900 => "1600x900@59.946",
+        _ => "1280x720@59.855",
+    };
+
     let check = Command::new("gdbus")
         .args([
             "call",
@@ -48,11 +82,6 @@ pub fn ensure_gnome_displays(scale: crate::config::ScaleMode) {
         ])
         .output();
 
-    let target_mode = match scale {
-        crate::config::ScaleMode::Scale1600x900 => "1600x900@59.946",
-        _ => "1280x720@59.855",
-    };
-
     let (serial, is_configured) = if let Ok(out) = check {
         let stdout = String::from_utf8_lossy(&out.stdout);
         let serial = if let Some(start) = stdout.find("(uint32 ") {
@@ -62,28 +91,36 @@ pub fn ensure_gnome_displays(scale: crate::config::ScaleMode) {
             1
         };
 
-        let is_logical = stdout.contains("[('HDMI-1'");
+        let is_logical = is_hdmi_in_logical_monitors(&stdout);
         (serial, is_logical)
     } else {
         (1, false)
     };
 
-    if is_configured {
+    if is_configured && CURRENT_GNOME_SCALE.load(Ordering::SeqCst) == scale_id {
+        CURRENT_GNOME_LAYOUT.store(2, Ordering::SeqCst);
         println!("\x1b[1;32m[+] GNOME Mutter displays already configured with HDMI-1 in extended mode ({}).\x1b[0m", target_mode);
         return;
     }
 
     println!("\x1b[1;33m[*] Applying GNOME extended display layout (side-by-side {}, serial={})...\x1b[0m", target_mode, serial);
+    // Method 1 = META_MONITORS_CONFIG_METHOD_TEMPORARY (silent, no GNOME Shell confirmation dialog prompts)
     let apply_cmd = format!(
-        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 2 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '{}', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '{}', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
         serial, target_mode
     );
     let _ = Command::new("bash").arg("-c").arg(&apply_cmd).status();
-    thread::sleep(Duration::from_millis(500));
+    CURRENT_GNOME_LAYOUT.store(2, Ordering::SeqCst);
+    CURRENT_GNOME_SCALE.store(scale_id, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(300));
 }
 
 /// Collapses GNOME extended display layout, turning off HDMI-1 and retaining only eDP-1.
 pub fn collapse_gnome_displays() {
+    if CURRENT_GNOME_LAYOUT.load(Ordering::SeqCst) == 1 {
+        return;
+    }
+
     let check = Command::new("gdbus")
         .args([
             "call",
@@ -105,24 +142,27 @@ pub fn collapse_gnome_displays() {
         } else {
             1
         };
-        let is_ext = stdout.contains("[('HDMI-1'");
+        let is_ext = is_hdmi_in_logical_monitors(&stdout);
         (serial, is_ext)
     } else {
         (1, true)
     };
 
     if !is_extended {
+        CURRENT_GNOME_LAYOUT.store(1, Ordering::SeqCst);
         println!("\x1b[1;32m[+] GNOME Mutter displays already collapsed (HDMI-1 disabled).\x1b[0m");
         return;
     }
 
     println!("\x1b[1;33m[*] Collapsing GNOME displays (retaining only internal screen eDP-1, serial={})...\x1b[0m", serial);
+    // Method 1 = META_MONITORS_CONFIG_METHOD_TEMPORARY (silent, no GNOME Shell confirmation dialog prompts)
     let apply_cmd = format!(
-        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 2 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 1 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
         serial
     );
     let _ = Command::new("bash").arg("-c").arg(&apply_cmd).status();
-    thread::sleep(Duration::from_millis(300));
+    CURRENT_GNOME_LAYOUT.store(1, Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(200));
 }
 
 /// Discovers the PipeWire capture output port for `node_id` and links it to `ext-hdmi-sender`
