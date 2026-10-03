@@ -730,7 +730,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     Select the active transmission pipeline between your PC and this screen. Switches immediately on the fly without rebooting.
                 </p>
                 <div class="btn-grid" id="activeTransportGrid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
-                    <button class="btn-toggle" id="btnTransport_mode1" onclick="setActiveTransport('mode1_udp')">
+                    <button class="btn-toggle active" id="btnTransport_mode1" onclick="setActiveTransport('mode1_udp')">
                         <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">🐧 Mode 1: Network UDP</div>
                         <div style="font-size: 0.76rem; opacity: 0.8;">UDP Port 5000 • &lt; 15ms latency</div>
                     </button>
@@ -738,7 +738,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">🪟 Mode 2: Miracast</div>
                         <div style="font-size: 0.76rem; opacity: 0.8;">Windows Win+K • TCP 7236</div>
                     </button>
-                    <button class="btn-toggle active" id="btnTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
+                    <button class="btn-toggle" id="btnTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
                         <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">⚡ Mode 3: USB Bulk Direct</div>
                         <div style="font-size: 0.76rem; opacity: 0.8;">480 Mbps FunctionFS • &lt; 1ms latency</div>
                     </button>
@@ -830,7 +830,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                                 <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;" data-i18n="lblScreenMode">Display Mode:</span>
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <button class="btn-toggle" id="btnMode1Extend" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode1_udp', 'extend'); event.stopPropagation();" data-i18n="btnM1Extend">
+                                <button class="btn-toggle active" id="btnMode1Extend" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode1_udp', 'extend'); event.stopPropagation();" data-i18n="btnM1Extend">
                                     🖥️ Estender
                                 </button>
                                 <button class="btn-toggle" id="btnMode1Clone" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode1_udp', 'clone'); event.stopPropagation();" data-i18n="btnM1Clone">
@@ -898,7 +898,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                                 <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;" data-i18n="lblScreenMode">Display Mode:</span>
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <button class="btn-toggle active" id="btnMode3Extend" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode3_usb_bulk', 'extend'); event.stopPropagation();" data-i18n="btnM3Extend">
+                                <button class="btn-toggle" id="btnMode3Extend" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode3_usb_bulk', 'extend'); event.stopPropagation();" data-i18n="btnM3Extend">
                                     🖥️ Estender
                                 </button>
                                 <button class="btn-toggle" id="btnMode3Clone" style="padding: 0.45rem 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm);" onclick="activateModeWithTopology('mode3_usb_bulk', 'clone'); event.stopPropagation();" data-i18n="btnM3Clone">
@@ -945,16 +945,16 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             <span class="tip-icon">?</span>
                             <span class="tip-box" data-i18n="tipHostTransport">Switch transmission protocol on the fly: USB Bulk Direct (&lt; 1ms raw pipe), Network UDP (port 5000), or Windows Miracast (Win+K RTSP).</span>
                         </span>
-                        <span class="control-value" id="valHostTransport">USB Bulk Direct (Mode 3)</span>
+                        <span class="control-value" id="valHostTransport">Network UDP (Mode 1)</span>
                     </div>
                     <div class="btn-grid" id="hostTransportGrid">
-                        <button class="btn-toggle active" id="btnHostTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
-                            <div style="font-weight: 700;">⚡ Mode 3: USB Bulk Direct</div>
-                            <div style="font-size: 0.76rem; opacity: 0.8;">480 Mbps FunctionFS • &lt; 1ms</div>
-                        </button>
-                        <button class="btn-toggle" id="btnHostTransport_mode1" onclick="setActiveTransport('mode1_udp')">
+                        <button class="btn-toggle active" id="btnHostTransport_mode1" onclick="setActiveTransport('mode1_udp')">
                             <div style="font-weight: 700;">🐧 Mode 1: Network UDP</div>
                             <div style="font-size: 0.76rem; opacity: 0.8;">UDP Port 5000 • &lt; 15ms</div>
+                        </button>
+                        <button class="btn-toggle" id="btnHostTransport_mode3" onclick="setActiveTransport('mode3_usb_bulk')">
+                            <div style="font-weight: 700;">⚡ Mode 3: USB Bulk Direct</div>
+                            <div style="font-size: 0.76rem; opacity: 0.8;">480 Mbps FunctionFS • &lt; 1ms</div>
                         </button>
                         <button class="btn-toggle tip-wrap" id="btnHostTransport_mode2" onclick="setActiveTransport('mode2_miracast')" title="Exec=env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays">
                             <div style="font-weight: 700;">🪟 Mode 2: Miracast</div>
@@ -3178,7 +3178,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         }
 
         // Active Extension Connection Transport and Topology
-        let currentTransport = 'mode3_usb_bulk';
+        let currentTransport = 'mode1_udp';
         let currentTopology = 'extend';
 
         function activateModeWithTopology(transport, topology) {
@@ -4424,6 +4424,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             .catch(() => {});
 
         pollNetworkStatus();
+        updateModeAndTopologyButtons();
+        pollTelemetry();
         setInterval(pollTelemetry, 2000);
         setInterval(pollNetworkStatus, 3500);
         setInterval(pollMediaStatus, 250);
