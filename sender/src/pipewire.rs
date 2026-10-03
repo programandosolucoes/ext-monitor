@@ -62,7 +62,7 @@ pub fn ensure_gnome_displays(scale: crate::config::ScaleMode) {
             1
         };
 
-        let is_logical = stdout.contains("('HDMI-1'") && stdout.contains(target_mode);
+        let is_logical = stdout.contains("[('HDMI-1'");
         (serial, is_logical)
     } else {
         (1, false)
@@ -80,6 +80,49 @@ pub fn ensure_gnome_displays(scale: crate::config::ScaleMode) {
     );
     let _ = Command::new("bash").arg("-c").arg(&apply_cmd).status();
     thread::sleep(Duration::from_millis(500));
+}
+
+/// Collapses GNOME extended display layout, turning off HDMI-1 and retaining only eDP-1.
+pub fn collapse_gnome_displays() {
+    let check = Command::new("gdbus")
+        .args([
+            "call",
+            "--session",
+            "--dest",
+            "org.gnome.Mutter.DisplayConfig",
+            "--object-path",
+            "/org/gnome/Mutter/DisplayConfig",
+            "--method",
+            "org.gnome.Mutter.DisplayConfig.GetCurrentState",
+        ])
+        .output();
+
+    let (serial, is_extended) = if let Ok(out) = check {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let serial = if let Some(start) = stdout.find("(uint32 ") {
+            let rest = &stdout[start + 8..];
+            rest.find(',').and_then(|end| rest[..end].trim().parse::<u32>().ok()).unwrap_or(1)
+        } else {
+            1
+        };
+        let is_ext = stdout.contains("[('HDMI-1'");
+        (serial, is_ext)
+    } else {
+        (1, true)
+    };
+
+    if !is_extended {
+        println!("\x1b[1;32m[+] GNOME Mutter displays already collapsed (HDMI-1 disabled).\x1b[0m");
+        return;
+    }
+
+    println!("\x1b[1;33m[*] Collapsing GNOME displays (retaining only internal screen eDP-1, serial={})...\x1b[0m", serial);
+    let apply_cmd = format!(
+        r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 2 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+        serial
+    );
+    let _ = Command::new("bash").arg("-c").arg(&apply_cmd).status();
+    thread::sleep(Duration::from_millis(300));
 }
 
 /// Discovers the PipeWire capture output port for `node_id` and links it to `ext-hdmi-sender`

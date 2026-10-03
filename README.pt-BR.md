@@ -143,8 +143,8 @@ Os 20 blueprints fundamentais documentam a arquitetura de silício e o motor ess
 19. **[Blueprint 19: Appliance IoT Media Renderer: Cast e Visualizador HDMI](docs/blueprints/pt/19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md):** Dongle multimídia inteligente: Google Cast (CastV2), DIAL (YouTube), UPnP/DLNA e visualizador gráfico HDMI.
 20. **[Blueprint 20: Multiplexador HDMI de Porta Única e Zero-Reboot](docs/blueprints/pt/20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md):** Exclusão mútua na porta HDMI física, FFT de 512 pontos com Hann, i18n simétrico e ciclo de vida zero-reboot.
 
-### A Suíte de Expansão Miracast, Benchmark, Áudio Hi-Res e Resiliência (Blueprints 21 a 32)
-Para viabilizar projeção sem fio nativa, eliminação de dependências legadas, áudio de estúdio e testes automatizados de troca de modo, o projeto evoluiu continuamente:
+### A Suíte de Expansão Miracast, Benchmark, Áudio Hi-Res e Resiliência (Blueprints 21 a 33)
+Para viabilizar projeção sem fio nativa, eliminação de dependências legadas, áudio de estúdio, transmissão Google Cast e testes automatizados de troca de modo, o projeto evoluiu continuamente:
 
 21. **[Blueprint 21: Miracast MS-MICE, Conexão Reversa RTSP WFD e SPS Dinâmico](docs/blueprints/pt/21-miracast-ms-mice-rtsp-wfd-sps-dinamico-e-gnome-network-displays.md):** Sinalização binária MS-MICE (TCP 7250), reversão RTSP WFD para o Source (7236), migração para UDP 5005 e parser puro em Rust de SPS dinâmico.
 22. **[Blueprint 22: Alinhamento NV12 no KMS, Fim da Faixa Verde e Otimizações Realtime](docs/blueprints/pt/22-correcao-faixa-verde-nv12-stride-alinhamento-e-otimizacoes-realtime-miracast.md):** Correção matemática de stride de 16 linhas (1080->1088), remoção de padding de 15.360 bytes no plano UV do KMS, demuxer MPEG-TS zero-delay via PUSI e aceleração VA-API AMD Radeon 610M.
@@ -158,6 +158,7 @@ Para viabilizar projeção sem fio nativa, eliminação de dependências legadas
 30. **[Blueprint 30: Áudio Hi-Res Direto via ALSA IEC958, Anti-Fragmentação IP e Perfis Web](docs/blueprints/pt/30-audio-hi-res-iec958-deduplicacao-sinks-anti-fragmentacao-ip-e-perfis-web.md):** Suporte nativo a 96kHz/192kHz no ALSA com codificação de subframe IEC958, deduplicação com mutex de sinks PulseAudio no host e pacotes UDP de 1024 bytes anti-fragmentação.
 31. **[Blueprint 31: Diagnóstico de Mismatch Visual na UI Web e Sincronização de Telemetria](docs/blueprints/pt/31-diagnostico-mismatch-transporte-ui-e-sincronizacao-telemetria-modo1-vs-modo3.md):** Resolução de discrepâncias estáticas na UI Web e sincronização imediata sub-100ms do estado de transporte no boot.
 32. **[Blueprint 32: Painel de Áudio Digital DAC na Aba Principal, Transmissão Estilo Chromecast e Testes Unitários](docs/blueprints/pt/blueprint-32-painel-audio-dac-e-transmissao-chromecast-com-testes-unitarios.md):** Consolidação dos controles de áudio Hi-Res DAC e transmissão estilo Chromecast (Web Cast 1-clique e Google Cast) diretamente na Aba 1 de Monitoramento, com 7 testes unitários em Rust para chaveamento determinístico de serviços e modo standby.
+33. **[Blueprint 33: Certificação TLS Estrita Chromium Cast, Handshake WebRTC Mirroring e Resolução de Conflitos SSDP](docs/blueprints/pt/blueprint-33-google-cast-v2-tls-webrtc-handshake-e-resolucao-conflitos-ssdp.md):** Validação estrita de certificados TLS Chromium (limite de 4 dias, extensões críticas e RSA-SHA256), negociação completa WebRTC Mirroring (OFFER/ANSWER), eliminação de dispositivo duplicado via SSDP/DIAL e correção de ativação lógica no GNOME Mutter (fim da imagem cinza).
 
 ---
 

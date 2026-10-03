@@ -255,13 +255,9 @@ pub fn show_status() {
 
     // Appliance endpoint telemetry
     println!("\n\x1b[1;34m[*] Verificando telemetria do Pi Zero em http://192.168.7.2:8080/api/status...\x1b[0m");
-    let res = Command::new("curl")
-        .args(["-s", "-m", "2", "http://192.168.7.2:8080/api/status"])
-        .output();
-
-    match res {
-        Ok(o) if o.status.success() && !o.stdout.is_empty() => {
-            println!("\x1b[1;32m[+] Conexão com Pi Zero OK:\x1b[0m\n{}", String::from_utf8_lossy(&o.stdout));
+    match crate::http_client::get("http://192.168.7.2:8080/api/status") {
+        Ok(body) if !body.is_empty() => {
+            println!("\x1b[1;32m[+] Conexão com Pi Zero OK:\x1b[0m\n{}", body);
         }
         _ => {
             println!("\x1b[1;33m[!] Pi Zero não respondeu em 192.168.7.2:8080 (verifique se o cabo USB está conectado)\x1b[0m");

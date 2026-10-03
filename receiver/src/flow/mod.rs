@@ -17,10 +17,16 @@ pub mod codec_v4l2_m2m;
 pub mod demux_annexb_assembler;
 pub mod demux_mpegts_parser;
 pub mod demux_rtp_depayloader;
+pub mod flow_hierarchy;
 pub mod ingress_network_udp;
 pub mod ingress_usb_bulk;
 pub mod scanout_drm_kms;
 pub mod scanout_frame_pacer;
+
+// Re-export hierarchy and arbiter micro-block
+pub use flow_hierarchy::{
+    ArbiterError, DesktopMode, DisplayOwner, MediaSource, ServiceArbiter, ServiceLevel, ARBITER,
+};
 
 // Re-export ingress micro-blocks
 pub use ingress_network_udp::{

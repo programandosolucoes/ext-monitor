@@ -427,6 +427,7 @@ fn handle_http_client(
                 match result {
                     ModeSwitchResult::EnterStandby => {
                         println!("\x1b[1;33m[web-server]\x1b[0m All video modes disabled via Web UI. Entering Standby...");
+                        let _ = crate::flow::ARBITER.request_standby();
                         if let Ok(mut cfg) = CONFIG.lock() {
                             cfg.active_transport = "standby".to_string();
                         }
@@ -448,6 +449,7 @@ fn handle_http_client(
                         println!("\x1b[1;36m[web-server]\x1b[0m Direct Active Transport switch requested: {}", transport);
                         match transport.as_str() {
                             "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
+                                let _ = crate::flow::ARBITER.request_level0(crate::flow::DesktopMode::Mode3UsbBulk, 86);
                                 if let Ok(mut cfg) = CONFIG.lock() {
                                     cfg.active_transport = "mode3_usb_bulk".to_string();
                                     cfg.mode3 = true;
@@ -464,6 +466,7 @@ fn handle_http_client(
                                 });
                             }
                             "mode1_udp" | "network" | "udp" | "mode1" => {
+                                let _ = crate::flow::ARBITER.request_level0(crate::flow::DesktopMode::Mode1NetworkUdp, 86);
                                 if let Ok(mut cfg) = CONFIG.lock() {
                                     cfg.active_transport = "mode1_udp".to_string();
                                     cfg.mode1 = true;
@@ -478,6 +481,7 @@ fn handle_http_client(
                                 });
                             }
                             "mode2_miracast" | "miracast" | "mode2" => {
+                                let _ = crate::flow::ARBITER.request_level0(crate::flow::DesktopMode::Mode2Miracast, 86);
                                 if let Ok(mut cfg) = CONFIG.lock() {
                                     cfg.active_transport = "mode2_miracast".to_string();
                                     cfg.mode1 = false;
@@ -583,6 +587,18 @@ fn handle_http_client(
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"forwarded_to_host\"}");
         }
+        ("GET", "/api/host/status") => {
+            let (active_trans, is_live) = if let Ok(cfg) = CONFIG.lock() {
+                (cfg.active_transport.clone(), cfg.mode1 || cfg.mode2 || cfg.mode3)
+            } else {
+                ("standby".to_string(), false)
+            };
+            let json = format!(
+                "{{\"connected\":true,\"ip\":\"192.168.7.1\",\"active_transport\":\"{}\",\"is_streaming\":{}}}",
+                active_trans, is_live
+            );
+            send_response(&mut stream, "200 OK", "application/json", json.as_bytes());
+        }
         ("POST", "/api/bluetooth/discoverable") => {
             println!("\x1b[1;34m[web-server]\x1b[0m Ativando Bluetooth A2DP Sink (pareável por 60s)...");
             let _ = std::process::Command::new("/bin/sh")
@@ -599,7 +615,7 @@ fn handle_http_client(
             send_dial_response(&mut stream, "200 OK", "text/xml; charset=utf-8", xml.as_bytes(), "http://192.168.7.2:8080/apps/");
         }
         ("GET", "/setup/eureka_info") => {
-            let eureka_json = r#"{"name":"Ext-Monitor (Raspberry Pi)","version":8,"build_info":{"build_type":2,"system_build_number":"1.56.275994","cast_build_revision":"1.56.275994"},"device_info":{"model_name":"Ext-Monitor TV","manufacturer":"Carlos Alberto / Ext-Monitor Project","mac_address":"12:22:33:44:55:67","ssdp_udn":"uuid:ext-monitor-dial-device","capabilities":{"audio_in":false,"audio_out":true,"video_in":false,"video_out":true,"display_supported":true}},"net":{"ip_address":"192.168.7.2","online":true}}"#;
+            let eureka_json = r#"{"name":"RaspCast","version":8,"build_info":{"build_type":2,"system_build_number":"1.56.275994","cast_build_revision":"1.56.275994"},"device_info":{"model_name":"Eureka Dongle","manufacturer":"Carlos Alberto / Ext-Monitor Project","mac_address":"12:22:33:44:55:67","ssdp_udn":"uuid:ext-monitor-dial-device","capabilities":{"audio_in":false,"audio_out":true,"video_in":false,"video_out":true,"display_supported":true}},"net":{"ip_address":"192.168.7.2","online":true}}"#;
             send_response(&mut stream, "200 OK", "application/json", eureka_json.as_bytes());
         }
         ("GET", "/setup/icon.png") => {
@@ -708,6 +724,7 @@ fn handle_http_client(
                 if let Ok(mut m) = st.lock() {
                     if let Some(vis) = extract_json_bool(body, "enabled") {
                         m.visualizer_enabled = vis;
+                        crate::flow::ARBITER.set_visualizer_user_enabled(vis);
                     }
                 };
             }

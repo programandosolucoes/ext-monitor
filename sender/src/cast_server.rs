@@ -307,11 +307,12 @@ pub fn build_auth_response(
     //   optional bytes sender_nonce = 5;
     //   optional HashAlgorithm hash_algorithm = 6 [default = SHA1];
     // }
+    let sig_algo = if challenge.signature_algorithm == 0 { 1 } else { challenge.signature_algorithm };
     let mut auth_resp = Vec::new();
     encode_length_delimited(1, &signature, &mut auth_resp);
     encode_length_delimited(2, &dev_cert_der, &mut auth_resp);
     encode_length_delimited(3, &ca_cert_der, &mut auth_resp);
-    encode_varint_field(4, challenge.signature_algorithm as u64, &mut auth_resp);
+    encode_varint_field(4, sig_algo as u64, &mut auth_resp);
     if !challenge.sender_nonce.is_empty() {
         encode_length_delimited(5, &challenge.sender_nonce, &mut auth_resp);
     }
@@ -472,6 +473,7 @@ fn handle_ssl_client(
         }
 
         if let Some(msg) = CastMessage::from_proto_bytes(&payload) {
+            println!("\x1b[1;36m[cast-server]\x1b[0m In msg [{}]: {:?}", msg.namespace, msg.payload_utf8.as_deref().unwrap_or("<binary>"));
             handle_cast_message(&mut ssl_stream, &msg, dev_key, dev_cert, ca_cert);
         }
     }
@@ -502,7 +504,7 @@ fn handle_cast_message<S: Read + Write>(
             }
         }
         "urn:x-cast:com.google.cast.tp.connection" => {
-            // Acknowledge connection
+            println!("\x1b[1;32m[cast-server]\x1b[0m Cast TP connection established: {:?}", msg.payload_utf8);
         }
         "urn:x-cast:com.google.cast.tp.deviceauth" => {
             println!("\x1b[1;32m[cast-server]\x1b[0m Authenticating Google Cast device challenge from client...");
@@ -530,9 +532,47 @@ fn handle_cast_message<S: Read + Write>(
                     .and_then(|s| s.trim_matches(|c: char| !c.is_numeric()).parse::<u64>().ok())
                     .unwrap_or(1);
 
-                if text.contains("GET_STATUS") || text.contains("GET_APP_AVAILABILITY") {
+                if text.contains("GET_APP_AVAILABILITY") {
+                    println!("\x1b[1;32m[cast-server]\x1b[0m Handling GET_APP_AVAILABILITY (req_id={}): {}", req_id, text);
+                    let mut availability_entries = Vec::new();
+                    if let Some(idx) = text.find("\"appId\":") {
+                        let slice = &text[idx + 8..];
+                        if let Some(b_open) = slice.find('[') {
+                            if let Some(b_close) = slice.find(']') {
+                                let inner = &slice[b_open + 1..b_close];
+                                for part in inner.split(',') {
+                                    let clean = part.trim().trim_matches('"').trim();
+                                    if !clean.is_empty() {
+                                        availability_entries.push(format!("\"{}\":\"APP_AVAILABLE\"", clean));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if availability_entries.is_empty() {
+                        availability_entries.push("\"0F5096E8\":\"APP_AVAILABLE\"".to_string());
+                        availability_entries.push("\"85CDB22F\":\"APP_AVAILABLE\"".to_string());
+                        availability_entries.push("\"CC1AD845\":\"APP_AVAILABLE\"".to_string());
+                    }
+                    let avail_json = format!(
+                        "{{\"responseType\":\"GET_APP_AVAILABILITY\",\"requestId\":{},\"availability\":{{{}}}}}",
+                        req_id,
+                        availability_entries.join(",")
+                    );
+                    let resp = CastMessage {
+                        protocol_version: 0,
+                        source_id: msg.destination_id.clone(),
+                        destination_id: msg.source_id.clone(),
+                        namespace: "urn:x-cast:com.google.cast.receiver".to_string(),
+                        payload_type: 0,
+                        payload_utf8: Some(avail_json),
+                        payload_binary: None,
+                    };
+                    let _ = stream.write_all(&resp.to_wire_bytes());
+                    println!("\x1b[1;32m[cast-server]\x1b[0m Sent APP_AVAILABLE response for {} app(s)", availability_entries.len());
+                } else if text.contains("GET_STATUS") {
                     let status_json = format!(
-                        "{{\"type\":\"RECEIVER_STATUS\",\"requestId\":{},\"status\":{{\"applications\":[{{\"appId\":\"0F5096E8\",\"displayName\":\"Ext-Monitor Screen Mirroring\",\"namespaces\":[{{\"name\":\"urn:x-cast:com.google.cast.webrtc\"}},{{\"name\":\"urn:x-cast:com.google.cast.tp.connection\"}}],\"sessionId\":\"ext-mirror-1\",\"statusText\":\"Ext-Monitor Ready\",\"transportId\":\"mirror-transport-1\"}}],\"volume\":{{\"level\":1.0,\"muted\":false}}}}}}",
+                        "{{\"type\":\"RECEIVER_STATUS\",\"requestId\":{},\"status\":{{\"applications\":[],\"isActiveInput\":true,\"isStandBy\":false,\"volume\":{{\"level\":1.0,\"muted\":false,\"controlType\":\"master\"}}}}}}",
                         req_id
                     );
                     let resp = CastMessage {
@@ -547,8 +587,31 @@ fn handle_cast_message<S: Read + Write>(
                     let _ = stream.write_all(&resp.to_wire_bytes());
                 } else if text.contains("LAUNCH") {
                     println!("\x1b[1;32m[cast-server]\x1b[0m Received LAUNCH request for Chrome Tab/Desktop Mirroring!");
+                    if let Ok(sock) = std::net::UdpSocket::bind("127.0.0.1:0") {
+                        let _ = sock.send_to(b"{\"action\":\"chrome_cast_launch\"}", "127.0.0.1:5001");
+                    }
                     let status_json = format!(
-                        "{{\"type\":\"RECEIVER_STATUS\",\"requestId\":{},\"status\":{{\"applications\":[{{\"appId\":\"0F5096E8\",\"displayName\":\"Ext-Monitor Screen Mirroring\",\"namespaces\":[{{\"name\":\"urn:x-cast:com.google.cast.webrtc\"}},{{\"name\":\"urn:x-cast:com.google.cast.tp.connection\"}}],\"sessionId\":\"ext-mirror-1\",\"statusText\":\"Streaming Live\",\"transportId\":\"mirror-transport-1\"}}],\"volume\":{{\"level\":1.0,\"muted\":false}}}}}}",
+                        "{{\"type\":\"RECEIVER_STATUS\",\"requestId\":{},\"status\":{{\"applications\":[{{\"appId\":\"0F5096E8\",\"displayName\":\"Chrome Screen Mirroring\",\"namespaces\":[{{\"name\":\"urn:x-cast:com.google.cast.webrtc\"}},{{\"name\":\"urn:x-cast:com.google.cast.tp.connection\"}},{{\"name\":\"urn:x-cast:com.google.cast.remoting\"}}],\"sessionId\":\"ext-mirror-1\",\"statusText\":\"Streaming Live\",\"transportId\":\"mirror-transport-1\"}}],\"isActiveInput\":true,\"isStandBy\":false,\"volume\":{{\"level\":1.0,\"muted\":false,\"controlType\":\"master\"}}}}}}",
+                        req_id
+                    );
+                    let resp = CastMessage {
+                        protocol_version: 0,
+                        source_id: msg.destination_id.clone(),
+                        destination_id: msg.source_id.clone(),
+                        namespace: "urn:x-cast:com.google.cast.receiver".to_string(),
+                        payload_type: 0,
+                        payload_utf8: Some(status_json),
+                        payload_binary: None,
+                    };
+                    let _ = stream.write_all(&resp.to_wire_bytes());
+                } else if text.contains("STOP") {
+                    println!("\x1b[1;33m[cast-server]\x1b[0m Received STOP request");
+                    if let Ok(sock) = std::net::UdpSocket::bind("127.0.0.1:0") {
+                        let _ = sock.send_to(b"{\"action\":\"stop_streaming\"}", "127.0.0.1:5001");
+                    }
+                    let _ = crate::http_client::post_empty("http://192.168.7.2:8080/api/stream/stop");
+                    let status_json = format!(
+                        "{{\"type\":\"RECEIVER_STATUS\",\"requestId\":{},\"status\":{{\"applications\":[],\"isActiveInput\":true,\"isStandBy\":false,\"volume\":{{\"level\":1.0,\"muted\":false,\"controlType\":\"master\"}}}}}}",
                         req_id
                     );
                     let resp = CastMessage {
@@ -564,7 +627,85 @@ fn handle_cast_message<S: Read + Write>(
                 }
             }
         }
-        _ => {}
+        "urn:x-cast:com.google.cast.webrtc" => {
+            if let Some(ref text) = msg.payload_utf8 {
+                println!("\x1b[1;36m[cast-server]\x1b[0m WebRTC msg: {}", text);
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(text) {
+                    let msg_type = val["type"].as_str().unwrap_or("");
+                    let seq_num = val["seqNum"].as_i64().unwrap_or(1);
+                    if msg_type == "OFFER" {
+                        let mut send_indexes = vec![0, 1];
+                        let mut ssrcs = vec![26593, 91897];
+                        if let Some(streams) = val["offer"]["supportedStreams"].as_array() {
+                            let mut found_idx = Vec::new();
+                            let mut found_ssrc = Vec::new();
+                            for stream in streams {
+                                if let (Some(idx), Some(ssrc)) = (stream["index"].as_i64(), stream["ssrc"].as_i64()) {
+                                    let codec = stream["codecName"].as_str().unwrap_or("");
+                                    if codec == "opus" || codec == "vp9" || codec == "vp8" {
+                                        if !found_idx.contains(&(idx as i32)) && found_idx.len() < 2 {
+                                            found_idx.push(idx as i32);
+                                            found_ssrc.push(ssrc as i32);
+                                        }
+                                    }
+                                }
+                            }
+                            if !found_idx.is_empty() {
+                                send_indexes = found_idx;
+                                ssrcs = found_ssrc;
+                            }
+                        }
+
+                        let answer_json = serde_json::json!({
+                            "type": "ANSWER",
+                            "seqNum": seq_num,
+                            "result": "ok",
+                            "answer": {
+                                "castMode": "mirroring",
+                                "receiverGetStatus": true,
+                                "sendIndexes": send_indexes,
+                                "ssrcs": ssrcs,
+                                "udpPort": 5000
+                            }
+                        }).to_string();
+
+                        let resp = CastMessage {
+                            protocol_version: 0,
+                            source_id: msg.destination_id.clone(),
+                            destination_id: msg.source_id.clone(),
+                            namespace: "urn:x-cast:com.google.cast.webrtc".to_string(),
+                            payload_type: 0,
+                            payload_utf8: Some(answer_json),
+                            payload_binary: None,
+                        };
+                        let _ = stream.write_all(&resp.to_wire_bytes());
+                        println!("\x1b[1;32m[cast-server]\x1b[0m Sent WebRTC ANSWER (seqNum: {}, indexes: {:?})", seq_num, send_indexes);
+                    } else if msg_type == "GET_STATUS" {
+                        let status_json = serde_json::json!({
+                            "type": "STATUS",
+                            "seqNum": seq_num,
+                            "result": "ok",
+                            "status": {
+                                "wifiStatus": 0
+                            }
+                        }).to_string();
+                        let resp = CastMessage {
+                            protocol_version: 0,
+                            source_id: msg.destination_id.clone(),
+                            destination_id: msg.source_id.clone(),
+                            namespace: "urn:x-cast:com.google.cast.webrtc".to_string(),
+                            payload_type: 0,
+                            payload_utf8: Some(status_json),
+                            payload_binary: None,
+                        };
+                        let _ = stream.write_all(&resp.to_wire_bytes());
+                    }
+                }
+            }
+        }
+        other_ns => {
+            println!("\x1b[1;35m[cast-server]\x1b[0m In msg [{}]: {:?}", other_ns, msg.payload_utf8);
+        }
     }
 }
 

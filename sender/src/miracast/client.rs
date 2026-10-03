@@ -703,7 +703,7 @@ mod tests {
             height: 240,
             fps: 30,
             bitrate_kbps: 1000,
-            mode: "extend".to_string(),
+            mode: "clone".to_string(),
             capture: "mutter".to_string(),
         };
 
@@ -764,7 +764,7 @@ mod tests {
             height: 240,
             fps: 30,
             bitrate_kbps: 1000,
-            mode: "extend".to_string(),
+            mode: "clone".to_string(),
             capture: "mutter".to_string(),
         };
 

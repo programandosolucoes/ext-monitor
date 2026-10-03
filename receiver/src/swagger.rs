@@ -279,6 +279,75 @@ pub const OPENAPI_JSON: &str = r##"{
         }
       }
     },
+    "/api/transport/active": {
+      "post": {
+        "tags": ["Operating Modes"],
+        "summary": "Set Active Video Transport Channel",
+        "description": "Switches the active display transport channel dynamically between Mode 3 (USB Bulk Direct), Mode 1 (Network UDP 5000), Mode 2 (Windows Miracast RTSP 7236), or Standby.",
+        "operationId": "setActiveTransport",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "active_transport": {
+                    "type": "string",
+                    "enum": ["mode3_usb_bulk", "mode1_udp", "mode2_miracast", "standby"],
+                    "example": "mode3_usb_bulk"
+                  },
+                  "transport": {
+                    "type": "string",
+                    "example": "usb_bulk"
+                  },
+                  "action": {
+                    "type": "string",
+                    "example": "start"
+                  }
+                },
+                "required": ["active_transport"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transport channel switched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericStatusResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cast": {
+      "get": {
+        "tags": ["Web Dashboard & Documentation"],
+        "summary": "Web Cast Browser Streaming Interface",
+        "description": "Serves the browser Web Cast client interface that renders live H.264 video streams over WebSocket.",
+        "operationId": "getWebCastPage",
+        "responses": {
+          "200": {
+            "description": "Web Cast HTML page",
+            "content": {
+              "text/html; charset=utf-8": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/mode": {
       "post": {
         "tags": ["Operating Modes"],
@@ -1018,6 +1087,164 @@ pub const OPENAPI_JSON: &str = r##"{
                 "example": {
                   "volume": 85,
                   "muted": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio/status": {
+      "get": {
+        "tags": ["Audio & Sound"],
+        "summary": "Get Audio Subsystem Status",
+        "description": "Retrieves the current HDMI ALSA audio volume, mute status, sample rate, and active backend.",
+        "operationId": "getAudioStatus",
+        "responses": {
+          "200": {
+            "description": "Audio telemetry status",
+            "content": {
+              "application/json": {
+                "example": {
+                  "volume": 85,
+                  "muted": false,
+                  "rate": 48000,
+                  "transport": "alsa"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio/rate": {
+      "post": {
+        "tags": ["Audio & Sound"],
+        "summary": "Set HDMI ALSA Audio Sample Rate",
+        "description": "Sets the hardware playback sample rate (44100, 48000, 88200, 96000, 192000 Hz).",
+        "operationId": "setAudioRate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "rate": 48000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sample rate configured",
+            "content": {
+              "application/json": {
+                "example": {
+                  "volume": 85,
+                  "muted": false,
+                  "rate": 48000
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio/transport": {
+      "post": {
+        "tags": ["Audio & Sound"],
+        "summary": "Set Audio Transport Backend",
+        "description": "Switches the audio subsystem transport backend (e.g. alsa, pulse).",
+        "operationId": "setAudioTransport",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "transport": "alsa"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Audio transport updated",
+            "content": {
+              "application/json": {
+                "example": {
+                  "volume": 85,
+                  "muted": false,
+                  "transport": "alsa"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/time": {
+      "get": {
+        "tags": ["Status & Telemetry"],
+        "summary": "Get System Unix Epoch Timestamp",
+        "description": "Returns current Raspberry Pi system time in seconds since Unix epoch.",
+        "operationId": "getSystemTime",
+        "responses": {
+          "200": {
+            "description": "Unix timestamp in seconds",
+            "content": {
+              "application/json": {
+                "example": {
+                  "unix_epoch_secs": 1740000000
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/time/sync": {
+      "post": {
+        "tags": ["Status & Telemetry"],
+        "summary": "Synchronize System Clock with Host",
+        "description": "Sets the Raspberry Pi Zero system clock using Unix epoch timestamp to eliminate RTC drift.",
+        "operationId": "syncSystemTime",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "unix_epoch_secs": 1740000000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Clock synchronized successfully",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "synchronized",
+                  "unix_epoch_secs": 1740000000
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/test_sound": {
+      "post": {
+        "tags": ["IoT Media & HDMI Visualizer"],
+        "summary": "Trigger Audio Spectrum & Visualizer Test",
+        "description": "Generates synthetic 24-band audio spectrum levels to verify the HDMI audio visualizer rendering.",
+        "operationId": "triggerTestSound",
+        "responses": {
+          "200": {
+            "description": "Test sound triggered",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "test_sound_triggered"
                 }
               }
             }

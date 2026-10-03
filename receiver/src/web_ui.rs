@@ -1108,7 +1108,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <span class="control-value" id="valHostStatus">Ready / Online</span>
                     </div>
                     <div class="btn-grid">
-                        <button class="btn-toggle active" id="btnHostStart" onclick="sendHostControl({ action: 'start' })" style="border-color: #00e676; color: #00e676;" data-i18n="btnHostStart">▶ Start / Restart Stream</button>
+                        <button class="btn-toggle active" id="btnHostStart" onclick="sendHostControl({ action: 'start', mode: hostConfiguredMode })" style="border-color: #00e676; color: #00e676;" data-i18n="btnHostStart">▶ Start / Restart Stream</button>
                         <button class="btn-toggle" id="btnHostStop" onclick="sendHostControl({ action: 'stop' })" style="border-color: #ff5252; color: #ff5252;" data-i18n="btnHostStop">⏹ Stop Stream</button>
                     </div>
                 </div>
@@ -1143,14 +1143,15 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                 <div class="control-group">
                     <div class="control-label">
                         <span class="tip-wrap">
-                            <span data-i18n="hostModeLabel">Monitor Display Mode</span>
+                            <span data-i18n="hostModeLabel">Display Mode / Chrome Cast Behavior</span>
                             <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipHostMode">HDMI-1: Virtual extended second screen on TV. eDP-1: Clones notebook primary screen.</span>
+                            <span class="tip-box" data-i18n="tipHostMode">HDMI-1: Virtual extended second screen on TV. eDP-1: Clones notebook primary screen. Dialog prompt applies exclusively when casting from Google Chrome.</span>
                         </span>
-                        <span class="control-value" id="valHostMode">Extended (HDMI-1)</span>
+                        <span class="control-value" id="valHostMode">🌐 Cast: Prompt on Screen</span>
                     </div>
                     <div class="btn-grid" id="hostModeGrid">
-                        <button class="btn-toggle active" id="btnModeExtend" onclick="setHostMode('extend')" data-i18n="btnModeExtend">🖥️ Extended (HDMI-1 TV)</button>
+                        <button class="btn-toggle active" id="btnModeAsk" onclick="setHostMode('ask')" data-i18n="btnModeAsk">🌐 Cast: Prompt on Screen</button>
+                        <button class="btn-toggle" id="btnModeExtend" onclick="setHostMode('extend')" data-i18n="btnModeExtend">🖥️ Extended (HDMI-1 TV)</button>
                         <button class="btn-toggle" id="btnModeClone" onclick="setHostMode('clone')" data-i18n="btnModeClone">💻 Cloned (eDP-1 Notebook)</button>
                     </div>
                 </div>
@@ -2089,10 +2090,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnSelectMode1: "▶ Switch to Network UDP",
                 btnSelectMode2: "▶ Switch to Miracast (Win+K)",
                 btnSelectMode3: "▶ Switch to USB Bulk",
-                hostModeLabel: "Monitor Display Mode",
-                tipHostMode: "HDMI-1: Virtual extended second screen on TV. eDP-1: Clones notebook primary screen.",
+                hostModeLabel: "Display Mode / Chrome Cast Behavior",
+                tipHostMode: "HDMI-1: Virtual extended second screen on TV. eDP-1: Clones notebook primary screen. Dialog prompt applies exclusively when casting from Google Chrome.",
+                btnModeAsk: "🌐 Cast: Prompt on Screen",
                 btnModeExtend: "🖥️ Extended (HDMI-1 TV)",
                 btnModeClone: "💻 Cloned (eDP-1 Notebook)",
+                toastModeAsk: "🌐 Google Cast: Will prompt to Extend or Clone when casting",
                 hostAudioLabel: "Hybrid Audio (IP Network Opus + Bluetooth A2DP)",
                 tipHostAudio: "Enable network audio to stream PC sound via 48kHz Opus to TV HDMI. Use Bluetooth pairing to connect phones/tablets directly to TV.",
                 btnHostAudioOn: "🔊 Network Audio (Opus UDP)",
@@ -2404,10 +2407,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnSelectMode1: "▶ Ativar Rede UDP",
                 btnSelectMode2: "▶ Ativar Miracast (Win+K)",
                 btnSelectMode3: "▶ Ativar USB Bulk",
-                hostModeLabel: "Modo de Exibição do Monitor",
-                tipHostMode: "HDMI-1: Segunda tela virtual estendida na TV. eDP-1: Clona a tela principal do notebook.",
+                hostModeLabel: "Modo de Exibição / Transmissão Chrome Cast",
+                tipHostMode: "Define a topologia de tela. 'Perguntar na Transmissão' aplica-se exclusivamente quando iniciado via Google Chrome Cast. Comandos pelo painel web e CLI aplicam imediatamente sem diálogo.",
+                btnModeAsk: "🌐 Cast: Perguntar na Tela",
                 btnModeExtend: "🖥️ Estendido (HDMI-1 TV)",
                 btnModeClone: "💻 Clonado (eDP-1 Notebook)",
+                toastModeAsk: "🌐 Google Cast: Perguntará se deseja Estender ou Clonar ao transmitir",
                 hostAudioLabel: "Áudio Híbrido (Rede IP Opus + Bluetooth A2DP)",
                 tipHostAudio: "Ative áudio de rede para transmitir som do PC via Opus 48kHz para o HDMI da TV. Use pareamento Bluetooth para conectar celulares/tablets direto à TV.",
                 btnHostAudioOn: "🔊 Áudio Rede (Opus UDP)",
@@ -2715,9 +2720,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostStart: "▶ Avvia / Riavvia Stream",
                 btnHostStop: "⏹ Ferma Stream",
                 hostModeLabel: "Modalità di Visualizzazione del Monitor",
-                tipHostMode: "HDMI-1: Secondo schermo virtuale esteso su TV. eDP-1: Clona lo schermo principale del notebook.",
+                tipHostMode: "HDMI-1: Secondo schermo virtuale esteso su TV. eDP-1: Clona lo schermo principale del notebook. Chiedi: Mostra finestra di selezione sul laptop.",
+                btnModeAsk: "❓ Chiedi Sempre (Finestra)",
                 btnModeExtend: "🖥️ Esteso (HDMI-1 TV)",
                 btnModeClone: "💻 Clonato (eDP-1 Notebook)",
+                toastModeAsk: "❓ Modalità configurata: Chiedi sempre sul laptop all'avvio",
                 hostAudioLabel: "Audio Ibrido (Rete IP Opus + Bluetooth A2DP)",
                 tipHostAudio: "Abilita l'audio di rete per trasmettere l'audio del PC via Opus 48kHz alla TV HDMI. Usa l'accoppiamento Bluetooth per connettere telefoni/tablet alla TV.",
                 btnHostAudioOn: "🔊 Audio di Rete (Opus UDP)",
@@ -3025,9 +3032,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostStart: "▶ 启动 / 重启推流",
                 btnHostStop: "⏹ 停止推流",
                 hostModeLabel: "显示器投屏模式",
-                tipHostMode: "HDMI-1: 在电视上扩展虚拟副屏；eDP-1: 镜像复制笔记本主屏。",
+                tipHostMode: "HDMI-1: 在电视上扩展虚拟副屏；eDP-1: 镜像复制笔记本主屏；询问: 投屏前在笔记本弹出选择窗口。",
+                btnModeAsk: "❓ 每次询问 (弹窗)",
                 btnModeExtend: "🖥️ 扩展模式 (HDMI-1 电视)",
                 btnModeClone: "💻 镜像模式 (eDP-1 笔记本)",
+                toastModeAsk: "❓ 模式已配置：每次投屏前在笔记本弹出询问窗口",
                 hostAudioLabel: "混合音频流 (IP 网络 Opus + 蓝牙 A2DP)",
                 tipHostAudio: "启用网络音频将电脑声音以 48kHz Opus 传输至电视 HDMI；使用蓝牙配对可将手机/平板直接连至电视播放音频。",
                 btnHostAudioOn: "🔊 网络音频 (Opus UDP)",
@@ -3433,7 +3442,17 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             updateModeAndTopologyButtons();
         }
 
+        let hostConfiguredMode = 'ask';
+
         function setHostMode(mode) {
+            hostConfiguredMode = mode;
+            if (mode === 'ask') {
+                showToast(t('toastModeAsk') || '❓ Modo configurado: Perguntar Sempre no Laptop');
+                sendHostControl({ mode: 'ask' });
+                updateModeAndTopologyButtons();
+                return;
+            }
+            sendHostControl({ mode: mode });
             setExtensionAction(mode);
         }
 
@@ -3456,6 +3475,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             const btnCln = document.getElementById('btnActionClone');
             const btnStop = document.getElementById('btnActionStop');
             const badge = document.getElementById('badgeExtState');
+            const hostAsk = document.getElementById('btnModeAsk');
             const hostExt = document.getElementById('btnModeExtend');
             const hostCln = document.getElementById('btnModeClone');
             const valHostMode = document.getElementById('valHostMode');
@@ -3491,9 +3511,18 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 }
             }
 
-            if (hostExt) hostExt.classList.toggle('active', currentTopology === 'extend');
-            if (hostCln) hostCln.classList.toggle('active', currentTopology === 'clone');
-            if (valHostMode) valHostMode.textContent = currentTopology === 'clone' ? (t('btnModeClone') || 'Cloned (eDP-1)') : (t('btnModeExtend') || 'Extended (HDMI-1)');
+            if (hostAsk) hostAsk.classList.toggle('active', hostConfiguredMode === 'ask');
+            if (hostExt) hostExt.classList.toggle('active', hostConfiguredMode === 'extend');
+            if (hostCln) hostCln.classList.toggle('active', hostConfiguredMode === 'clone');
+            if (valHostMode) {
+                if (hostConfiguredMode === 'ask') {
+                    valHostMode.textContent = t('btnModeAsk') || '❓ Perguntar Sempre (Diálogo)';
+                } else if (hostConfiguredMode === 'clone') {
+                    valHostMode.textContent = t('btnModeClone') || '💻 Cloned (eDP-1)';
+                } else {
+                    valHostMode.textContent = t('btnModeExtend') || '🖥️ Extended (HDMI-1)';
+                }
+            }
 
             // 3. Update Individual Mode Card action buttons
             const m1Ext = document.getElementById('btnMode1Extend');

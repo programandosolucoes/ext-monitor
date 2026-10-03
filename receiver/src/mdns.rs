@@ -59,7 +59,7 @@ pub fn build_full_mdns_response(device_ip: [u8; 4], _http_port: u16, miracast_po
     packet.extend_from_slice(&[0x00, 0x04]); // ARCOUNT: 4 Additional (SRV x2, TXT, A)
 
     let cast_service = "_googlecast._tcp.local";
-    let cast_instance = "Ext-Monitor-TV._googlecast._tcp.local";
+    let cast_instance = "RaspCast._googlecast._tcp.local";
     let display_service = "_display._tcp.local";
     let display_instance = "Raspberry-Pi-Miracast._display._tcp.local";
     let wfd_service = "_miracast._tcp.local";
@@ -117,7 +117,7 @@ pub fn build_full_mdns_response(device_ip: [u8; 4], _http_port: u16, miracast_po
         "ve=05",
         "md=Chromecast",
         "ic=/setup/icon.png",
-        "fn=Ext-Monitor (Raspberry Pi)",
+        "fn=RaspCast",
         "ca=4101",
         "st=0",
         "bs=",

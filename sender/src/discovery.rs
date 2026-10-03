@@ -166,51 +166,33 @@ pub fn start_host_ssdp_bridge(running: Arc<AtomicBool>, target_ip: String, http_
                     let _ = socket.send_to(msg.as_bytes(), "239.255.255.250:1900");
                 }
 
-                // Handle M-SEARCH from local Chrome / applications
+                // Handle M-SEARCH from local Chrome / applications: only respond to DIAL (not generic MediaRenderer)
                 if let Ok((len, src)) = socket.recv_from(&mut buf) {
                     let req = String::from_utf8_lossy(&buf[..len]);
                     let trimmed = req.trim_start();
-                    if trimmed.starts_with("M-SEARCH") || trimmed.starts_with("m-search") {
-                        if req.contains("dial") || req.contains("MediaRenderer") || req.contains("ssdp:all") || req.contains("upnp:rootdevice") {
-                            let st = if req.contains("device:dial:1") {
-                                "urn:dial-multiscreen-org:device:dial:1"
-                            } else if req.contains("dial") {
-                                "urn:dial-multiscreen-org:service:dial:1"
-                            } else if req.contains("MediaRenderer") {
-                                "urn:schemas-upnp-org:device:MediaRenderer:1"
-                            } else {
-                                "upnp:rootdevice"
-                            };
+                    if (trimmed.starts_with("M-SEARCH") || trimmed.starts_with("m-search")) && req.contains("dial") {
+                        let st = if req.contains("device:dial:1") {
+                            "urn:dial-multiscreen-org:device:dial:1"
+                        } else {
+                            "urn:dial-multiscreen-org:service:dial:1"
+                        };
 
-                            let is_dial = st.contains("dial");
-                            let loc_path = if is_dial { "/dial/dd.xml" } else { "/upnp/desc.xml" };
-                            let usn = if is_dial {
-                                format!("uuid:ext-monitor-dial-device::{}", st)
-                            } else {
-                                format!("uuid:ext-monitor-bcm2835-renderer::{}", st)
-                            };
-                            let app_url_header = if is_dial {
-                                format!("APPLICATION-URL: http://{}:{}/apps/\r\n", target_ip, http_port)
-                            } else {
-                                String::new()
-                            };
-
-                            let response = format!(
-                                "HTTP/1.1 200 OK\r\n\
-                                 CACHE-CONTROL: max-age=1800\r\n\
-                                 DATE: Tue, 29 Sep 2026 18:00:00 GMT\r\n\
-                                 EXT:\r\n\
-                                 LOCATION: http://{}:{}{}\r\n\
-                                 {}SERVER: Linux/6.6 UPnP/1.0 Ext-Monitor/2.3\r\n\
-                                 ST: {}\r\n\
-                                 USN: {}\r\n\
-                                 BOOTID.UPNP.ORG: 1\r\n\
-                                 CONFIGID.UPNP.ORG: 1\r\n\
-                                 SEARCHPORT.UPNP.ORG: 1900\r\n\r\n",
-                                target_ip, http_port, loc_path, app_url_header, st, usn
-                            );
-                            let _ = socket.send_to(response.as_bytes(), src);
-                        }
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\n\
+                             CACHE-CONTROL: max-age=1800\r\n\
+                             DATE: Tue, 29 Sep 2026 18:00:00 GMT\r\n\
+                             EXT:\r\n\
+                             LOCATION: http://{}:{}/dial/dd.xml\r\n\
+                             APPLICATION-URL: http://{}:{}/apps/\r\n\
+                             SERVER: Linux/6.6 UPnP/1.0 RaspCast/1.56\r\n\
+                             ST: {}\r\n\
+                             USN: uuid:ext-monitor-dial-device::{}\r\n\
+                             BOOTID.UPNP.ORG: 1\r\n\
+                             CONFIGID.UPNP.ORG: 1\r\n\
+                             SEARCHPORT.UPNP.ORG: 1900\r\n\r\n",
+                            target_ip, http_port, target_ip, http_port, st, st
+                        );
+                        let _ = socket.send_to(response.as_bytes(), src);
                     }
                 }
             }

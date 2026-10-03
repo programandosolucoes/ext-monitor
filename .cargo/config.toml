@@ -1,8 +1,15 @@
 [target.arm-unknown-linux-gnueabihf]
 linker = "arm-linux-gnueabihf-gcc"
+rustflags = [
+    "-C", "target-cpu=arm1176jzf-s",
+    "-C", "target-feature=+vfp2",
+    "-C", "link-arg=-Wl,--as-needed"
+]
 
 [target.arm-unknown-linux-musleabihf]
 linker = "arm-linux-gnueabihf-gcc"
 rustflags = [
     "-C", "target-cpu=arm1176jzf-s",
+    "-C", "target-feature=+vfp2",
+    "-C", "link-arg=-Wl,--as-needed"
 ]

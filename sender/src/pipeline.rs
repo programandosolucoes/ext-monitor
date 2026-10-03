@@ -212,7 +212,8 @@ impl PipelineBuilder {
                 .arg("!")
                 .arg("fdsink")
                 .arg(format!("fd={}", fd))
-                .arg("sync=false");
+                .arg("sync=false")
+                .arg("blocksize=65536");
 
             use std::os::unix::process::CommandExt;
             unsafe {
@@ -574,13 +575,9 @@ pub fn spawn_opus_audio_streamer(
                 // Notify receiver of target sample rate so ALSA device configures hardware at exact rate
                 let client_ip = target_ip.clone();
                 thread::spawn(move || {
-                    let _ = Command::new("curl")
-                        .args([
-                            "-s", "-m", "2", "-X", "POST",
-                            &format!("http://{}:8080/api/audio/rate", client_ip),
-                            "-d", &format!("{{\"rate\":{}}}", audio_rate),
-                        ])
-                        .output();
+                    let url = format!("http://{}:8080/api/audio/rate", client_ip);
+                    let body = format!("{{\"rate\":{}}}", audio_rate);
+                    let _ = crate::http_client::post_json(&url, &body);
                 });
 
                 let mut cmd = Command::new("gst-launch-1.0");
@@ -778,6 +775,7 @@ impl PipelineBuilder {
             args.push("fdsink".to_string());
             args.push(format!("fd={}", fd));
             args.push("sync=false".to_string());
+            args.push("blocksize=65536".to_string());
         } else {
             args.push("h264parse".to_string());
             args.push("!".to_string());

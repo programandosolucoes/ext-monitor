@@ -179,8 +179,6 @@ fn send_ssdp_announcements(socket: &UdpSocket, targets: &[SocketAddr], http_port
     let notifications = [
         ("urn:dial-multiscreen-org:service:dial:1", "/dial/dd.xml", "uuid:ext-monitor-dial-device", true),
         ("urn:dial-multiscreen-org:device:dial:1", "/dial/dd.xml", "uuid:ext-monitor-dial-device", true),
-        ("urn:schemas-upnp-org:device:MediaRenderer:1", "/upnp/desc.xml", "uuid:ext-monitor-bcm2835-renderer", false),
-        ("upnp:rootdevice", "/upnp/desc.xml", "uuid:ext-monitor-bcm2835-renderer", false),
     ];
 
     for &(nt, loc_path, udn, is_dial) in &notifications {
@@ -196,7 +194,7 @@ fn send_ssdp_announcements(socket: &UdpSocket, targets: &[SocketAddr], http_port
              LOCATION: http://192.168.7.2:{}{}\r\n\
              {}NT: {}\r\n\
              NTS: ssdp:alive\r\n\
-             SERVER: Linux/6.6 UPnP/1.0 Ext-Monitor/2.3\r\n\
+             SERVER: Linux/6.6 UPnP/1.0 RaspCast/1.56\r\n\
              USN: {}::{}\r\n\
              BOOTID.UPNP.ORG: 1\r\n\
              CONFIGID.UPNP.ORG: 1\r\n\r\n",
@@ -220,8 +218,10 @@ pub fn parse_ssdp_msearch(req: &str) -> Option<(&'static str, &'static str)> {
         } else {
             Some(("/dial/dd.xml", "urn:dial-multiscreen-org:service:dial:1"))
         }
-    } else if req.contains("MediaRenderer") || req.contains("ssdp:all") || req.contains("upnp:rootdevice") {
+    } else if req.contains("MediaRenderer") || req.contains("RenderingControl") || req.contains("AVTransport") {
         Some(("/upnp/desc.xml", "urn:schemas-upnp-org:device:MediaRenderer:1"))
+    } else if req.contains("ssdp:all") || req.contains("upnp:rootdevice") {
+        Some(("/dial/dd.xml", "urn:dial-multiscreen-org:device:dial:1"))
     } else {
         None
     }
@@ -238,7 +238,7 @@ pub fn get_upnp_desc_xml(host_ip: &str, http_port: u16) -> String {
   </specVersion>
   <device>
     <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
-    <friendlyName>Ext-Monitor TV &amp; Sound ({})</friendlyName>
+    <friendlyName>RaspCast DLNA ({})</friendlyName>
     <manufacturer>Carlos Alberto / Ext-Monitor Project</manufacturer>
     <manufacturerURL>https://github.com/programandosolucoes/ext-monitor</manufacturerURL>
     <modelDescription>Smart IoT Display &amp; Audio Renderer</modelDescription>
@@ -279,9 +279,9 @@ pub fn get_dial_dd_xml(host_ip: &str, http_port: u16) -> String {
   </specVersion>
   <device>
     <deviceType>urn:dial-multiscreen-org:device:dial:1</deviceType>
-    <friendlyName>Ext-Monitor (Raspberry Pi - {})</friendlyName>
+    <friendlyName>RaspCast ({})</friendlyName>
     <manufacturer>Carlos Alberto / Ext-Monitor Project</manufacturer>
-    <modelName>Ext-Monitor Cast</modelName>
+    <modelName>Eureka Dongle</modelName>
     <modelURL>http://{}:{}/</modelURL>
     <UDN>uuid:ext-monitor-dial-device</UDN>
     <iconList>
@@ -432,14 +432,14 @@ impl VisualizerEngine {
                 println!("\x1b[1;36m[visualizer]\x1b[0m HDMI Dynamic Audio Visualizer Engine ready (Single-HDMI Multiplexed).");
 
                 while running.load(Ordering::Relaxed) {
-                    // 1. Dependency Rule: Single HDMI Port on Raspberry Pi Zero
-                    // If Desktop Video streaming is active, video owns 100% of HDMI scanout.
-                    // Visualizer must NOT write to /dev/fb0.
-                    if pipeline_mgr.current_kind().is_some() {
+                    // 1. Dependency Rule: Single HDMI Port on Raspberry Pi Zero (Blueprint 34 / Level 0 Arbiter)
+                    // If Desktop Video streaming is active (Level 0), video owns 100% of HDMI scanout.
+                    // Visualizer must NOT write to /dev/fb0 and must NEVER trigger splash screen.
+                    if pipeline_mgr.current_kind().is_some() || crate::flow::ARBITER.is_level0_active() {
                         if was_drawing {
                             was_drawing = false;
                         }
-                        thread::sleep(Duration::from_millis(200));
+                        thread::sleep(Duration::from_millis(150));
                         continue;
                     }
 
@@ -461,7 +461,8 @@ impl VisualizerEngine {
                         if !is_audio_active && st.source == "pc_audio" {
                             st.state = "idle".to_string();
                         }
-                        let should_render = st.visualizer_enabled && is_audio_active;
+                        // Level 2 Arbiter Rule: only render visualizer if Arbiter explicitly grants Level 2 with audio active
+                        let should_render = crate::flow::ARBITER.can_visualizer_render() && is_audio_active;
                         (
                             should_render,
                             st.title.clone(),
@@ -470,11 +471,13 @@ impl VisualizerEngine {
                         )
                     };
 
-                    // 3. If audio has stopped and visualizer was drawing, restore Splash screen immediately
+                    // 3. If audio has stopped and visualizer was drawing, restore Splash screen ONLY if Arbiter permits
                     if !vis_enabled {
                         if was_drawing {
-                            println!("\x1b[1;33m[visualizer]\x1b[0m Audio stopped/silenced. Restoring Ready Splash screen...");
-                            crate::display::SplashEngine::show_ready();
+                            if crate::flow::ARBITER.can_splash_render() {
+                                println!("\x1b[1;33m[visualizer]\x1b[0m Audio stopped/silenced. Restoring Ready Splash screen...");
+                                crate::display::SplashEngine::show_ready();
+                            }
                             was_drawing = false;
                         }
                         thread::sleep(Duration::from_millis(100));
@@ -826,7 +829,7 @@ mod tests {
     fn test_dial_youtube_google_home_descriptor() {
         let xml = get_dial_dd_xml("192.168.7.2", 8080);
         assert!(xml.contains("urn:dial-multiscreen-org:device:dial:1"));
-        assert!(xml.contains("Ext-Monitor (Raspberry Pi - 192.168.7.2)"));
+        assert!(xml.contains("RaspCast (192.168.7.2)"));
         assert!(xml.contains("urn:dial-multiscreen-org:service:dial:1"));
         assert!(xml.contains("<controlURL>/apps</controlURL>"));
         assert!(xml.contains("<SCPDURL>/dial/dial.xml</SCPDURL>"));
@@ -836,7 +839,7 @@ mod tests {
     fn test_upnp_media_renderer_descriptor() {
         let xml = get_upnp_desc_xml("192.168.7.2", 8080);
         assert!(xml.contains("urn:schemas-upnp-org:device:MediaRenderer:1"));
-        assert!(xml.contains("Ext-Monitor TV &amp; Sound (192.168.7.2)"));
+        assert!(xml.contains("RaspCast DLNA (192.168.7.2)"));
         assert!(xml.contains("urn:schemas-upnp-org:service:RenderingControl:1"));
         assert!(xml.contains("urn:schemas-upnp-org:service:AVTransport:1"));
         assert!(xml.contains("<modelName>Ext-Monitor IoT Appliance</modelName>"));
@@ -854,10 +857,10 @@ mod tests {
         let res = parse_ssdp_msearch(upnp_req);
         assert_eq!(res, Some(("/upnp/desc.xml", "urn:schemas-upnp-org:device:MediaRenderer:1")));
 
-        // Broad ssdp:all query
+        // Broad ssdp:all query routes to DIAL to avoid duplicate ghost MediaRenderer in Chrome
         let all_req = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: ssdp:all\r\n\r\n";
         let res = parse_ssdp_msearch(all_req);
-        assert_eq!(res, Some(("/upnp/desc.xml", "urn:schemas-upnp-org:device:MediaRenderer:1")));
+        assert_eq!(res, Some(("/dial/dd.xml", "urn:dial-multiscreen-org:device:dial:1")));
 
         // Non-SSDP or unrelated packet
         let invalid_req = "GET /index.html HTTP/1.1\r\n\r\n";

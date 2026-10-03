@@ -12,6 +12,7 @@ use std::net::UdpSocket;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ControlAction {
     StartStreaming,
+    ChromeCastLaunch,
     StopStreaming,
     LaunchMiracast,
     SetMode(String),
@@ -30,6 +31,7 @@ pub enum ControlAction {
     SetCas(bool),
     TriggerHud,
     HideHud,
+    SetAutoConnect(bool),
 }
 
 pub struct ControlListener {
@@ -81,6 +83,7 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
         if let Some(action) = v.get("action").and_then(|x| x.as_str()) {
             match action {
                 "start" | "start_streaming" => actions.push(ControlAction::StartStreaming),
+                "cast_launch" | "chrome_cast_launch" => actions.push(ControlAction::ChromeCastLaunch),
                 "stop" | "stop_streaming" | "standby" | "disable" => actions.push(ControlAction::StopStreaming),
                 "launch_miracast" | "miracast" => actions.push(ControlAction::LaunchMiracast),
                 "trigger_hud" => actions.push(ControlAction::TriggerHud),
@@ -215,6 +218,10 @@ pub fn parse_control_payload(buf: &[u8]) -> Vec<ControlAction> {
         if let Some(cas_val) = v.get("cas").and_then(|x| x.as_bool()) {
             actions.push(ControlAction::SetCas(cas_val));
         }
+
+        if let Some(ac) = v.get("auto_connect").and_then(|x| x.as_bool()) {
+            actions.push(ControlAction::SetAutoConnect(ac));
+        }
     } else {
         if std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false) {
             eprintln!("\x1b[1;31m[DEBUG] Malformed JSON payload received: {}\x1b[0m", String::from_utf8_lossy(buf));
@@ -318,5 +325,27 @@ mod tests {
         assert!(actions5.contains(&ControlAction::StartStreaming));
         assert!(actions5.contains(&ControlAction::LaunchMiracast));
         assert!(actions5.contains(&ControlAction::SetTransport(TransportKind::Miracast)));
+    }
+
+    #[test]
+    fn test_parse_control_auto_connect() {
+        let payload = br#"{"auto_connect":true}"#;
+        let actions = parse_control_payload(payload);
+        assert_eq!(actions, vec![ControlAction::SetAutoConnect(true)]);
+
+        let payload_off = br#"{"auto_connect":false}"#;
+        let actions_off = parse_control_payload(payload_off);
+        assert_eq!(actions_off, vec![ControlAction::SetAutoConnect(false)]);
+    }
+
+    #[test]
+    fn test_parse_control_chrome_cast_launch() {
+        let launch_payload = br#"{"action":"chrome_cast_launch"}"#;
+        let actions = parse_control_payload(launch_payload);
+        assert_eq!(actions, vec![ControlAction::ChromeCastLaunch]);
+
+        let cast_payload = br#"{"action":"cast_launch"}"#;
+        let actions2 = parse_control_payload(cast_payload);
+        assert_eq!(actions2, vec![ControlAction::ChromeCastLaunch]);
     }
 }

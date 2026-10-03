@@ -417,6 +417,7 @@ impl AudioReceiver {
                             }
 
                             active.store(true, Ordering::Relaxed);
+                            crate::flow::ARBITER.set_audio_active(true);
                             last_active = Instant::now();
 
                             let active_rate = pcm_device.as_ref().map(|d| d.rate).unwrap_or(current_rate);
@@ -495,6 +496,7 @@ impl AudioReceiver {
                         Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
                             if active.load(Ordering::Relaxed) && last_active.elapsed() > Duration::from_millis(1500) {
                                 active.store(false, Ordering::Relaxed);
+                                crate::flow::ARBITER.set_audio_active(false);
                                 // Note: We deliberately KEEP pcm_device open and warm!
                                 // Tearing down and reopening /dev/snd/pcmC0D0p takes ~300ms on the bcm2835
                                 // ALSA driver, which causes audio delay and clipped syllables when dialogue resumes.

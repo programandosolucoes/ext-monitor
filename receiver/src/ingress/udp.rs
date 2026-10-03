@@ -132,8 +132,8 @@ impl UdpRtpIngress {
                     display.render_frame(frame_rgb565);
                 });
 
-                if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_secs(15) {
-                    println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP stream disconnected (>15s) -> Exibindo Ready Splash...");
+                if !splash_active && total_packets > 0 && last_packet_time.elapsed() >= Duration::from_millis(1500) {
+                    println!("\x1b[1;33m[udp-ingress]\x1b[0m UDP stream idle (>1.5s) -> Exibindo Ready Splash...");
                     crate::display::SplashEngine::show_ready();
                     splash_active = true;
                 }

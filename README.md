@@ -262,8 +262,8 @@ The initial 20 engineering blueprints document the core silicon architecture and
 19. **[Blueprint 19: IoT Media Renderer, Chromecast/UPnP/DLNA & Web Visualizer](docs/blueprints/en/19-iot-media-renderer-chromecast-upnp-hdmi-visualizer.md):** Media streaming appliance mode, background player, and HDMI audio visualizer.
 20. **[Blueprint 20: Single-HDMI Scanout Multiplexer, Realtime Hardware FFT & Zero-Reboot](docs/blueprints/en/20-single-hdmi-scanout-multiplexer-realtime-fft-i18n-zero-reboot.md):** 512-point Cooley-Tukey FFT, single-HDMI mutual exclusion, 4-language i18n, and zero-reboot teardown.
 
-### The Expansion Suite: Miracast, Benchmarks, Hi-Res Audio & Resilience (Blueprints 21 to 32)
-To support native zero-driver wireless projection, studio-grade Hi-Res audio, modular video flow architecture, and formal state verification, the project expanded through continuous engineering blueprints:
+### The Expansion Suite: Miracast, Benchmarks, Hi-Res Audio & Resilience (Blueprints 21 to 33)
+To support native zero-driver wireless projection, studio-grade Hi-Res audio, modular video flow architecture, Google Cast V2 streaming, and formal state verification, the project expanded through continuous engineering blueprints:
 
 21. **[Blueprint 21: Miracast MS-MICE, Reverse RTSP WFD & Dynamic SPS Parsing](docs/blueprints/en/21-miracast-ms-mice-rtsp-wfd-dynamic-sps-and-gnome-network-displays.md):** MS-MICE binary signaling (TCP 7250), reverse RTSP WFD connection to Source (7236), UDP 5005 discovery migration, and GNOME 1080p bug resolution via pure-Rust dynamic SPS parser.
 22. **[Blueprint 22: NV12 Macroblock Stride Alignment & Realtime Miracast Optimizations](docs/blueprints/en/22-nv12-macroblock-stride-green-bar-fix-and-realtime-miracast-optimizations.md):** 16-line macroblock pitch math (1080->1088), 15,360-byte padding fix on KMS UV plane, PUSI zero-delay TS demuxing, 2ms polling, and AMD Radeon 610M VA-API hardware acceleration.
@@ -277,6 +277,7 @@ To support native zero-driver wireless projection, studio-grade Hi-Res audio, mo
 30. **[Blueprint 30: Direct ALSA IEC958 Hi-Res Audio, Sink Deduplication & IP Anti-Fragmentation](docs/blueprints/en/30-hi-res-iec958-audio-sink-deduplication-anti-fragmentation-and-web-profiles.md):** Native 96kHz/192kHz ALSA hardware operation with IEC958 subframe channel status, PulseAudio sink mutex deduplication, and zero-fragmentation 1024-byte UDP audio packets.
 31. **[Blueprint 31: Web UI Transport Mismatch Diagnosis & Telemetry Sync](docs/blueprints/en/31-ui-transport-mismatch-diagnosis-and-telemetry-sync-mode1-vs-mode3.md):** Resolving visual mismatch where Web UI buttons statically displayed "USB Bulk Direct" while streaming over Network UDP; updating HTML defaults and sub-100ms boot sync.
 32. **[Blueprint 32: Audio DAC Panel on Tab 1, Chromecast-Style Web Casting & Service Switching Unit Tests](docs/blueprints/en/blueprint-32-audio-dac-panel-and-chromecast-casting-with-unit-tests.md):** Consolidating Hi-Res Audio DAC controls and Chromecast-style web sharing (1-click Web Cast and Google Cast) directly onto Tab 1 Monitoring, with 7 formal Rust unit tests for deterministic service switching and standby behavior.
+33. **[Blueprint 33: Strict Chromium Cast TLS Certificate Validation, WebRTC Mirroring Handshake & SSDP Conflict Resolution](docs/blueprints/en/blueprint-33-google-cast-v2-tls-webrtc-handshake-and-ssdp-conflict-resolution.md):** Enforcing Chromium Cast strict certificate lifetimes (4-day max, critical X.509 extensions, RSA-SHA256 signature), complete WebRTC Mirroring OFFER/ANSWER negotiation, eliminating duplicate ghost devices via SSDP/DIAL routing, and fixing GNOME Mutter logical display detection (resolving gray screen).
 
 ---
 

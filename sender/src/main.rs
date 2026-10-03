@@ -15,6 +15,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 mod cast_cert;
+pub mod audio_native;
 mod cast_server;
 mod config;
 mod control;
@@ -22,6 +23,8 @@ pub mod damage_pacer;
 mod discovery;
 mod encoder;
 mod i18n;
+pub mod http_client;
+pub mod dialog;
 pub mod flow;
 pub mod kms;
 pub mod miracast;
@@ -124,6 +127,19 @@ fn close_usb_transport(
     }
 }
 
+/// Prompts the user interactively on their GUI desktop to choose between Extend, Clone, Window or Tab
+/// 100% Pure Rust via FreeDesktop D-Bus Notifications with Action buttons (Zero bash, zero zenity).
+pub fn prompt_user_mode_selection() -> Option<String> {
+    crate::dialog::prompt_user_mode_selection_native()
+}
+
+/// Signals the receiver to immediately return to Standby Splash screen upon stream stop
+/// 100% Pure Rust via native TCP HTTP client (Zero curl subprocess).
+pub fn notify_receiver_stop(target_ip: &str) {
+    let url = format!("http://{}:8080/api/stream/stop", target_ip);
+    let _ = crate::http_client::post_empty(&url);
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
@@ -185,17 +201,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start background time synchronization with Pi Zero appliance
     time_sync::start_time_sync_daemon(running.clone(), cfg.target_ip.clone(), 8080);
 
-    // Optimize USB interface txqueuelen for ultra-low jitter (<15ms)
-    if let Ok(output) = std::process::Command::new("ip").args(["-o", "link"]).output() {
-        let s = String::from_utf8_lossy(&output.stdout);
-        for line in s.lines() {
-            if let Some(iface) = line.split(": ").nth(1) {
-                let iface_name = iface.split('@').next().unwrap_or(iface);
-                if iface_name.starts_with("enx") || iface_name.starts_with("usb") {
-                    let _ = std::process::Command::new("sudo")
-                        .args(["ip", "link", "set", iface_name, "txqueuelen", "100"])
-                        .output();
-                }
+    // Optimize USB interface txqueuelen directly via sysfs in pure Rust (Zero subprocesses)
+    if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with("enx") || name.starts_with("usb") {
+                let tx_path = entry.path().join("tx_queue_len");
+                let _ = std::fs::write(&tx_path, b"100");
             }
         }
     }
@@ -245,25 +257,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.contrast,
         cfg.saturation
     );
-    let audio_running = Arc::new(AtomicBool::new(cfg.audio));
     let mut audio_tx_running = Arc::new(AtomicBool::new(cfg.audio));
     if cfg.audio {
-        println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Enabled (UDP Native PCM {}:{} @ {} Hz Hi-Res, Realtime Spectrum: 5006)", cfg.target_ip, cfg.audio_port, cfg.audio_rate);
-        let _ = pipeline::spawn_audio_spectrum_monitor(cfg.target_ip.clone(), audio_running.clone());
-        let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+        println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Enabled (100% In-Process Native PCM {}:{} @ {} Hz Hi-Res, Spectrum: 5006)", cfg.target_ip, cfg.audio_port, cfg.audio_rate);
+        let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
     } else {
         println!("\x1b[1;33m[*] Audio Subsystem:\x1b[0m Disabled (--no-audio)");
     }
 
+    let mut is_paused = !cfg.auto_connect || cfg.transport == TransportKind::Miracast;
+
     let mut monitor_to_record = if cfg.mode == "clone" {
         "eDP-1".to_string()
     } else {
-        pipewire::ensure_kernel_hdmi_connected();
-        pipewire::ensure_gnome_displays(cfg.scale);
         "HDMI-1".to_string()
     };
 
-    println!("\x1b[1;34m[*] Recording Monitor:\x1b[0m {}", monitor_to_record);
+    if !is_paused {
+        if cfg.mode == "ask" || cfg.mode == "interactive" {
+            if let Some(selected) = prompt_user_mode_selection() {
+                if selected == "clone" {
+                    monitor_to_record = "eDP-1".to_string();
+                    pipewire::collapse_gnome_displays();
+                } else {
+                    monitor_to_record = "HDMI-1".to_string();
+                    pipewire::ensure_kernel_hdmi_connected();
+                    pipewire::ensure_gnome_displays(cfg.scale);
+                }
+            } else {
+                is_paused = true;
+                pipewire::collapse_gnome_displays();
+            }
+        } else if monitor_to_record == "HDMI-1" {
+            pipewire::ensure_kernel_hdmi_connected();
+            pipewire::ensure_gnome_displays(cfg.scale);
+        } else {
+            pipewire::collapse_gnome_displays();
+        }
+        if !is_paused {
+            println!("\x1b[1;34m[*] Recording Monitor:\x1b[0m {}", monitor_to_record);
+        }
+    } else {
+        println!("\x1b[1;33m[i] Ext-Monitor iniciado em modo Standby (auto-connect: desativado).\x1b[0m");
+        println!("\x1b[1;36m    Aguardando ativação pelo Painel Web (http://192.168.7.2:8080) ou comando CLI.\x1b[0m");
+        pipewire::collapse_gnome_displays();
+    }
 
     let ctrl_listener = ControlListener::bind(5001);
     let mut hud_hide_at = if cfg.hud {
@@ -278,20 +316,101 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Transmissao ativa para o monitor secundario (Pi Zero)",
     );
 
-    // 4.1 Wayland Damage Pacer (100% Pure Rust - Blueprint 16 & 28): maintains continuous 60 FPS clock on HDMI-1,
-    // preventing GNOME Mutter quiescence freeze when mouse is stationary or outside the screen
-    let (pacer_x, pacer_y) = if monitor_to_record == "HDMI-1" {
-        (1920 + 1280 - 2, 720 - 2)
+    // 4.1 Wayland Damage Pacer (Optional - only if explicitly enabled via --enable-damage-pacer and capture is Mutter):
+    // By default KMS direct capture does not require X11 damage events and avoids dock window tracking glitches.
+    let _pacer_handle = if cfg.enable_damage_pacer && cfg.capture == CaptureEngine::Mutter {
+        let (pacer_x, pacer_y) = if monitor_to_record == "HDMI-1" {
+            (1920 + 1280 - 2, 720 - 2)
+        } else {
+            (1280 - 2, 720 - 2)
+        };
+        damage_pacer::spawn_damage_pacer(running.clone(), pacer_x, pacer_y)
     } else {
-        (1280 - 2, 720 - 2)
+        None
     };
 
-    let _pacer_handle = damage_pacer::spawn_damage_pacer(running.clone(), pacer_x, pacer_y);
-
     // 5. Main Supervisor Loop (Reconnects on Suspend/Resume or System Event)
-    let mut is_paused = cfg.transport == TransportKind::Miracast;
-
     while running.load(Ordering::SeqCst) {
+        if is_paused {
+            // Idle Standby Loop: poll UDP control listener without starting screencast session or pipelines
+            while running.load(Ordering::SeqCst) && is_paused {
+                for action in ctrl_listener.poll_actions() {
+                    match action {
+                        ControlAction::StartStreaming => {
+                            println!("\x1b[1;32m[+] Comando recebido: Iniciar Transmissão!\x1b[0m");
+                            if monitor_to_record == "HDMI-1" {
+                                pipewire::ensure_kernel_hdmi_connected();
+                                pipewire::ensure_gnome_displays(cfg.scale);
+                            } else {
+                                pipewire::collapse_gnome_displays();
+                            }
+                            is_paused = false;
+                            break;
+                        }
+                        ControlAction::ChromeCastLaunch => {
+                            println!("\x1b[1;32m[+] Chrome Cast LAUNCH recebido: Seleção interativa de tela...\x1b[0m");
+                            if let Some(selected) = prompt_user_mode_selection() {
+                                if selected == "window" || selected == "tab" {
+                                    println!("\x1b[1;36m[*] Abrindo Web Caster no navegador para transmissão de {}...\x1b[0m", selected);
+                                    let _ = std::process::Command::new("xdg-open")
+                                        .arg("http://192.168.7.2:8080/cast")
+                                        .env("WAYLAND_DISPLAY", std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".to_string()))
+                                        .env("DISPLAY", std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string()))
+                                        .spawn();
+                                    pipewire::collapse_gnome_displays();
+                                    continue;
+                                } else if selected == "clone" {
+                                    monitor_to_record = "eDP-1".to_string();
+                                    pipewire::collapse_gnome_displays();
+                                } else {
+                                    monitor_to_record = "HDMI-1".to_string();
+                                    pipewire::ensure_kernel_hdmi_connected();
+                                    pipewire::ensure_gnome_displays(cfg.scale);
+                                }
+                                is_paused = false;
+                                break;
+                            } else {
+                                println!("\x1b[1;33m[!] Chrome Cast cancelado pelo usuário no diálogo.\x1b[0m");
+                                continue;
+                            }
+                        }
+                        ControlAction::StopStreaming => {
+                            pipewire::collapse_gnome_displays();
+                            notify_receiver_stop(&cfg.target_ip);
+                        }
+                        ControlAction::SetMode(ref m) => {
+                            cfg.mode = m.clone();
+                            if m == "clone" {
+                                monitor_to_record = "eDP-1".to_string();
+                                pipewire::collapse_gnome_displays();
+                                is_paused = false;
+                                break;
+                            } else if m == "extend" {
+                                monitor_to_record = "HDMI-1".to_string();
+                                pipewire::ensure_kernel_hdmi_connected();
+                                pipewire::ensure_gnome_displays(cfg.scale);
+                                is_paused = false;
+                                break;
+                            } else if m == "ask" || m == "interactive" {
+                                println!("\x1b[1;32m[+] Modo configurado para Perguntar ao Iniciar (Interativo).\x1b[0m");
+                            }
+                        }
+                        ControlAction::SetTransport(new_trans) => {
+                            println!("\x1b[1;35m[*] Standby: Transporte atualizado para {:?}\x1b[0m", new_trans);
+                            cfg.transport = new_trans;
+                        }
+                        _ => {}
+                    }
+                }
+                if is_paused {
+                    thread::sleep(Duration::from_millis(150));
+                }
+            }
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
+        }
+
         let (_screencast_session, node_id, kms_info) = match cfg.capture {
             CaptureEngine::Kms => {
                 println!("\x1b[1;34m[*] Motor KMS Direct: Descobrindo conector DRM/KMS para '{}'...\x1b[0m", monitor_to_record);
@@ -414,6 +533,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match action {
                     ControlAction::StartStreaming => {
                         println!("\x1b[1;32m[+] Web Command: Iniciar / Retomar Transmissão recebido!\x1b[0m");
+                        if monitor_to_record == "HDMI-1" {
+                            pipewire::ensure_kernel_hdmi_connected();
+                            pipewire::ensure_gnome_displays(cfg.scale);
+                        } else {
+                            pipewire::collapse_gnome_displays();
+                        }
                         if cfg.transport == TransportKind::Miracast {
                             println!("\x1b[1;35m[*] Mode 2 Miracast ativo: Disparando cliente Miracast nativo pure-Rust...\x1b[0m");
                             is_paused = true;
@@ -427,8 +552,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             restart_pipeline = true;
                         }
                     }
+                    ControlAction::ChromeCastLaunch => {
+                        println!("\x1b[1;32m[+] Chrome Cast LAUNCH recebido durante execução: Seleção de tela...\x1b[0m");
+                        if let Some(selected) = prompt_user_mode_selection() {
+                            if selected == "window" || selected == "tab" {
+                                println!("\x1b[1;36m[*] Abrindo Web Caster no navegador para transmissão de {}...\x1b[0m", selected);
+                                let _ = std::process::Command::new("xdg-open")
+                                    .arg("http://192.168.7.2:8080/cast")
+                                    .env("WAYLAND_DISPLAY", std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".to_string()))
+                                    .env("DISPLAY", std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string()))
+                                    .spawn();
+                                pipewire::collapse_gnome_displays();
+                                is_paused = true;
+                                break;
+                            }
+                            let target_mon = if selected == "clone" { "eDP-1".to_string() } else { "HDMI-1".to_string() };
+                            if target_mon == "HDMI-1" {
+                                pipewire::ensure_kernel_hdmi_connected();
+                                pipewire::ensure_gnome_displays(cfg.scale);
+                            } else {
+                                pipewire::collapse_gnome_displays();
+                            }
+                            if target_mon != monitor_to_record {
+                                monitor_to_record = target_mon;
+                                switch_engine_or_monitor = true;
+                            }
+                            is_paused = false;
+                            restart_pipeline = true;
+                        } else {
+                            println!("\x1b[1;33m[!] Chrome Cast cancelado pelo usuário no diálogo.\x1b[0m");
+                        }
+                    }
                     ControlAction::StopStreaming => {
-                        println!("\x1b[1;33m[*] Web Command: Parar Transmissão / Standby recebido! Encerrando todos os transmissores...\x1b[0m");
+                        println!("\x1b[1;33m[*] Web Command: Parar Transmissão / Standby recebido! Encerrando transmissores e recolhendo display...\x1b[0m");
                         crate::miracast_launcher::stop_miracast_client();
                         if let Some(mut c) = child.take() {
                             let _ = c.kill();
@@ -441,7 +597,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                         pipeline_builder.usb_pipe_fd = None;
                         is_paused = true;
-                        println!("\x1b[1;32m[*] Todos os transmissores de vídeo do Host foram finalizados. Modo Standby ativo.\x1b[0m");
+                        pipewire::collapse_gnome_displays();
+                        notify_receiver_stop(&cfg.target_ip);
+                        println!("\x1b[1;32m[*] Todos os transmissores de vídeo do Host foram finalizados e tela estendida recolhida do GNOME Mutter. Modo Standby ativo.\x1b[0m");
+                        break;
                     }
                     ControlAction::SetMode(m) => {
                         if m == "miracast" || m == "wfd" || m == "mode2" || m == "2" {
@@ -454,8 +613,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             std::thread::spawn(|| {
                                 crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
                             });
+                        } else if m == "ask" || m == "interactive" {
+                            cfg.mode = "ask".to_string();
+                            println!("\x1b[1;32m[+] Modo configurado: Perguntar ao Iniciar (Interativo)\x1b[0m");
                         } else {
                             let target_mon = if m == "clone" { "eDP-1".to_string() } else { "HDMI-1".to_string() };
+                            if target_mon == "eDP-1" {
+                                pipewire::collapse_gnome_displays();
+                            } else {
+                                pipewire::ensure_kernel_hdmi_connected();
+                                pipewire::ensure_gnome_displays(cfg.scale);
+                            }
                             if target_mon != monitor_to_record || m != cfg.mode {
                                 println!("\x1b[1;35m[*] Web Command: Troca de Modo '{}' -> '{}' (Monitor: {})\x1b[0m", cfg.mode, m, target_mon);
                                 cfg.mode = m;
@@ -473,12 +641,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("\x1b[1;35m[*] Web Command: Áudio {} -> {}\x1b[0m", cfg.audio, a);
                             cfg.audio = a;
                             pipeline_builder.audio = a;
-                            audio_running.store(a, Ordering::SeqCst);
                             audio_tx_running.store(false, Ordering::SeqCst);
                             if a {
                                 audio_tx_running = Arc::new(AtomicBool::new(true));
-                                let _ = pipeline::spawn_audio_spectrum_monitor(cfg.target_ip.clone(), audio_running.clone());
-                                let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+                                let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
                             }
                         }
                     }
@@ -490,7 +656,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 audio_tx_running.store(false, Ordering::SeqCst);
                                 thread::sleep(Duration::from_millis(80));
                                 audio_tx_running = Arc::new(AtomicBool::new(true));
-                                let _ = pipeline::spawn_opus_audio_streamer(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+                                let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
                             }
                         }
                     }
@@ -636,6 +802,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             pipeline_builder.saturation = cfg.saturation;
                             restart_pipeline = true;
                         }
+                    }
+                    ControlAction::SetAutoConnect(ac) => {
+                        println!("\x1b[1;35m[*] Web Command: Configuração Auto-Connect {} -> {}\x1b[0m", cfg.auto_connect, ac);
+                        cfg.auto_connect = ac;
                     }
                 }
             }
@@ -790,6 +960,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         thread::sleep(Duration::from_secs(1));
     }
 
+    pipewire::collapse_gnome_displays();
     crate::miracast_launcher::stop_miracast_client();
     close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
     println!("\x1b[1;32m[*] ext-sender terminated cleanly.\x1b[0m");

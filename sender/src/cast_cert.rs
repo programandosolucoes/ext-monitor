@@ -12,6 +12,9 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
+
+static CERT_MUTEX: Mutex<()> = Mutex::new(());
 
 #[allow(dead_code)]
 pub struct CastCertPaths {
@@ -29,6 +32,7 @@ pub fn get_cast_cert_dir() -> PathBuf {
 
 /// Ensures valid Cast V2 CA and Device certificates exist on disk
 pub fn ensure_cast_certificates() -> Result<CastCertPaths, Box<dyn std::error::Error>> {
+    let _lock = CERT_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let dir = get_cast_cert_dir();
     fs::create_dir_all(&dir)?;
 
@@ -36,44 +40,123 @@ pub fn ensure_cast_certificates() -> Result<CastCertPaths, Box<dyn std::error::E
     let ca_key = dir.join("cast-ca.key");
     let dev_cert = dir.join("cast-dev.pem");
     let dev_key = dir.join("cast-dev.key");
-    let dev_csr = dir.join("cast-dev.csr");
 
-    if !ca_cert.exists() || !ca_key.exists() || !dev_cert.exists() || !dev_key.exists() {
-        println!("\x1b[1;34m[cast-cert]\x1b[0m Generating high-grade 2048-bit RSA Cast Root CA & Device Certificates...");
+    // 1. Generate Root CA if missing
+    if !ca_cert.exists() || !ca_key.exists() {
+        println!("\x1b[1;34m[cast-cert]\x1b[0m Generating high-grade 2048-bit RSA Cast Root CA Certificate...");
+        let ca_cnf = dir.join("ca.cnf");
+        let ca_cnf_content = "[req]\n\
+            distinguished_name = req_distinguished_name\n\
+            x509_extensions = v3_ca\n\
+            prompt = no\n\n\
+            [req_distinguished_name]\n\
+            CN = Ext-Monitor Cast Root CA\n\
+            O = Ext-Monitor\n\
+            C = BR\n\n\
+            [v3_ca]\n\
+            basicConstraints = critical, CA:TRUE\n\
+            keyUsage = critical, keyCertSign, cRLSign\n\
+            subjectKeyIdentifier = hash\n\
+            authorityKeyIdentifier = keyid:always,issuer\n";
+        fs::write(&ca_cnf, ca_cnf_content)?;
 
-        // 1. Generate Root CA
         let status = Command::new("openssl")
             .args([
                 "req", "-x509", "-newkey", "rsa:2048", "-days", "3650", "-nodes",
                 "-keyout", ca_key.to_str().unwrap(),
                 "-out", ca_cert.to_str().unwrap(),
-                "-subj", "/CN=Ext-Monitor Cast Root CA/O=Ext-Monitor/C=BR",
+                "-config", ca_cnf.to_str().unwrap(),
             ])
             .status()?;
+        let _ = fs::remove_file(ca_cnf);
 
         if !status.success() {
             return Err("Falha ao gerar Root CA com openssl".into());
         }
+    }
 
-        // 2. Generate Device Key & CSR
+    // 2. Check if Device Certificate needs generation / rotation
+    // Chromium enforces:
+    // - kMaxSelfSignedCertLifetimeInDays = 4 (cast_auth_util.cc)
+    // - Key Usage MUST include digitalSignature (cast_cert_validator.cc)
+    // - Extended Key Usage MUST support clientAuth (cast_cert_validator.cc)
+    let mut dev_needs_regeneration = !dev_cert.exists() || !dev_key.exists();
+    if !dev_needs_regeneration {
+        if let (Ok(cert_pem), Ok(key_pem)) = (fs::read(&dev_cert), fs::read(&dev_key)) {
+            if let (Ok(x509), Ok(rsa)) = (openssl::x509::X509::from_pem(&cert_pem), openssl::rsa::Rsa::private_key_from_pem(&key_pem)) {
+                if let (Ok(cert_pkey), Ok(rsa_pkey)) = (x509.public_key(), openssl::pkey::PKey::from_rsa(rsa)) {
+                    if cert_pkey.public_eq(&rsa_pkey) {
+                        let not_after = x509.not_after();
+                        let now = openssl::asn1::Asn1Time::days_from_now(0).unwrap();
+                        let four_days = openssl::asn1::Asn1Time::days_from_now(4).unwrap();
+                        let too_long = not_after.compare(&four_days).unwrap_or(std::cmp::Ordering::Less) == std::cmp::Ordering::Greater;
+                        let expired = not_after.compare(&now).unwrap_or(std::cmp::Ordering::Greater) != std::cmp::Ordering::Greater;
+                        if too_long || expired {
+                            println!("\x1b[1;33m[cast-cert]\x1b[0m Device cert expired or lifetime too long for Chromium (limit 4 days). Regenerating...");
+                            dev_needs_regeneration = true;
+                        }
+                    } else {
+                        println!("\x1b[1;33m[cast-cert]\x1b[0m Device cert and private key mismatch. Regenerating...");
+                        dev_needs_regeneration = true;
+                    }
+                } else {
+                    dev_needs_regeneration = true;
+                }
+            } else {
+                dev_needs_regeneration = true;
+            }
+        } else {
+            dev_needs_regeneration = true;
+        }
+    }
+
+    if dev_needs_regeneration {
+        println!("\x1b[1;34m[cast-cert]\x1b[0m Generating 3-day device certificate for RaspCast / Chromium compliance...");
+        let _ = fs::remove_file(&dev_key);
+        let _ = fs::remove_file(&dev_cert);
+        let dev_cnf = dir.join("dev.cnf");
+        let dev_csr = dir.join("cast-dev.csr");
+
+        let dev_cnf_content = "[req]\n\
+            distinguished_name = req_distinguished_name\n\
+            prompt = no\n\n\
+            [req_distinguished_name]\n\
+            CN = RaspCast\n\
+            O = Ext-Monitor\n\
+            C = BR\n\n\
+            [v3_dev]\n\
+            basicConstraints = critical, CA:FALSE\n\
+            keyUsage = critical, digitalSignature, keyEncipherment\n\
+            extendedKeyUsage = clientAuth, serverAuth\n\
+            subjectKeyIdentifier = hash\n\
+            authorityKeyIdentifier = keyid,issuer\n\
+            subjectAltName = @alt_names\n\n\
+            [alt_names]\n\
+            IP.1 = 192.168.7.2\n\
+            IP.2 = 192.168.7.1\n\
+            IP.3 = 127.0.0.1\n\
+            DNS.1 = pi-zero.local\n\
+            DNS.2 = localhost\n\
+            DNS.3 = RaspCast\n";
+        fs::write(&dev_cnf, dev_cnf_content)?;
+
+        // Generate Device Key & CSR
         let status = Command::new("openssl")
             .args([
                 "req", "-newkey", "rsa:2048", "-nodes",
                 "-keyout", dev_key.to_str().unwrap(),
                 "-out", dev_csr.to_str().unwrap(),
-                "-subj", "/CN=Ext-Monitor/O=Ext-Monitor/C=BR",
+                "-config", dev_cnf.to_str().unwrap(),
             ])
             .status()?;
 
         if !status.success() {
+            let _ = fs::remove_file(&dev_cnf);
+            let _ = fs::remove_file(&dev_csr);
             return Err("Falha ao gerar Device CSR com openssl".into());
         }
 
-        // 3. Sign Device Certificate with CA (Subject Alternative Names for local IP & MDNS)
-        let ext_content = "subjectAltName=IP:192.168.7.2,IP:192.168.7.1,IP:127.0.0.1,DNS:pi-zero.local,DNS:localhost\n";
-        let ext_file = dir.join("extfile.cnf");
-        fs::write(&ext_file, ext_content)?;
-
+        // Sign Device Certificate with Root CA (-days 3 for Chromium kMaxSelfSignedCertLifetimeInDays=4 limit)
         let status = Command::new("openssl")
             .args([
                 "x509", "-req",
@@ -82,12 +165,13 @@ pub fn ensure_cast_certificates() -> Result<CastCertPaths, Box<dyn std::error::E
                 "-CAkey", ca_key.to_str().unwrap(),
                 "-CAcreateserial",
                 "-out", dev_cert.to_str().unwrap(),
-                "-days", "3650",
-                "-extfile", ext_file.to_str().unwrap(),
+                "-days", "3",
+                "-extfile", dev_cnf.to_str().unwrap(),
+                "-extensions", "v3_dev",
             ])
             .status()?;
 
-        let _ = fs::remove_file(ext_file);
+        let _ = fs::remove_file(dev_cnf);
         let _ = fs::remove_file(dev_csr);
 
         if !status.success() {

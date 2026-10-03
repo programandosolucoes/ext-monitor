@@ -607,7 +607,7 @@ Qualquer computador antigo rodando Linux pode se transformar em um receptor de u
 
 ---
 
-## Apêndice D: Evolução Contínua de Engenharia (Blueprints 29 a 32)
+## Apêndice D: Evolução Contínua de Engenharia (Blueprints 29 a 33)
 
 ### D.1 Pacer 100% Rust e Eliminação do Eco Multicast mDNS (Blueprint 29)
 * **Pacer in-process:** Eliminação da dependência de interpretadores Python externos; o laço de batimento cardíaco opera nativamente dentro do binário `ext-sender` em Rust puro.
@@ -625,7 +625,28 @@ Qualquer computador antigo rodando Linux pode se transformar em um receptor de u
 * **Experiência Chromecast Nativa:** Descoberta mDNS Google Cast V2 (portas 8008 e 8009), espelhamento WebCodecs via navegador (`/cast`) com 1 clique e reprodutor direto de URLs de vídeo na TV.
 * **Máquina de Estados com Testes Formais:** 7 testes unitários em Rust validando que desligar todos os modos entra rigorosamente em Standby e que selecionar qualquer modo transfere a transmissão de forma atômica e resiliente.
 
+### D.5 Certificação TLS Estrita Chromium Cast, WebRTC Handshake e Resolução SSDP (Blueprint 33)
+* **Validação Criptográfica Estrita do Chromium:** Adequação aos limites do Chromium (`kMaxSelfSignedCertLifetimeInDays = 4`) com emissão de certificados efêmeros de 3 dias, extensões X.509 críticas (`basicConstraints = critical, CA:FALSE`, `keyUsage = critical`, `extendedKeyUsage`), casamento de chave pública RSA sob mutex e algoritmo de assinatura `RSASSA_PKCS1v15` com SHA-256.
+* **Resolução de Conflitos SSDP e Fim do Dispositivo Fantasma:** Eliminação de anúncios periódicos de `MediaRenderer` e roteamento de buscas genéricas `ssdp:all` para o descritor DIAL do `RaspCast`, erradicando a duplicidade confusa no Chrome ("Disponível em sites específicos").
+* **Handshake WebRTC Mirroring (`urn:x-cast:com.google.cast.webrtc`):** Implementação síncrona do par `OFFER` / `ANSWER`, extração dinâmica de SSRCs/índices Opus/VP8/VP9 e sinalização de portas UDP de transporte.
+* **Fim da Tela Cinza no Mutter:** Correção da detecção lógica de displays no GNOME Wayland (`[('HDMI-1'`), garantindo que o `ApplyMonitorsConfig` ative a tela estendida real antes de disparar o `RecordMonitor`, eliminando buffers virtuais vazios.
+* **Decisão Interativa do Usuário em 4 Modos:** Modo padrão interativo (`mode: "ask"`). Ao receber comando de transmissão ou Google Cast LAUNCH, exibe diálogo gráfico Wayland nativo para escolher entre: Estender Área de Trabalho (HDMI-1), Espelhar Tela Inteira (eDP-1), Transmitir Janela de Aplicativo ou Transmitir Aba do Navegador. O Painel Web (Aba 1) conta com o seletor triplo (*Perguntar Sempre*, *Estender Automático*, *Espelhar Automático*).
+* **Eliminação do Pacer X11 em Standby / KMS:** Erradicação de janela X11 fantasma que causava anomalias no rastreador de janelas e dock do GNOME (ao clicar em aplicativos abertos como o Antigravity). Pacer tornado estritamente opcional (`--enable-damage-pacer`), pois a engine DRM/KMS padrão dispensa eventos X11.
+* **Fim da Imagem Congelada na TV (Zero Frozen Frame):** Notificação HTTP atômica instantânea (`/api/stream/stop`) ao interromper a transmissão e redução do watchdog de inatividade UDP no receptor de 15s para 1,5s, restaurando a tela de espera (*Ready Splash*) imediatamente.
+
+### D.6 Arquitetura 100% Rust Pura e Ritmo de Quadros em Memória (Blueprint 34)
+* **Arquitetura 100% Rust Pura (Zero Subprocessos):** Erradicação completa de chamadas externas a interpretadores shell (`bash -c`), utilitários gráficos legados (`zenity`), clientes de rede externos (`curl`) e ferramentas de rede (`ip link`).
+  * **Cliente HTTP em Sockets Nativos:** Implementação de `crate::http_client` utilizando unicamente `std::net::TcpStream` com timeouts estritos para requisições GET, POST JSON e POST vazio.
+  * **Diálogo D-Bus Nativo via `zbus 5`:** Implementação de `crate::dialog` utilizando o protocolo FreeDesktop Notifications (`org.freedesktop.Notifications`) com pares de ações interativas (`extend`, `clone`, `window`, `tab`), escutando sinais de barramento `ActionInvoked` e `NotificationClosed` via `MessageIterator` em Rust puro.
+  * **Ajuste de Fila de Rede Direto no Sysfs:** Configuração de `tx_queue_len` do adaptador USB (`enx*`) diretamente via `std::fs::write("/sys/class/net/.../tx_queue_len")`.
+  * **Subsistema de Áudio e Espectro 100% In-Process (`audio_native.rs`):** Erradicação completa dos subprocessos auxiliares `parec` e `gst-launch-1.0 pulsesrc`. Implementação de captura de áudio direto na memória via `libpulse-simple` com streaming UDP de baixa latência (5,3ms) e cálculo matemático de FFT puro (`compute_spectrum_packet`), reduzindo os processos no CGroup para exatamente 1 binário único (`ext-sender`) e o uso de memória de 22,3MB para 12,5MB.
+* **Desmistificação do Pacer 1x1 e Ritmo de Quadros em Memória:**
+  * **Causa Raiz da Anomalia na Dock do GNOME:** A criação de uma janela X11 virtual de 1x1 pixel (`0x1000001`) via Xwayland com pulsos periódicos de `clear_area` a cada 16ms interferia no `ShellWindowTracker` do Mutter. O GNOME Shell perdia a sincronia do rastreador de janelas em foco, fazendo com que cliques em ícones da dock (como o Antigravity) abrissem novas instâncias duplicadas em vez de restaurar a janela existente.
+  * **Garantia de Não-Congelamento Sem Janela Dummy (In-Memory Buffer Resend):** Em Wayland/PipeWire, telas estáticas interrompem a emissão de eventos de dano (*damage*). A solução definitiva foi implementada diretamente no fluxo de memória do pipeline: o elemento `pipewiresrc` com `keepalive-time=16` combinado com `videorate drop-only=false` atua como um repetidor de quadros em RAM. Quando a área de trabalho fica ociosa, o buffer existente em memória é duplicado e despachado a 60 FPS contínuos para o encoder de hardware (VA-API / NVENC), prevenindo qualquer engasgo ou timeout no receptor.
+  * **Captura KMS Direct Hardware Scanout:** Quando no modo padrão KMS Direct, o buffer de exibição é lido diretamente do plano CRTC do DRM (`/dev/dri/card*`) no ciclo de clock do VSync de hardware da GPU, sendo 100% independente do compositor Wayland e dispensando qualquer mecanismo de pacer artificial.
+
 ---
 
-*Fim do Livro do Ext-Monitor — Versão 2.4.0.*  
+*Fim do Livro do Ext-Monitor — Versão 2.5.0.*  
 *Projeto de Engenharia de Sistemas Embarcados por Carlos Alberto <carlosalberto4ti@gmail.com>.*
+

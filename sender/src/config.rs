@@ -153,6 +153,8 @@ pub struct SenderConfig {
     pub contrast: f32,
     pub saturation: f32,
     pub debug: bool,
+    pub auto_connect: bool,
+    pub enable_damage_pacer: bool,
 }
 
 impl SenderConfig {
@@ -186,15 +188,72 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
     }
     if let Some((path, body)) = pi_api_path {
         let url = format!("http://192.168.7.2:8080{}", path);
-        let _ = std::process::Command::new("curl")
-            .args(["-s", "-m", "2", "-X", "POST", "-H", "Content-Type: application/json", "-d", body, &url])
-            .output();
+        let _ = crate::http_client::post_json(&url, body);
     }
 }
 
         // Subcomandos de controle de serviço e processo
         if let Some(cmd) = args.get(1) {
+            let extract_mode = |slice: &[String]| -> Option<String> {
+                for a in slice {
+                    let l = a.to_lowercase();
+                    if l == "extend" || l == "clone" || l == "ask" {
+                        return Some(l);
+                    } else if let Some(m) = l.strip_prefix("--mode=") {
+                        return Some(m.to_string());
+                    }
+                }
+                None
+            };
+
             match cmd.as_str() {
+                "switch" => {
+                    let target = args.get(2).map(|s| s.as_str()).unwrap_or("status");
+                    let mode_opt = extract_mode(&args[2..]);
+                    let mode_str = mode_opt.as_deref().unwrap_or("extend");
+
+                    match target {
+                        "usb-bulk" | "bulk" | "3" | "usb" => {
+                            let payload = format!(r#"{{"action":"start","transport":"usb_bulk","mode":"{}"}}"#, mode_str);
+                            let pi_body = format!(r#"{{"active_transport":"mode3_usb_bulk","transport":"usb_bulk","action":"start","mode1":false,"mode2":false,"mode3":true,"mode":"{}"}}"#, mode_str);
+                            notify_daemon_and_receiver(&payload, Some(("/api/transport/active", &pi_body)));
+                            println!("\x1b[1;32m[+] Modo 3 (USB Bulk Direto) ativado com sucesso! [modo: {}]\x1b[0m", mode_str);
+                            println!("    - Protocolo: USB FunctionFS Bulk 480 Mbps (< 1ms)");
+                            println!("    - Painel Web: http://192.168.7.2:8080");
+                            return Ok(None);
+                        }
+                        "network" | "udp" | "1" | "net" => {
+                            let payload = format!(r#"{{"action":"start","transport":"network","mode":"{}"}}"#, mode_str);
+                            let pi_body = format!(r#"{{"active_transport":"mode1_udp","transport":"network","action":"start","mode1":true,"mode2":false,"mode3":false,"mode":"{}"}}"#, mode_str);
+                            notify_daemon_and_receiver(&payload, Some(("/api/transport/active", &pi_body)));
+                            println!("\x1b[1;32m[+] Modo 1 (Rede UDP) ativado com sucesso! [modo: {}]\x1b[0m", mode_str);
+                            println!("    - Protocolo: UDP H.264 / RFC 4571 (< 15ms)");
+                            println!("    - Painel Web: http://192.168.7.2:8080");
+                            return Ok(None);
+                        }
+                        "miracast" | "wfd" | "2" => {
+                            let payload = r#"{"action":"stop"}"#;
+                            let pi_body = r#"{"active_transport":"mode2_miracast","transport":"miracast","action":"stop","mode1":false,"mode2":true,"mode3":false}"#;
+                            notify_daemon_and_receiver(payload, Some(("/api/transport/active", pi_body)));
+                            println!("\x1b[1;32m[+] Modo 2 (Windows Miracast) ativado com sucesso!\x1b[0m");
+                            println!("    - Windows Miracast: Porta RTSP 7236 (Win + K)");
+                            println!("    - Painel Web: http://192.168.7.2:8080");
+                            return Ok(None);
+                        }
+                        "standby" | "stop" | "pause" | "off" => {
+                            notify_daemon_and_receiver(
+                                r#"{"action":"stop"}"#,
+                                Some(("/api/host/control", r#"{"action":"stop"}"#)),
+                            );
+                            println!("\x1b[1;33m[+] Modo Standby ativado: Transmissão pausada. TV exibindo Splash Screen.\x1b[0m");
+                            return Ok(None);
+                        }
+                        _ => {
+                            crate::service::show_status();
+                            return Ok(None);
+                        }
+                    }
+                }
                 "standby" | "pause" => {
                     notify_daemon_and_receiver(
                         r#"{"action":"stop"}"#,
@@ -204,21 +263,27 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
                     return Ok(None);
                 }
                 "usb-bulk" | "bulk" => {
+                    let mode_str = extract_mode(&args[2..]).unwrap_or_else(|| "extend".to_string());
+                    let payload = format!(r#"{{"action":"start","transport":"usb_bulk","mode":"{}"}}"#, mode_str);
+                    let pi_body = format!(r#"{{"active_transport":"mode3_usb_bulk","transport":"usb_bulk","action":"start","mode1":false,"mode2":false,"mode3":true,"mode":"{}"}}"#, mode_str);
                     notify_daemon_and_receiver(
-                        r#"{"action":"start","transport":"usb_bulk"}"#,
-                        Some(("/api/transport/active", r#"{"active_transport":"mode3_usb_bulk","transport":"usb_bulk","action":"start","mode1":false,"mode2":false,"mode3":true}"#)),
+                        &payload,
+                        Some(("/api/transport/active", &pi_body)),
                     );
-                    println!("\x1b[1;32m[+] Modo 3 (USB Bulk Direto) ativado com sucesso!\x1b[0m");
+                    println!("\x1b[1;32m[+] Modo 3 (USB Bulk Direto) ativado com sucesso! [modo: {}]\x1b[0m", mode_str);
                     println!("    - Protocolo: USB FunctionFS Bulk 480 Mbps (< 1ms)");
                     println!("    - Painel Web: http://192.168.7.2:8080");
                     return Ok(None);
                 }
                 "network" | "udp" => {
+                    let mode_str = extract_mode(&args[2..]).unwrap_or_else(|| "extend".to_string());
+                    let payload = format!(r#"{{"action":"start","transport":"network","mode":"{}"}}"#, mode_str);
+                    let pi_body = format!(r#"{{"active_transport":"mode1_udp","transport":"network","action":"start","mode1":true,"mode2":false,"mode3":false,"mode":"{}"}}"#, mode_str);
                     notify_daemon_and_receiver(
-                        r#"{"action":"start","transport":"network"}"#,
-                        Some(("/api/transport/active", r#"{"active_transport":"mode1_udp","transport":"network","action":"start","mode1":true,"mode2":false,"mode3":false}"#)),
+                        &payload,
+                        Some(("/api/transport/active", &pi_body)),
                     );
-                    println!("\x1b[1;32m[+] Modo 1 (Rede UDP) ativado com sucesso!\x1b[0m");
+                    println!("\x1b[1;32m[+] Modo 1 (Rede UDP) ativado com sucesso! [modo: {}]\x1b[0m", mode_str);
                     println!("    - Protocolo: UDP H.264 / RFC 4571 (< 15ms)");
                     println!("    - Painel Web: http://192.168.7.2:8080");
                     return Ok(None);
@@ -236,19 +301,37 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
                 "mode" => {
                     let sub = args.get(2).map(|s| s.as_str()).unwrap_or("status");
                     match sub {
+                        "extend" | "ext" => {
+                            let payload = r#"{"action":"start","mode":"extend"}"#;
+                            notify_daemon_and_receiver(payload, Some(("/api/host/control", payload)));
+                            println!("\x1b[1;32m[+] Topologia alterada para Estender Tela (HDMI-1 TV)\x1b[0m");
+                            return Ok(None);
+                        }
+                        "clone" | "cln" | "mirror" => {
+                            let payload = r#"{"action":"start","mode":"clone"}"#;
+                            notify_daemon_and_receiver(payload, Some(("/api/host/control", payload)));
+                            println!("\x1b[1;32m[+] Topologia alterada para Clonar Tela (eDP-1 Notebook)\x1b[0m");
+                            return Ok(None);
+                        }
+                        "ask" => {
+                            let payload = r#"{"mode":"ask"}"#;
+                            notify_daemon_and_receiver(payload, Some(("/api/host/control", payload)));
+                            println!("\x1b[1;36m[+] Modo interativo configurado para Google Cast (Perguntar na Transmissão)\x1b[0m");
+                            return Ok(None);
+                        }
                         "usb-bulk" | "bulk" | "3" => {
-                            notify_daemon_and_receiver(
-                                r#"{"action":"start","transport":"usb_bulk"}"#,
-                                Some(("/api/transport/active", r#"{"active_transport":"mode3_usb_bulk","transport":"usb_bulk","action":"start","mode1":false,"mode2":false,"mode3":true}"#)),
-                            );
-                            println!("\x1b[1;32m[+] Modo 3 (USB Bulk Direto) ativado com sucesso!\x1b[0m");
+                            let mode_str = extract_mode(&args[3..]).unwrap_or_else(|| "extend".to_string());
+                            let payload = format!(r#"{{"action":"start","transport":"usb_bulk","mode":"{}"}}"#, mode_str);
+                            let pi_body = format!(r#"{{"active_transport":"mode3_usb_bulk","transport":"usb_bulk","action":"start","mode1":false,"mode2":false,"mode3":true,"mode":"{}"}}"#, mode_str);
+                            notify_daemon_and_receiver(&payload, Some(("/api/transport/active", &pi_body)));
+                            println!("\x1b[1;32m[+] Modo 3 (USB Bulk Direto) ativado com sucesso! [modo: {}]\x1b[0m", mode_str);
                         }
                         "network" | "udp" | "1" => {
-                            notify_daemon_and_receiver(
-                                r#"{"action":"start","transport":"network"}"#,
-                                Some(("/api/transport/active", r#"{"active_transport":"mode1_udp","transport":"network","action":"start","mode1":true,"mode2":false,"mode3":false}"#)),
-                            );
-                            println!("\x1b[1;32m[+] Modo 1 (Rede UDP) ativado com sucesso!\x1b[0m");
+                            let mode_str = extract_mode(&args[3..]).unwrap_or_else(|| "extend".to_string());
+                            let payload = format!(r#"{{"action":"start","transport":"network","mode":"{}"}}"#, mode_str);
+                            let pi_body = format!(r#"{{"active_transport":"mode1_udp","transport":"network","action":"start","mode1":true,"mode2":false,"mode3":false,"mode":"{}"}}"#, mode_str);
+                            notify_daemon_and_receiver(&payload, Some(("/api/transport/active", &pi_body)));
+                            println!("\x1b[1;32m[+] Modo 1 (Rede UDP) ativado com sucesso! [modo: {}]\x1b[0m", mode_str);
                         }
                         "miracast" | "wfd" | "2" => {
                             notify_daemon_and_receiver(
@@ -375,7 +458,7 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
         let mut target_ip = "192.168.7.2".to_string();
         let mut target_port: u16 = 5000;
         let mut raw_bitrate: u32 = 0;
-        let mut mode = "extend".to_string();
+        let mut mode = "ask".to_string();
         let mut encoder = EncoderApi::detect();
         let mut fps: u32 = 60; // 60 FPS por padrão para máxima fluidez do mouse e tela
 
@@ -387,7 +470,7 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             target_port = args.get(2).and_then(|p| p.parse::<u16>().ok()).unwrap_or(5000);
             raw_bitrate = args.get(3).and_then(|p| p.parse::<u32>().ok()).unwrap_or(0);
             if let Some(m) = args.get(4) {
-                if m == "extend" || m == "clone" { mode = m.to_lowercase(); }
+                if m == "extend" || m == "clone" || m == "ask" || m == "interactive" { mode = m.to_lowercase(); }
             }
             if let Some(enc) = args.get(5) {
                 encoder = EncoderApi::from_str(enc);
@@ -399,7 +482,7 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             // Parser flexível e inteligente: suporta 'ext-sender', 'ext-sender extend', 'ext-sender 60', 'ext-sender --fps=60'
             for arg in args.iter().skip(1) {
                 let lower = arg.to_lowercase();
-                if lower == "extend" || lower == "clone" {
+                if lower == "extend" || lower == "clone" || lower == "ask" || lower == "interactive" {
                     mode = lower;
                 } else if let Some(m) = lower.strip_prefix("--mode=") {
                     mode = m.to_string();
@@ -562,6 +645,16 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
 
         let debug = args.iter().any(|a| a == "--debug" || a == "-d");
 
+        let auto_connect = if args.iter().any(|a| a == "--no-auto-connect" || a == "--standby" || a == "--no-auto-start") {
+            false
+        } else if args.iter().any(|a| a == "--auto-connect" || a == "--auto-start" || a == "--connect") {
+            true
+        } else {
+            std::env::var("EXT_AUTO_CONNECT").map(|v| v == "1" || v == "true").unwrap_or(false)
+        };
+
+        let enable_damage_pacer = args.iter().any(|a| a == "--enable-damage-pacer" || a == "--pacer");
+
         Ok(Some(Self {
             target_ip,
             target_port,
@@ -585,6 +678,8 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             contrast,
             saturation,
             debug,
+            auto_connect,
+            enable_damage_pacer,
         }))
     }
 }
@@ -644,6 +739,68 @@ mod tests {
         let args3 = vec!["ext-sender".to_string(), "--direct".to_string(), "--scale=1600x900".to_string()];
         let cfg3 = SenderConfig::parse(&args3).unwrap().unwrap();
         assert_eq!(cfg3.scale, ScaleMode::Scale1600x900);
+    }
+
+    #[test]
+    fn test_auto_connect_default_and_flags() {
+        // By default, auto_connect is FALSE (Standby on boot)
+        let args_def = vec!["ext-sender".to_string(), "--direct".to_string()];
+        let cfg_def = SenderConfig::parse(&args_def).unwrap().unwrap();
+        assert!(!cfg_def.auto_connect);
+
+        // Opt-in via --auto-connect
+        let args_auto = vec!["ext-sender".to_string(), "--direct".to_string(), "--auto-connect".to_string()];
+        let cfg_auto = SenderConfig::parse(&args_auto).unwrap().unwrap();
+        assert!(cfg_auto.auto_connect);
+
+        // Explicit --standby
+        let args_standby = vec!["ext-sender".to_string(), "--direct".to_string(), "--standby".to_string()];
+        let cfg_standby = SenderConfig::parse(&args_standby).unwrap().unwrap();
+        assert!(!cfg_standby.auto_connect);
+    }
+
+    #[test]
+    fn test_switch_subcommand_usb_bulk_and_network() {
+        let args_usb = vec!["ext-sender".to_string(), "switch".to_string(), "usb-bulk".to_string(), "--mode=clone".to_string()];
+        let res_usb = SenderConfig::parse(&args_usb);
+        assert!(res_usb.is_ok());
+        assert!(res_usb.unwrap().is_none());
+
+        let args_net = vec!["ext-sender".to_string(), "switch".to_string(), "network".to_string(), "--mode=extend".to_string()];
+        let res_net = SenderConfig::parse(&args_net);
+        assert!(res_net.is_ok());
+        assert!(res_net.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_switch_subcommand_miracast_and_standby() {
+        let args_mira = vec!["ext-sender".to_string(), "switch".to_string(), "miracast".to_string()];
+        let res_mira = SenderConfig::parse(&args_mira);
+        assert!(res_mira.is_ok());
+        assert!(res_mira.unwrap().is_none());
+
+        let args_std = vec!["ext-sender".to_string(), "switch".to_string(), "standby".to_string()];
+        let res_std = SenderConfig::parse(&args_std);
+        assert!(res_std.is_ok());
+        assert!(res_std.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_mode_subcommand_extend_clone_and_ask() {
+        let args_ext = vec!["ext-sender".to_string(), "mode".to_string(), "extend".to_string()];
+        let res_ext = SenderConfig::parse(&args_ext);
+        assert!(res_ext.is_ok());
+        assert!(res_ext.unwrap().is_none());
+
+        let args_cln = vec!["ext-sender".to_string(), "mode".to_string(), "clone".to_string()];
+        let res_cln = SenderConfig::parse(&args_cln);
+        assert!(res_cln.is_ok());
+        assert!(res_cln.unwrap().is_none());
+
+        let args_ask = vec!["ext-sender".to_string(), "mode".to_string(), "ask".to_string()];
+        let res_ask = SenderConfig::parse(&args_ask);
+        assert!(res_ask.is_ok());
+        assert!(res_ask.unwrap().is_none());
     }
 }
 
