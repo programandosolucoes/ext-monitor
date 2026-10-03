@@ -975,13 +975,20 @@ fn handle_http_client(
             send_response(&mut stream, "200 OK", "application/json", format!("{{\"status\":\"{}\"}}", status).as_bytes());
         }
         ("POST", "/api/stream/stop") => {
-            println!("\x1b[1;33m[web-server]\x1b[0m User requested stream STOP / STANDBY via Web UI. Stopping all 3 video services...");
-            if let Ok(mut cfg) = CONFIG.lock() {
+            let was_running = if let Ok(mut cfg) = CONFIG.lock() {
+                let r = cfg.mode1 || cfg.mode2 || cfg.mode3 || cfg.active_transport != "standby";
                 cfg.mode1 = false;
                 cfg.mode2 = false;
                 cfg.mode3 = false;
+                cfg.active_transport = "standby".to_string();
+                r
+            } else {
+                true
+            };
+            if was_running {
+                println!("\x1b[1;33m[web-server]\x1b[0m User requested stream STOP / STANDBY via Web UI. Stopping all 3 video services...");
+                forward_config_to_sender("{\"action\":\"stop\"}");
             }
-            forward_config_to_sender("{\"action\":\"stop\"}");
             let pipe = pipeline_mgr.clone();
             thread::spawn(move || {
                 pipe.pause();
@@ -1308,8 +1315,8 @@ fn get_system_telemetry_json(
 
     let displays_json: Vec<String> = all_displays.iter().map(|d| {
         format!(
-            "{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}}",
-            d.connector, d.connector_friendly, d.hardware_model, d.connected, d.name, d.active_mode, d.preferred_mode, d.vpu
+            "{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\",\"has_audio\":{}}}",
+            d.connector, d.connector_friendly, d.hardware_model, d.connected, d.name, d.active_mode, d.preferred_mode, d.vpu, d.has_audio
         )
     }).collect();
     let displays_str = format!("[{}]", displays_json.join(","));
@@ -1362,7 +1369,7 @@ fn get_system_telemetry_json(
     };
 
     format!(
-        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_transport\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"hierarchy\":{{\"level\":{},\"level_name\":\"{}\",\"display_owner\":\"{}\",\"visualizer_enabled\":{}}},\"displays\":{},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
+        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_transport\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"hierarchy\":{{\"level\":{},\"level_name\":\"{}\",\"display_owner\":\"{}\",\"visualizer_enabled\":{}}},\"displays\":{},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\",\"has_audio\":{}}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"has_audio\":{}}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
         temp_val,
         cpu_load,
         mem_free_mb,
@@ -1387,6 +1394,7 @@ fn get_system_telemetry_json(
         mon.active_mode,
         mon.preferred_mode,
         mon.vpu,
+        mon.has_audio,
         mon.connected,
         mon.name,
         mon.preferred_mode,
@@ -1395,6 +1403,7 @@ fn get_system_telemetry_json(
         mon.connector,
         mon.connector_friendly,
         mon.hardware_model,
+        mon.has_audio,
         audio_st.to_json(),
         h264_mhz,
         vpu_mhz,

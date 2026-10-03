@@ -9,13 +9,15 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct TestOptions {
     pub project_root: PathBuf,
     pub run_unit: bool,
     pub run_docker: bool,
     pub test_usb: bool,
+    pub reboot_pi: bool,
+    pub target_ip: String,
 }
 
 /// Executes requested test suites
@@ -26,6 +28,14 @@ pub fn run_tests(opts: &TestOptions) -> Result<(), String> {
     println!("\x1b[1;32m========================================================================\x1b[0m\n");
 
     let mut all_ok = true;
+
+    // 0. Reboot Pi Zero before running tests if requested
+    if opts.reboot_pi {
+        if let Err(e) = reboot_and_wait_pi(&opts.target_ip) {
+            eprintln!("\x1b[1;31m[✖] Falha no reboot do Pi Zero: {}\x1b[0m\n", e);
+            all_ok = false;
+        }
+    }
 
     // 1. Run local Rust unit tests if requested or if no specific mode selected
     if opts.run_unit || (!opts.run_docker && !opts.test_usb) {
@@ -117,6 +127,83 @@ fn run_cargo_test(manifest_path: &Path) -> Result<(), String> {
     } else {
         Err(format!("cargo test retornou status de erro {:?}", status.code()))
     }
+}
+
+/// Dispatches reboot to Pi Zero via HTTP or serial CDC ACM, then waits for it to come back online
+pub fn reboot_and_wait_pi(target_ip: &str) -> Result<(), String> {
+    println!("\x1b[1;33m[▶] Disparando Reboot do Raspberry Pi Zero (IP: {})...\x1b[0m", target_ip);
+    let mut reboot_dispatched = false;
+
+    // 1. Try via HTTP REST API
+    let reboot_url = format!("http://{}:8080/api/system/reboot", target_ip);
+    let res = Command::new("curl")
+        .args(["-s", "--connect-timeout", "2", "-X", "POST", &reboot_url])
+        .output();
+    if let Ok(out) = res {
+        if out.status.success() {
+            println!("\x1b[1;32m[✔] Comando de reboot aceito via HTTP REST API (/api/system/reboot)!\x1b[0m");
+            reboot_dispatched = true;
+        }
+    }
+
+    // 2. Try via serial CDC ACM if HTTP was unreachable
+    if !reboot_dispatched {
+        println!("\x1b[1;34m[*] Tentando sinal de reboot via console serial USB (/dev/ttyACM*)...\x1b[0m");
+        for dev in &["/dev/ttyACM0", "/dev/ttyACM1"] {
+            if Path::new(dev).exists() {
+                let py_cmd = format!(
+                    "import serial, time; s = serial.Serial('{}', 115200, timeout=1); s.write(b'reboot\\n'); s.close()",
+                    dev
+                );
+                if Command::new("python3").args(["-c", &py_cmd]).status().is_ok() {
+                    println!("\x1b[1;32m[✔] Comando de reboot enviado via serial em {}!\x1b[0m", dev);
+                    reboot_dispatched = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if !reboot_dispatched {
+        println!("\x1b[1;33m[!] Aviso: Não foi possível enviar sinal de reboot via rede ou serial (Pi Zero pode estar desligado ou iniciando).\x1b[0m");
+    }
+
+    println!("\x1b[1;34m[*] Aguardando Pi Zero reiniciar e restabelecer comunicação...\x1b[0m");
+    std::thread::sleep(Duration::from_secs(3));
+
+    let start = Instant::now();
+    let mut online = false;
+    while start.elapsed() < Duration::from_secs(40) {
+        let ping = Command::new("ping")
+            .args(["-c", "1", "-W", "1", target_ip])
+            .output();
+        if let Ok(p) = ping {
+            if p.status.success() {
+                // Check if port 8080 is answering
+                let status_url = format!("http://{}:8080/api/status", target_ip);
+                if let Ok(st) = Command::new("curl").args(["-s", "--connect-timeout", "1", &status_url]).output() {
+                    if st.status.success() && !st.stdout.is_empty() {
+                        online = true;
+                        println!(
+                            "\x1b[1;32m[✔] Pi Zero online e API Web 8080 respondendo com sucesso em {:.1}s!\x1b[0m\n",
+                            start.elapsed().as_secs_f64()
+                        );
+                        break;
+                    }
+                }
+            }
+        }
+        std::thread::sleep(Duration::from_millis(800));
+    }
+
+    if !online {
+        return Err(format!(
+            "Timeout aguardando Pi Zero reiniciar em {}:8080 após 40s. Se o cabo foi desconectado, reconecte-o.",
+            target_ip
+        ));
+    }
+
+    Ok(())
 }
 
 /// Probes USB devices on the host to check for Pi Zero via native sysfs or lsusb
@@ -249,8 +336,12 @@ mod tests {
             run_unit: true,
             run_docker: false,
             test_usb: false,
+            reboot_pi: true,
+            target_ip: "192.168.7.2".to_string(),
         };
         assert!(opts.run_unit);
         assert!(!opts.run_docker);
+        assert!(opts.reboot_pi);
+        assert_eq!(opts.target_ip, "192.168.7.2");
     }
 }

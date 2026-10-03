@@ -360,7 +360,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         ControlAction::StopStreaming => {
                             pipewire::collapse_gnome_displays();
-                            notify_receiver_stop(&cfg.target_ip);
+                            // Do not echo notify_receiver_stop here to prevent ping-pong loop with receiver
                         }
                         ControlAction::SetMode(ref m) => {
                             cfg.mode = m.clone();
@@ -382,6 +382,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ControlAction::SetTransport(new_trans) => {
                             println!("\x1b[1;35m[*] Standby: Transporte atualizado para {:?}\x1b[0m", new_trans);
                             cfg.transport = new_trans;
+                        }
+                        ControlAction::SetAudio(a) => {
+                            println!("\x1b[1;35m[*] Standby: Áudio simultâneo configurado para {}\x1b[0m", a);
+                            cfg.audio = a;
+                            audio_tx_running.store(false, Ordering::SeqCst);
+                            if a {
+                                audio_tx_running = Arc::new(AtomicBool::new(true));
+                                let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+                            }
                         }
                         _ => {}
                     }
@@ -582,7 +591,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         pipeline_builder.usb_pipe_fd = None;
                         is_paused = true;
                         pipewire::collapse_gnome_displays();
-                        notify_receiver_stop(&cfg.target_ip);
+                        // Do not echo notify_receiver_stop here to prevent ping-pong loop with receiver
                         println!("\x1b[1;32m[*] Todos os transmissores de vídeo do Host foram finalizados e tela estendida recolhida do GNOME Mutter. Modo Standby ativo.\x1b[0m");
                         break;
                     }

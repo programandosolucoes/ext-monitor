@@ -26,7 +26,8 @@ fn print_usage() {
     println!("  ext-tool <SUBCOMANDO> [OPÇÕES]\n");
 
     println!("\x1b[1;33mSUBCOMANDOS DISPONÍVEIS:\x1b[0m");
-    println!("  \x1b[1;32mtest\x1b[0m [--unit] [--docker] [--usb] Executa bateria de testes unitários ou container isolado Docker");
+    println!("  \x1b[1;32mtest\x1b[0m [--unit] [--docker] [--usb] [--reboot] [--ip=<IP>] Executa testes unitários ou dispara reboot antes do teste");
+    println!("  \x1b[1;32mreboot\x1b[0m [--ip=<IP>]          Reinicia o Raspberry Pi Zero remotamente e aguarda subida limpa");
     println!("  \x1b[1;32mbuild\x1b[0m [--image] [--splash]  Compila ext-receiver (ARMv6), ext-sender e gera initramfs.cpio.gz");
     println!("  \x1b[1;32mdeploy\x1b[0m [--ip=<IP>]          Envia atualização OTA ao vivo para o Pi Zero (http://IP:8080)");
     println!("  \x1b[1;32msplash\x1b[0m                      Gera telas de splash (loading/ready) em RGB565 raw.gz em Rust");
@@ -36,6 +37,8 @@ fn print_usage() {
 
     println!("\x1b[1;33mEXEMPLOS RÁPIDOS:\x1b[0m");
     println!("  ext-tool test               # Executa todos os testes unitários nativos em Rust");
+    println!("  ext-tool test --reboot      # Reinicia o Pi Zero e executa bateria completa de testes");
+    println!("  ext-tool reboot             # Reinicia o Raspberry Pi Zero e aguarda voltar online");
     println!("  ext-tool test --docker      # Executa testes isolados no Docker (blindagem de GNOME)");
     println!("  ext-tool test --usb         # Diagnostica a comunicação direta com o gadget USB");
     println!("  ext-tool build              # Compila e empacota initramfs.cpio.gz");
@@ -72,15 +75,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "test" => {
             let run_docker = args.iter().any(|a| a == "--docker" || a == "--isolated");
             let test_usb = args.iter().any(|a| a == "--usb");
-            let run_unit = args.iter().any(|a| a == "--unit") || (!run_docker && !test_usb);
+            let reboot_pi = args.iter().any(|a| a == "--reboot");
+            let target_ip = args
+                .iter()
+                .find_map(|a| a.strip_prefix("--ip="))
+                .unwrap_or("192.168.7.2")
+                .to_string();
+            let run_unit = args.iter().any(|a| a == "--unit") || (!run_docker && !test_usb && !reboot_pi);
             let opts = test::TestOptions {
                 project_root,
                 run_unit,
                 run_docker,
                 test_usb,
+                reboot_pi,
+                target_ip,
             };
             if let Err(e) = test::run_tests(&opts) {
                 eprintln!("\x1b[1;31m[!] Erro na execução dos testes: {}\x1b[0m", e);
+                std::process::exit(1);
+            }
+        }
+        "reboot" => {
+            let target_ip = args
+                .iter()
+                .find_map(|a| a.strip_prefix("--ip="))
+                .unwrap_or("192.168.7.2");
+            if let Err(e) = test::reboot_and_wait_pi(target_ip) {
+                eprintln!("\x1b[1;31m[!] Erro no reboot: {}\x1b[0m", e);
                 std::process::exit(1);
             }
         }

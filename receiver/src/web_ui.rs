@@ -930,7 +930,30 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     </div>
                 </div>
 
-                <!-- 3. Audio Volume Slider & Action Row -->
+                <!-- 3. Simultaneous Audio Streaming Toggle & HDMI Output Capability -->
+                <div class="control-group" style="margin-bottom: 1.2rem; padding: 1rem; background: rgba(0, 0, 0, 0.25); border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.06);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                            <span style="font-size: 1.25rem;">🔊</span>
+                            <div>
+                                <div style="font-weight: 700; font-size: 0.95rem;">Transmitir Áudio Simultaneamente para a TV</div>
+                                <div style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 0.15rem;">
+                                    Desacoplado por padrão: extensão e clone operam com vídeo puro. Ative aqui para rotear o som do PC simultaneamente via HDMI.
+                                </div>
+                            </div>
+                        </div>
+                        <label class="switch" style="flex-shrink: 0; margin-left: 1rem;" title="Ativar Som Simultaneamente">
+                            <input type="checkbox" id="toggleSimultaneousAudio" onchange="onSimultaneousAudioToggle(this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                        <span style="font-size: 0.78rem; color: var(--text-muted);">Capacidade de Saída de Áudio:</span>
+                        <span id="badgeHdmiAudioCapability" class="stat-badge badge-green">✓ Saída HDMI com suporte a Áudio Digital</span>
+                    </div>
+                </div>
+
+                <!-- 4. Audio Volume Slider & Action Row -->
                 <div class="control-group">
                     <div class="control-label">
                         <span class="tip-wrap">
@@ -3321,6 +3344,17 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         let currentTransport = 'mode1_udp';
         let currentTopology = 'extend';
 
+        function isSimultaneousAudioEnabled() {
+            const toggle = document.getElementById('toggleSimultaneousAudio');
+            return toggle ? toggle.checked : false;
+        }
+
+        function onSimultaneousAudioToggle(checked) {
+            localStorage.setItem('ext_simultaneous_audio', checked ? 'true' : 'false');
+            showToast(checked ? '🔊 Áudio simultâneo para TV ATIVADO' : '🔇 Áudio simultâneo DESATIVADO (Vídeo puro)');
+            sendHostControl({ audio: checked });
+        }
+
         function activateModeWithTopology(transport, topology) {
             currentTransport = transport;
             if (topology && topology !== 'miracast') {
@@ -3337,7 +3371,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             const modeLabel = targetMode === 'clone' ? 'Clonar (eDP-1)' : 'Estender (HDMI-1)';
             const transLabel = transport.includes('usb') ? 'USB Bulk Direct' : 'Rede UDP';
             const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
-            showToast(`🚀 Ativando ${transLabel} no modo ${modeLabel}...`);
+            const withAudio = isSimultaneousAudioEnabled();
+            showToast(`🚀 Ativando ${transLabel} no modo ${modeLabel}${withAudio ? ' com Áudio' : ''}...`);
 
             // 1. Tell receiver to switch transport
             fetch('/api/transport/active', {
@@ -3346,8 +3381,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 body: JSON.stringify({ active_transport: transport, transport: transport, action: 'start' })
             }).catch(() => {});
 
-            // 2. Tell host sender to switch transport and mode
-            sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans });
+            // 2. Tell host sender to switch transport, mode, and simultaneous audio flag
+            sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans, audio: withAudio });
             fetch('/api/stream/start', { method: 'POST' }).then(() => {
                 setTimeout(pollTelemetry, 250);
                 setTimeout(pollTelemetry, 800);
@@ -3409,7 +3444,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 currentTopology = targetMode;
                 showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (targetMode === 'clone' ? 'Clonar' : 'Estender') + ')...');
                 const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
-                sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans });
+                const withAudio = isSimultaneousAudioEnabled();
+                sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans, audio: withAudio });
                 fetch('/api/stream/start', { method: 'POST' }).catch(() => {});
             }
 
@@ -3429,6 +3465,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         function setExtensionAction(action) {
             currentTopology = action;
             const activeTrans = currentTransport.includes('usb') ? 'usb_bulk' : 'network';
+            const withAudio = isSimultaneousAudioEnabled();
 
             if (action === 'stop') {
                 showToast(t('toastExtStopped') || '⏹ Extension disabled (Standby)');
@@ -3436,11 +3473,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 fetch('/api/stream/stop', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             } else if (action === 'clone') {
                 showToast(t('toastExtCloned') || '💻 Mirroring notebook display (eDP-1)...');
-                sendHostControl({ action: 'start', mode: 'clone', transport: activeTrans });
+                sendHostControl({ action: 'start', mode: 'clone', transport: activeTrans, audio: withAudio });
                 fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             } else {
                 showToast(t('toastExtExtended') || '🖥️ Extending desktop to TV (HDMI-1)...');
-                sendHostControl({ action: 'start', mode: 'extend', transport: activeTrans });
+                sendHostControl({ action: 'start', mode: 'extend', transport: activeTrans, audio: withAudio });
                 fetch('/api/stream/start', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 300));
             }
 
@@ -4389,6 +4426,18 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                             const mode = h.active_mode || '1280x720 @ 60 Hz';
                             elHdmiDetails.textContent = mon + ' • ' + mode + ' • ' + hw;
                         }
+
+                        const badgeAudioCap = document.getElementById('badgeHdmiAudioCapability');
+                        if (badgeAudioCap) {
+                            const hasAudio = h.has_audio !== false;
+                            if (hasAudio) {
+                                badgeAudioCap.textContent = '✓ Saída ' + (h.connector || 'HDMI') + ' com suporte a Áudio Digital';
+                                badgeAudioCap.className = 'stat-badge badge-green';
+                            } else {
+                                badgeAudioCap.textContent = '⚠️ Conector ' + (h.connector || 'Vídeo') + ' sem Áudio Integrado (Vídeo Puro)';
+                                badgeAudioCap.className = 'stat-badge badge-amber';
+                            }
+                        }
                     }
                 })
                 .catch(() => {});
@@ -4684,6 +4733,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 if (cfg.mode3 !== undefined && savedM3 === null) setModeToggleUI('mode3', cfg.mode3);
             })
             .catch(() => {});
+
+        const savedSimAudio = localStorage.getItem('ext_simultaneous_audio') === 'true';
+        const toggleSim = document.getElementById('toggleSimultaneousAudio');
+        if (toggleSim) toggleSim.checked = savedSimAudio;
 
         pollNetworkStatus();
         updateModeAndTopologyButtons();

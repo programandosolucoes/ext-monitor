@@ -21,6 +21,7 @@ pub struct MonitorInfo {
     pub connector: String,
     pub connector_friendly: String,
     pub hardware_model: String,
+    pub has_audio: bool,
 }
 
 impl MonitorInfo {
@@ -142,6 +143,8 @@ impl MonitorInfo {
 
             let preferred_mode = modes.first().cloned().unwrap_or_else(|| "1280x720".to_string());
 
+            let has_audio = conn_name.starts_with("HDMI") || conn_name.starts_with("DP");
+
             if !is_conn {
                 results.push(Self {
                     connected: false,
@@ -154,6 +157,7 @@ impl MonitorInfo {
                     connector: conn_name,
                     connector_friendly,
                     hardware_model: hardware_model.clone(),
+                    has_audio,
                 });
                 continue;
             }
@@ -186,6 +190,7 @@ impl MonitorInfo {
                 connector: conn_name,
                 connector_friendly,
                 hardware_model: hardware_model.clone(),
+                has_audio,
             });
         }
 
@@ -210,6 +215,7 @@ impl MonitorInfo {
                 connector: "HDMI-A-1".to_string(),
                 connector_friendly: "Mini-HDMI Port (HDMI-A-1)".to_string(),
                 hardware_model: "Raspberry Pi Zero W".to_string(),
+                has_audio: true,
             })
     }
 }

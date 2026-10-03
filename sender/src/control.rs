@@ -348,4 +348,27 @@ mod tests {
         let actions2 = parse_control_payload(cast_payload);
         assert_eq!(actions2, vec![ControlAction::ChromeCastLaunch]);
     }
+
+    #[test]
+    fn test_parse_control_audio_simultaneous_and_decoupled() {
+        // Mode 3 USB Bulk without simultaneous audio (pure video)
+        let payload_video_only = br#"{"action":"start","mode":"extend","transport":"usb_bulk","audio":false}"#;
+        let actions = parse_control_payload(payload_video_only);
+        assert!(actions.contains(&ControlAction::StartStreaming));
+        assert!(actions.contains(&ControlAction::SetMode("extend".to_string())));
+        assert!(actions.contains(&ControlAction::SetTransport(TransportKind::UsbBulk)));
+        assert!(actions.contains(&ControlAction::SetAudio(false)));
+
+        // Mode 1 Network UDP with simultaneous audio enabled
+        let payload_with_audio = br#"{"action":"start","mode":"clone","transport":"network","audio":true}"#;
+        let actions2 = parse_control_payload(payload_with_audio);
+        assert!(actions2.contains(&ControlAction::StartStreaming));
+        assert!(actions2.contains(&ControlAction::SetMode("clone".to_string())));
+        assert!(actions2.contains(&ControlAction::SetTransport(TransportKind::Network {
+            ip: "192.168.7.2".to_string(),
+            port: 5000,
+        })));
+        assert!(actions2.contains(&ControlAction::SetAudio(true)));
+    }
 }
+
