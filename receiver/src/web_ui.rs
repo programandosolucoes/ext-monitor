@@ -909,6 +909,182 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     </div>
                 </div>
             </div>
+
+            <!-- Hi-Res Digital Audio & Hardware DAC Card -->
+            <div class="glass-card" id="cardAudioDac" style="margin-top: 1.5rem; margin-bottom: 1.5rem; border: 1px solid rgba(179, 136, 255, 0.4); background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(22, 17, 40, 0.98) 100%);">
+                <div class="card-header" style="margin-bottom: 0.8rem;">
+                    <div class="card-title">
+                        <span>🔊</span>
+                        <span data-i18n="audioHeader">Hi-Res Digital Audio & Hardware DAC</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span class="card-badge badge-purple" id="badgeAudioStatus" data-i18n="audioBadge">ALSA Hardware PCM</span>
+                    </div>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1rem; line-height: 1.4;" data-i18n="audioCardDesc">
+                    Configure volume, master sample rate clocks, and physical transport channels for HDMI digital audio. Low-latency playback with automatic A/V synchronization.
+                </p>
+
+                <!-- Audio Volume Slider & Action Row -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="audioLabel">HDMI Digital Audio (Opus 48kHz / PCM)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipAudio">Digital audio volume sent to monitor/TV via HDMI cable. Sub-25ms latency with A/V sync.</span>
+                        </span>
+                        <span class="control-value" id="valAudioVolume">100%</span>
+                    </div>
+                    <div class="slider-wrap">
+                        <input type="range" min="0" max="100" step="5" value="100" class="range-slider" id="audioVolumeSlider" oninput="updateAudioVolume(this.value)">
+                        <div class="slider-labels">
+                            <span>0% (Mute)</span>
+                            <span>25%</span>
+                            <span>50%</span>
+                            <span>75%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+                    <div class="action-row" style="margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;">
+                        <button id="btnAudioMute" class="btn-primary" onclick="toggleAudioMute()" data-i18n="btnAudioMute">🔊 Mute Audio</button>
+                        <button class="btn-primary" onclick="testRealAudioSignal()" style="background: linear-gradient(135deg, #7c4dff, #00e5ff);" data-i18n="btnTestAudioChime">🔔 Test Hardware Audio Chime</button>
+                    </div>
+                </div>
+
+                <!-- Live Hardware Audio Spectrum Visualizer (30 FPS Canvas) -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="mediaVisLabel">Live Hardware Audio Spectrum (HDMI Telemetry)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipMediaVis">Real-time 24-band frequency spectrum and VU meter generated from ALSA hardware PCM audio stream. Prevents HDMI screen sleeping.</span>
+                        </span>
+                        <span class="control-value" id="valVisualizerState" style="color: #7ee787;">Active (30 FPS)</span>
+                    </div>
+                    <canvas id="audioVisualizerCanvas" width="680" height="90" style="width: 100%; max-width: 680px; height: 90px; background: rgba(5,8,16,0.7); border-radius: 8px; border: 1px solid rgba(179,136,255,0.3); margin: 0.6rem 0; display: block;"></canvas>
+                    <div class="btn-grid" style="grid-template-columns: 1fr 1fr; margin-top: 0.4rem;">
+                        <button class="btn-toggle active" id="btnVisOn" onclick="toggleVisualizer(true)" style="border-color: #b388ff; color: #b388ff;" data-i18n="btnVisOn">🎨 Enable HDMI Visualizer</button>
+                        <button class="btn-toggle" id="btnVisOff" onclick="toggleVisualizer(false)" data-i18n="btnVisOff">⏹ Disable Visualizer</button>
+                    </div>
+                </div>
+
+                <!-- HDMI Audio Hardware Profiles & Master Clock -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="audioProfileLabel">HDMI Master Audio Profile & Sample Rate</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipAudioProfile">Select and force-load the hardware sample rate clock directly into the Pi Zero BCM2835 ALSA sound core. Supports true IEC958 subframe audio up to 192kHz 24-bit Hi-Res.</span>
+                        </span>
+                        <span class="control-value" id="valAudioRate">96 kHz (Hi-Res Studio - Default)</span>
+                    </div>
+                    <div class="btn-grid" id="audioRateGrid">
+                        <button class="btn-toggle active" id="btnRate96k" onclick="setAudioRate(96000)" data-rate="96000">🎵 Hi-Res Studio (96 kHz / 24-bit)</button>
+                        <button class="btn-toggle" id="btnRate192k" onclick="setAudioRate(192000)" data-rate="192000">🚀 Ultra Hi-Res (192 kHz / 24-bit)</button>
+                        <button class="btn-toggle" id="btnRate48k" onclick="setAudioRate(48000)" data-rate="48000">🎬 Cinema Standard (48 kHz / 16-bit)</button>
+                        <button class="btn-toggle" id="btnRate44k" onclick="setAudioRate(44100)" data-rate="44100">💿 CD Fidelity (44.1 kHz / 16-bit)</button>
+                    </div>
+                </div>
+
+                <!-- Audio Transport Architecture: Network UDP vs UAC2 Gadget vs USB Bulk Mux -->
+                <div class="control-group" style="margin-bottom: 0;">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="audioTransportLabel">Audio Transport Architecture</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipAudioTransport">Select how digital audio is carried from PC to Pi Zero: Mode 1 UDP Network Stream (Port 5004), Mode 2 USB Audio Class (UAC2 Gadget), or Mode 3 USB Bulk Multiplexed.</span>
+                        </span>
+                        <span class="control-value" id="valAudioTransport">Mode 1: UDP Stream (Port 5004 - Active)</span>
+                    </div>
+                    <div class="btn-grid" id="audioTransportGrid">
+                        <button class="btn-toggle active" id="btnAudioTransUdp" onclick="setAudioTransport('network_udp')" data-transport="network_udp">🌐 Mode 1: UDP Network (Low-Latency)</button>
+                        <button class="btn-toggle" id="btnAudioTransUac2" onclick="setAudioTransport('uac2_gadget')" data-transport="uac2_gadget">🔌 Mode 2: USB Audio Class (UAC2)</button>
+                        <button class="btn-toggle" id="btnAudioTransBulk" onclick="setAudioTransport('usb_bulk_mux')" data-transport="usb_bulk_mux">📦 Mode 3: USB Bulk Mux (Offline)</button>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.5rem; line-height: 1.4;" id="descAudioTransport" data-i18n="audioTransportDesc">
+                        Mode 1 UDP Network: Audio stream arrives via UDP port 5004 in 1024-byte unfragmented packets. True sub-5ms delay with automatic A/V synchronization.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Web Sharing & Chromecast Card -->
+            <div class="glass-card" id="cardChromecast" style="margin-bottom: 1.5rem; border: 1px solid rgba(0, 229, 255, 0.4); background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(13, 26, 44, 0.98) 100%);">
+                <div class="card-header" style="margin-bottom: 0.8rem;">
+                    <div class="card-title">
+                        <span>📺</span>
+                        <span data-i18n="castHeader">Web Sharing & Chromecast-Style Casting (Google Cast)</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span class="card-badge badge-green" id="badgeCastStatus" data-i18n="googleCastReady">● Google Cast Active (Ports 8008/8009)</span>
+                    </div>
+                </div>
+
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.2rem; line-height: 1.5;" data-i18n="castDesc">
+                    Mirror your browser tabs, windows, video URLs or mobile screen directly to the TV just like a real Chromecast device.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.2rem;">
+                    <!-- Option 1: 1-Click Web Cast (Tab / Window / Entire Screen) -->
+                    <div style="background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: var(--radius-md); padding: 1.1rem; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span style="font-size: 1.3rem;">🌐</span>
+                                <strong style="color: var(--accent-cyan); font-size: 1rem;" data-i18n="webCastTitle">Cast Browser Tab or Screen (Web Cast)</strong>
+                            </div>
+                            <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.8rem;" data-i18n="webCastDesc">
+                                Stream any Chrome/Firefox tab, Meet/Teams call, or entire display with low-latency WebCodecs hardware encoding.
+                            </p>
+                        </div>
+                        <a href="/cast" target="_blank" class="btn-primary" style="text-decoration: none; text-align: center; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: linear-gradient(135deg, #00b0ff, #00e5ff); color: #000; font-weight: 700; padding: 0.65rem 1rem;" data-i18n="btnOpenWebCast">
+                            🔴 Open Web Caster (/cast)
+                        </a>
+                    </div>
+
+                    <!-- Option 2: Native Google Cast (Chrome, Android, YouTube, Pluto TV) -->
+                    <div style="background: rgba(179, 136, 255, 0.06); border: 1px solid rgba(179, 136, 255, 0.3); border-radius: var(--radius-md); padding: 1.1rem; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span style="font-size: 1.3rem;">📱</span>
+                                <strong style="color: var(--accent-purple); font-size: 1rem;" data-i18n="googleCastTitle">Google Cast (Native Chromecast)</strong>
+                            </div>
+                            <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.8rem;" data-i18n="googleCastDesc">
+                                In Chrome/Edge menu (Cast...) or phone apps (YouTube, Netflix, Pluto TV), select 'Ext-Monitor (Raspberry Pi)' to cast directly.
+                            </p>
+                        </div>
+                        <button class="btn-toggle" style="width: 100%; border-color: var(--accent-purple); color: var(--accent-purple); font-size: 0.82rem; cursor: default;" data-i18n="googleCastReady">
+                            ✓ mDNS & Cast V2 Active (Ports 8008 / 8009)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Direct Video URL Cast (Play on TV) -->
+                <div class="control-group" style="margin-bottom: 0.75rem;">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="castUrlLabel">Direct Video URL Cast (Play on TV)</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipCastUrl">Enter a video URL (MP4, WebM, HLS m3u8) to decode and display directly on the Raspberry Pi HDMI output.</span>
+                        </span>
+                    </div>
+                    <div style="display: flex; gap: 0.6rem; margin-top: 0.4rem;">
+                        <input type="text" id="castMediaUrlInput" placeholder="https://example.com/video.mp4 or stream..." style="flex: 1; padding: 0.6rem 0.8rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-sm); color: #fff; font-size: 0.85rem;">
+                        <button class="btn-primary" onclick="castMediaUrl()" style="white-space: nowrap; background: linear-gradient(135deg, #00e5ff, #7c4dff);" data-i18n="btnCastUrl">
+                            ▶ Cast to TV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Now Playing / Current Playback Status -->
+                <div style="background: rgba(0,0,0,0.3); padding: 0.9rem; border-radius: 6px; border-left: 3px solid #00e5ff;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Cast / Media Player State:</span>
+                        <span class="control-value" id="valMediaState" style="color: #00e5ff; font-size: 0.82rem;">Idle / Ready</span>
+                    </div>
+                    <div style="font-size: 1.05rem; font-weight: 700; color: #fff; margin-top: 0.25rem;" id="mediaTitle">Ext-Monitor Cast & Media Player</div>
+                    <div style="font-size: 0.86rem; color: #00e5ff; margin-top: 0.2rem;" id="mediaArtist">Google Cast V2 (8009) • Web Cast (/cast) • DLNA / UPnP</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.1rem;" id="mediaAlbum">Broadcom VideoCore IV HDMI Output (1280x720 60 FPS)</div>
+                </div>
+            </div>
         </section>
 
         <!-- ================================================================= -->
@@ -1009,57 +1185,6 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     <div class="btn-grid">
                         <button class="btn-toggle" onclick="sendHostControl({ action: 'trigger_hud' })" data-i18n="btnHostShowHud">📊 Show HUD on TV (60s)</button>
                         <button class="btn-toggle" onclick="sendHostControl({ action: 'hide_hud' })" data-i18n="btnHostHideHud">❌ Hide HUD</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- IoT Media Player & HDMI Visualizer Card -->
-            <div class="glass-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(179, 136, 255, 0.35);">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span>🎵</span>
-                        <span data-i18n="mediaHeader">IoT Media Center & HDMI Visualizer (Chromecast / DLNA)</span>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <span class="card-badge badge-purple" id="badgeHdmiMuxMode" data-i18n="badgeHdmiMuxStandby">Mode: Standby (Ready Splash)</span>
-                        <span class="card-badge badge-green" id="badgeMediaSource" data-i18n="mediaBadge">Google Home • UPnP • Bluetooth</span>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <div class="control-label">
-                        <span class="tip-wrap">
-                            <span data-i18n="mediaPlaybackLabel">Current Playback (IoT Audio on TV)</span>
-                            <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipMediaPlayback">Displays metadata of music currently playing via Bluetooth from smartphone or UPnP/Cast network stream.</span>
-                        </span>
-                        <span class="control-value" id="valMediaState" style="color: #b388ff;">Idle / Ready</span>
-                    </div>
-                    <div style="background: rgba(0,0,0,0.3); padding: 0.9rem; border-radius: 6px; margin-top: 0.5rem; border-left: 3px solid #b388ff;">
-                        <div style="font-size: 1.05rem; font-weight: 700; color: #fff;" id="mediaTitle">Ext-Monitor IoT Audio</div>
-                        <div style="font-size: 0.86rem; color: #00e5ff; margin-top: 0.2rem;" id="mediaArtist">Ready for Bluetooth, Cast or PC Audio</div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.1rem;" id="mediaAlbum">Broadcom VideoCore IV HDMI Output</div>
-                    </div>
-                </div>
-
-                <!-- Visualizer Controls & Live Hardware Audio Canvas -->
-                <div class="control-group">
-                    <div class="control-label">
-                        <span class="tip-wrap">
-                            <span data-i18n="mediaVisLabel">Graphic Visualizer on TV Screen (Never Dark/Blank)</span>
-                            <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipMediaVis">When audio plays without PC desktop video, renders 24-band frequency spectrum and VU meter at 30 FPS on HDMI, preventing the TV from going dark or sleeping.</span>
-                        </span>
-                        <span class="control-value" id="valVisualizerState">Active (30 FPS)</span>
-                    </div>
-
-                    <!-- Live Hardware Spectrum & VU Meter Canvas -->
-                    <canvas id="audioVisualizerCanvas" width="680" height="110" style="width: 100%; max-width: 680px; height: 110px; background: rgba(5,8,16,0.7); border-radius: 8px; border: 1px solid rgba(179,136,255,0.3); margin: 0.75rem 0; display: block;"></canvas>
-
-                    <div class="btn-grid">
-                        <button class="btn-toggle active" id="btnVisOn" onclick="toggleVisualizer(true)" style="border-color: #b388ff; color: #b388ff;" data-i18n="btnVisOn">🎨 Enable HDMI Visualizer</button>
-                        <button class="btn-toggle" id="btnVisOff" onclick="toggleVisualizer(false)" data-i18n="btnVisOff">⏹ Disable Visualizer</button>
-                        <button class="btn-primary" onclick="testRealAudioSignal()" style="background: linear-gradient(135deg, #7c4dff, #00e5ff);" data-i18n="btnTestAudioChime">🔊 Test Hardware Audio Signal</button>
                     </div>
                 </div>
             </div>
@@ -1217,69 +1342,6 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                         <button class="btn-toggle active" data-color="full" onclick="setColor('full')" data-i18n="colorFull">24-bit TrueColor</button>
                         <button class="btn-toggle" data-color="256" onclick="setColor('256')" data-i18n="color256">256 Colors (QP 30-44)</button>
                         <button class="btn-toggle" data-color="gray" onclick="setColor('gray')" data-i18n="colorGray">Monochrome</button>
-                    </div>
-                </div>
-
-                <!-- HDMI Digital Audio (Opus 48kHz) -->
-                <div class="control-group">
-                    <div class="control-label">
-                        <span class="tip-wrap">
-                            <span data-i18n="audioLabel">HDMI Digital Audio (Opus 48kHz)</span>
-                            <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipAudio">Digital audio volume sent to the monitor/TV via HDMI cable. Sub-25ms latency with A/V sync.</span>
-                        </span>
-                        <span class="control-value" id="valAudioVolume">100%</span>
-                    </div>
-                    <div class="slider-wrap">
-                        <input type="range" min="0" max="100" step="5" value="100" class="range-slider" id="audioVolumeSlider" oninput="updateAudioVolume(this.value)">
-                        <div class="slider-labels">
-                            <span>0% (Mute)</span>
-                            <span>25%</span>
-                            <span>50%</span>
-                            <span>75%</span>
-                            <span>100%</span>
-                        </div>
-                    </div>
-                    <div class="action-row" style="margin-top: 0.6rem;">
-                        <button id="btnAudioMute" class="btn-primary" onclick="toggleAudioMute()" data-i18n="btnAudioMute">🔊 Mute Audio</button>
-                    </div>
-                </div>
-
-                <!-- HDMI Audio Hardware Profiles & Master Clock -->
-                <div class="control-group">
-                    <div class="control-label">
-                        <span class="tip-wrap">
-                            <span data-i18n="audioProfileLabel">HDMI Master Audio Profile & Sample Rate</span>
-                            <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipAudioProfile">Select and force-load the hardware sample rate clock directly into the Pi Zero BCM2835 ALSA sound core. Supports true IEC958 subframe audio up to 192kHz 24-bit Hi-Res.</span>
-                        </span>
-                        <span class="control-value" id="valAudioRate">96 kHz (Hi-Res Studio - Default)</span>
-                    </div>
-                    <div class="btn-grid" id="audioRateGrid">
-                        <button class="btn-toggle active" id="btnRate96k" onclick="setAudioRate(96000)" data-rate="96000">🎵 Hi-Res Studio (96 kHz / 24-bit)</button>
-                        <button class="btn-toggle" id="btnRate192k" onclick="setAudioRate(192000)" data-rate="192000">🚀 Ultra Hi-Res (192 kHz / 24-bit)</button>
-                        <button class="btn-toggle" id="btnRate48k" onclick="setAudioRate(48000)" data-rate="48000">🎬 Cinema Standard (48 kHz / 16-bit)</button>
-                        <button class="btn-toggle" id="btnRate44k" onclick="setAudioRate(44100)" data-rate="44100">💿 CD Fidelity (44.1 kHz / 16-bit)</button>
-                    </div>
-                </div>
-
-                <!-- Audio Transport Architecture: Network UDP vs UAC2 Gadget vs USB Bulk Mux -->
-                <div class="control-group">
-                    <div class="control-label">
-                        <span class="tip-wrap">
-                            <span data-i18n="audioTransportLabel">Audio Transport Architecture</span>
-                            <span class="tip-icon">?</span>
-                            <span class="tip-box" data-i18n="tipAudioTransport">Select how digital audio is carried from PC to Pi Zero: Mode 1 UDP Network Stream (Port 5004), Mode 2 USB Audio Class (UAC2 Gadget), or Mode 3 USB Bulk Multiplexed.</span>
-                        </span>
-                        <span class="control-value" id="valAudioTransport">Mode 1: UDP Stream (Port 5004 - Active)</span>
-                    </div>
-                    <div class="btn-grid" id="audioTransportGrid">
-                        <button class="btn-toggle active" id="btnAudioTransUdp" onclick="setAudioTransport('network_udp')" data-transport="network_udp">🌐 Mode 1: UDP Network (Low-Latency)</button>
-                        <button class="btn-toggle" id="btnAudioTransUac2" onclick="setAudioTransport('uac2_gadget')" data-transport="uac2_gadget">🔌 Mode 2: USB Audio Class (UAC2)</button>
-                        <button class="btn-toggle" id="btnAudioTransBulk" onclick="setAudioTransport('usb_bulk_mux')" data-transport="usb_bulk_mux">📦 Mode 3: USB Bulk Mux (Offline)</button>
-                    </div>
-                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.4rem; line-height: 1.4;" id="descAudioTransport" data-i18n="audioTransportDesc">
-                        Mode 1 UDP Network: Audio stream arrives via UDP port 5004 in 1024-byte unfragmented packets. True sub-5ms delay with automatic A/V synchronization.
                     </div>
                 </div>
 
@@ -2041,6 +2103,23 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostShowHud: "📊 Show HUD on TV (60s)",
                 btnHostHideHud: "❌ Hide HUD",
                 mediaHeader: "IoT Media Center & HDMI Visualizer (Chromecast / DLNA)",
+                audioHeader: "Hi-Res Digital Audio & Hardware DAC",
+                audioBadge: "ALSA Hardware PCM",
+                audioCardDesc: "Configure volume, master sample rate clocks, and physical transport channels for HDMI digital audio. Low-latency playback with automatic A/V synchronization.",
+                castHeader: "Web Sharing & Chromecast-Style Casting (Google Cast)",
+                castDesc: "Mirror your browser tabs, windows, video URLs or mobile screen directly to the TV just like a real Chromecast device.",
+                webCastTitle: "Cast Browser Tab or Screen (Web Cast)",
+                webCastDesc: "Stream any Chrome/Firefox tab, Meet/Teams call, or entire display with low-latency WebCodecs hardware encoding.",
+                btnOpenWebCast: "🔴 Open Web Caster (/cast)",
+                googleCastTitle: "Google Cast (Native Chromecast)",
+                googleCastDesc: "In Chrome/Edge menu (Cast...) or phone apps (YouTube, Netflix, Pluto TV), select 'Ext-Monitor (Raspberry Pi)' to cast directly.",
+                googleCastReady: "✓ mDNS & Cast V2 Active (Ports 8008 / 8009)",
+                castUrlLabel: "Direct Video URL Cast (Play on TV)",
+                tipCastUrl: "Enter a video URL (MP4, WebM, HLS m3u8) to decode and display directly on the Raspberry Pi HDMI output.",
+                btnCastUrl: "▶ Cast to TV",
+                toastEnterUrl: "Please enter a valid video URL",
+                toastCasting: "Sending video to TV screen...",
+                toastCastSuccess: "✓ Video stream casted to TV!",
                 badgeHdmiMuxStandby: "Mode: Standby (Ready Splash)",
                 badgeHdmiMuxPc: "Mode: PC Video (TV Screen + Audio)",
                 badgeHdmiMuxIot: "Mode: IoT Audio (HDMI Visualizer 30 FPS)",
@@ -2339,6 +2418,23 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostShowHud: "📊 Exibir HUD na TV (60s)",
                 btnHostHideHud: "❌ Ocultar HUD",
                 mediaHeader: "Central de Mídia IoT & Visualizador HDMI (Chromecast / DLNA)",
+                audioHeader: "Áudio Digital HDMI & DAC de Alta Fidelidade",
+                audioBadge: "ALSA Hardware PCM",
+                audioCardDesc: "Configure o volume, clocks mestres de amostragem e canais físicos de transporte para o áudio digital HDMI com sincronismo A/V.",
+                castHeader: "Transmissão Web & Compartilhamento Estilo Chromecast (Google Cast)",
+                castDesc: "Espelhe suas abas do navegador, janelas, URLs de vídeo ou tela do celular diretamente na TV, exatamente como um Chromecast real.",
+                webCastTitle: "Transmitir Esta Aba ou Tela (Web Cast)",
+                webCastDesc: "Transmita qualquer aba do Chrome/Firefox, reuniões ou tela inteira com aceleração de hardware WebCodecs de baixa latência.",
+                btnOpenWebCast: "🔴 Abrir Transmissor Web (/cast)",
+                googleCastTitle: "Google Cast (Chromecast Nativo)",
+                googleCastDesc: "No menu do Chrome/Edge (Transmitir...) ou em celulares (YouTube, Netflix, Pluto TV), selecione 'Ext-Monitor (Raspberry Pi)'.",
+                googleCastReady: "✓ Descoberta mDNS & Cast V2 Ativos (Portas 8008 / 8009)",
+                castUrlLabel: "Transmitir URL de Vídeo Direto na TV (Play URL)",
+                tipCastUrl: "Insira uma URL direta de vídeo (MP4, WebM, HLS m3u8) para decodificar e reproduzir diretamente no HDMI do Raspberry Pi.",
+                btnCastUrl: "▶ Transmitir na TV",
+                toastEnterUrl: "Por favor, insira uma URL de vídeo válida.",
+                toastCasting: "Enviando vídeo para o decodificador HDMI...",
+                toastCastSuccess: "✓ Reprodução iniciada na TV!",
                 badgeHdmiMuxStandby: "Modo: Standby (Splash Pronta)",
                 badgeHdmiMuxPc: "Modo: Vídeo do PC (Tela da TV + Áudio)",
                 badgeHdmiMuxIot: "Modo: Áudio IoT (Visualizador HDMI 30 FPS)",
@@ -2632,6 +2728,23 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostShowHud: "📊 Mostra HUD su TV (60s)",
                 btnHostHideHud: "❌ Nascondi HUD",
                 mediaHeader: "Centro Multimediale IoT & Visualizzatore HDMI (Chromecast / DLNA)",
+                audioHeader: "Audio Digitale HDMI & DAC Hardware ad Alta Fedeltà",
+                audioBadge: "ALSA Hardware PCM",
+                audioCardDesc: "Configura volume, frequenze di campionamento master e canali fisici di trasporto per l'audio digitale HDMI con sincronizzazione A/V.",
+                castHeader: "Condivisione Web & Trasmissione Stile Chromecast (Google Cast)",
+                castDesc: "Trasmetti schede del browser, finestre, URL video o smartphone direttamente alla TV come un vero dispositivo Chromecast.",
+                webCastTitle: "Trasmetti Scheda o Schermo (Web Cast)",
+                webCastDesc: "Trasmetti qualsiasi scheda Chrome/Firefox, riunione o intero schermo con codifica WebCodecs a bassa latenza.",
+                btnOpenWebCast: "🔴 Apri Trasmettitore Web (/cast)",
+                googleCastTitle: "Google Cast (Chromecast Nativo)",
+                googleCastDesc: "Nel menu di Chrome/Edge (Trasmetti...) o nelle app mobili (YouTube, Netflix, Pluto TV), seleziona 'Ext-Monitor (Raspberry Pi)'.",
+                googleCastReady: "✓ Rilevamento mDNS & Cast V2 Attivi (Porte 8008 / 8009)",
+                castUrlLabel: "Trasmetti URL Video Diretto sulla TV (Play URL)",
+                tipCastUrl: "Inserisci l'URL di un video (MP4, WebM, HLS m3u8) per riprodurlo direttamente sull'uscita HDMI del Raspberry Pi.",
+                btnCastUrl: "▶ Trasmetti sulla TV",
+                toastEnterUrl: "Inserisci un URL video valido.",
+                toastCasting: "Invio video alla TV in corso...",
+                toastCastSuccess: "✓ Riproduzione video avviata sulla TV!",
                 badgeHdmiMuxStandby: "Modalità: Standby (Splash Pronta)",
                 badgeHdmiMuxPc: "Modalità: Video PC (Schermo TV + Audio)",
                 badgeHdmiMuxIot: "Modalità: Audio IoT (Visualizzatore HDMI 30 FPS)",
@@ -2925,6 +3038,23 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 btnHostShowHud: "📊 在电视上显示 HUD (60秒)",
                 btnHostHideHud: "❌ 隐藏 HUD",
                 mediaHeader: "IoT 媒体中心与 HDMI 音频频谱可视化 (Chromecast / DLNA)",
+                audioHeader: "HDMI 数字高保真音频与硬件 DAC",
+                audioBadge: "ALSA 硬件 PCM",
+                audioCardDesc: "配置 HDMI 数字音频的音量、主采样时钟及物理传输通道，具备毫秒级超低延迟与音画同步。",
+                castHeader: "网页共享与 Chromecast 风格投屏 (Google Cast)",
+                castDesc: "像真正的 Chromecast 一样，将浏览器标签页、窗口、视频链接或手机屏幕直接镜像到电视。",
+                webCastTitle: "投射此标签页或屏幕 (Web Cast)",
+                webCastDesc: "通过低延迟 WebCodecs 硬件编码，投射任何 Chrome/Firefox 标签页、会议或整个屏幕。",
+                btnOpenWebCast: "🔴 打开网页投屏器 (/cast)",
+                googleCastTitle: "Google Cast (原生 Chromecast)",
+                googleCastDesc: "在 Chrome/Edge 菜单（投射...）或手机应用（YouTube、Netflix、Pluto TV）中选择 'Ext-Monitor (Raspberry Pi)'。",
+                googleCastReady: "✓ mDNS 与 Cast V2 活跃 (端口 8008 / 8009)",
+                castUrlLabel: "直接在电视上播放视频链接 (Play URL)",
+                tipCastUrl: "输入视频链接 (MP4, WebM, HLS m3u8)，直接在树莓派 HDMI 输出了硬件解码播放。",
+                btnCastUrl: "▶ 在电视上播放",
+                toastEnterUrl: "请输入有效的视频链接。",
+                toastCasting: "正在将视频发送到电视屏幕...",
+                toastCastSuccess: "✓ 视频已成功投射到电视！",
                 badgeHdmiMuxStandby: "模式：待机 (就绪引导屏)",
                 badgeHdmiMuxPc: "模式：PC 视频 (电视画面 + 音频)",
                 badgeHdmiMuxIot: "模式：IoT 音频 (HDMI 频谱可视化 30 FPS)",
@@ -3627,6 +3757,28 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                     pollMediaStatus();
                 })
                 .catch(() => showToast('Audio pulse transmitted'));
+        }
+
+        // Direct Video URL Cast (Play on TV)
+        function castMediaUrl() {
+            const input = document.getElementById('castMediaUrlInput');
+            const url = input ? input.value.trim() : '';
+            if (!url) {
+                showToast(t('toastEnterUrl') || 'Please enter a valid video URL');
+                return;
+            }
+            showToast(t('toastCasting') || 'Sending video to TV screen...');
+            fetch('/api/media/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'play', url: url })
+            })
+            .then(r => r.json())
+            .then(() => {
+                showToast(t('toastCastSuccess') || '✓ Video stream casted to TV!');
+                pollMediaStatus();
+            })
+            .catch(() => showToast('Cast URL command transmitted'));
         }
 
         // Stream Pause / Resume

@@ -123,6 +123,83 @@ pub fn start_web_server(
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModeSwitchResult {
+    EnterStandby,
+    SwitchTransport(String),
+    DisableListener(String),
+    NoChange,
+}
+
+pub fn evaluate_mode_switch(
+    body: &str,
+    current_active_transport: &str,
+    mut mode1: bool,
+    mut mode2: bool,
+    mut mode3: bool,
+) -> (bool, bool, bool, ModeSwitchResult) {
+    let mut m1_change = None;
+    let mut m3_change = None;
+    let active_transport = extract_json_str(body, "active_transport")
+        .or_else(|| extract_json_str(body, "transport"));
+
+    if let Some(m1) = extract_json_bool(body, "mode1") {
+        mode1 = m1;
+        m1_change = Some(m1);
+    }
+    if let Some(m2) = extract_json_bool(body, "mode2") {
+        mode2 = m2;
+    }
+    if let Some(m3) = extract_json_bool(body, "mode3") {
+        mode3 = m3;
+        m3_change = Some(m3);
+    }
+
+    let all_disabled = active_transport.is_none() && !mode1 && !mode2 && !mode3;
+
+    if all_disabled {
+        return (mode1, mode2, mode3, ModeSwitchResult::EnterStandby);
+    }
+
+    let inferred_transport = active_transport.map(|s| s.to_string())
+        .or_else(|| {
+            if let Some(true) = m3_change {
+                Some("mode3_usb_bulk".to_string())
+            } else if let Some(true) = m1_change {
+                Some("mode1_udp".to_string())
+            } else if let Some(true) = extract_json_bool(body, "mode2") {
+                Some("mode2_miracast".to_string())
+            } else {
+                if (current_active_transport.contains("mode1") && m1_change == Some(false))
+                    || (current_active_transport.contains("mode3") && m3_change == Some(false))
+                    || (current_active_transport.contains("mode2") && extract_json_bool(body, "mode2") == Some(false))
+                {
+                    if mode1 {
+                        Some("mode1_udp".to_string())
+                    } else if mode3 {
+                        Some("mode3_usb_bulk".to_string())
+                    } else if mode2 {
+                        Some("mode2_miracast".to_string())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+        });
+
+    if let Some(transport) = inferred_transport {
+        (mode1, mode2, mode3, ModeSwitchResult::SwitchTransport(transport))
+    } else if let Some(false) = m3_change {
+        (mode1, mode2, mode3, ModeSwitchResult::DisableListener("mode3".to_string()))
+    } else if let Some(false) = m1_change {
+        (mode1, mode2, mode3, ModeSwitchResult::DisableListener("mode1".to_string()))
+    } else {
+        (mode1, mode2, mode3, ModeSwitchResult::NoChange)
+    }
+}
+
 fn handle_http_client(
     mut stream: TcpStream,
     pipeline_mgr: Arc<PipelineManager>,
@@ -332,139 +409,96 @@ fn handle_http_client(
         ("POST", "/api/modes") | ("POST", "/api/transport/active") => {
             if let Some(idx) = req_str.find("\r\n\r\n") {
                 let body = &req_str[idx + 4..];
-                let mut m1_change = None;
-                let mut m3_change = None;
-                let active_transport = extract_json_str(body, "active_transport")
-                    .or_else(|| extract_json_str(body, "transport"));
 
-                if let Ok(mut cfg) = CONFIG.lock() {
-                    if let Some(m1) = extract_json_bool(body, "mode1") {
-                        cfg.mode1 = m1;
-                        m1_change = Some(m1);
-                    }
-                    if let Some(m2) = extract_json_bool(body, "mode2") { cfg.mode2 = m2; }
-                    if let Some(m3) = extract_json_bool(body, "mode3") {
-                        cfg.mode3 = m3;
-                        m3_change = Some(m3);
-                    }
-                }
-
-                let all_disabled = active_transport.is_none() && if let Ok(cfg) = CONFIG.lock() {
-                    !cfg.mode1 && !cfg.mode2 && !cfg.mode3
+                let (cur_trans, cur_m1, cur_m2, cur_m3) = if let Ok(cfg) = CONFIG.lock() {
+                    (cfg.active_transport.clone(), cfg.mode1, cfg.mode2, cfg.mode3)
                 } else {
-                    false
+                    (String::new(), false, false, false)
                 };
 
-                let inferred_transport = active_transport.map(|s| s.to_string())
-                    .or_else(|| {
-                        if all_disabled {
-                            None
-                        } else if let Some(true) = m3_change {
-                            Some("mode3_usb_bulk".to_string())
-                        } else if let Some(true) = m1_change {
-                            Some("mode1_udp".to_string())
-                        } else if let Some(true) = extract_json_bool(body, "mode2") {
-                            Some("mode2_miracast".to_string())
-                        } else {
-                            if let Ok(cfg) = CONFIG.lock() {
-                                if (cfg.active_transport.contains("mode1") && m1_change == Some(false))
-                                    || (cfg.active_transport.contains("mode3") && m3_change == Some(false))
-                                {
-                                    if cfg.mode1 {
-                                        Some("mode1_udp".to_string())
-                                    } else if cfg.mode3 {
-                                        Some("mode3_usb_bulk".to_string())
-                                    } else if cfg.mode2 {
-                                        Some("mode2_miracast".to_string())
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        }
-                    });
+                let (new_m1, new_m2, new_m3, result) = evaluate_mode_switch(body, &cur_trans, cur_m1, cur_m2, cur_m3);
 
-                if all_disabled {
-                    println!("\x1b[1;33m[web-server]\x1b[0m All video modes disabled via Web UI. Entering Standby...");
-                    if let Ok(mut cfg) = CONFIG.lock() {
-                        cfg.active_transport = "standby".to_string();
+                if let Ok(mut cfg) = CONFIG.lock() {
+                    cfg.mode1 = new_m1;
+                    cfg.mode2 = new_m2;
+                    cfg.mode3 = new_m3;
+                }
+
+                match result {
+                    ModeSwitchResult::EnterStandby => {
+                        println!("\x1b[1;33m[web-server]\x1b[0m All video modes disabled via Web UI. Entering Standby...");
+                        if let Ok(mut cfg) = CONFIG.lock() {
+                            cfg.active_transport = "standby".to_string();
+                        }
+                        forward_config_to_sender("{\"action\":\"stop\"}");
+                        let pipe = pipeline_mgr.clone();
+                        thread::spawn(move || {
+                            pipe.pause();
+                            crate::wfd::terminate_active_sessions();
+                            if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+                                *lock = None;
+                            }
+                            crate::display::SplashEngine::show_ready();
+                        });
                     }
-                    forward_config_to_sender("{\"action\":\"stop\"}");
-                    let pipe = pipeline_mgr.clone();
-                    thread::spawn(move || {
-                        pipe.pause();
-                        crate::wfd::terminate_active_sessions();
+                    ModeSwitchResult::SwitchTransport(transport) => {
                         if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
                             *lock = None;
                         }
-                        crate::display::SplashEngine::show_ready();
-                    });
-                } else if let Some(transport) = inferred_transport.as_deref() {
-                    if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
-                        *lock = None;
-                    }
-                    println!("\x1b[1;36m[web-server]\x1b[0m Direct Active Transport switch requested: {}", transport);
-                    match transport {
-                        "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
-                            if let Ok(mut cfg) = CONFIG.lock() {
-                                cfg.active_transport = "mode3_usb_bulk".to_string();
-                                cfg.mode3 = true;
-                                cfg.mode1 = false;
-                                cfg.mode2 = false;
-                            }
-                            forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
-                            let run = running.clone();
-                            let pipe = pipeline_mgr.clone();
-                            thread::spawn(move || {
-                                if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
-                                    eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
+                        println!("\x1b[1;36m[web-server]\x1b[0m Direct Active Transport switch requested: {}", transport);
+                        match transport.as_str() {
+                            "mode3_usb_bulk" | "usb_bulk" | "mode3" => {
+                                if let Ok(mut cfg) = CONFIG.lock() {
+                                    cfg.active_transport = "mode3_usb_bulk".to_string();
+                                    cfg.mode3 = true;
+                                    cfg.mode1 = false;
+                                    cfg.mode2 = false;
                                 }
-                            });
-                        }
-                        "mode1_udp" | "network" | "udp" | "mode1" => {
-                            if let Ok(mut cfg) = CONFIG.lock() {
-                                cfg.active_transport = "mode1_udp".to_string();
-                                cfg.mode1 = true;
-                                cfg.mode2 = false;
-                                cfg.mode3 = false;
+                                forward_config_to_sender("{\"action\":\"start\",\"transport\":\"usb_bulk\"}");
+                                let run = running.clone();
+                                let pipe = pipeline_mgr.clone();
+                                thread::spawn(move || {
+                                    if let Err(e) = crate::usb_bulk::activate_usb_bulk(run, pipe) {
+                                        eprintln!("\x1b[1;31m[web-server]\x1b[0m Failed to activate USB Bulk: {}", e);
+                                    }
+                                });
                             }
-                            forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
-                            let pipe = pipeline_mgr.clone();
-                            thread::spawn(move || {
-                                let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
-                                let _ = pipe.resume(default_kind);
-                            });
-                        }
-                        "mode2_miracast" | "miracast" | "mode2" => {
-                            if let Ok(mut cfg) = CONFIG.lock() {
-                                cfg.active_transport = "mode2_miracast".to_string();
-                                cfg.mode1 = false;
-                                cfg.mode2 = true;
-                                cfg.mode3 = false;
+                            "mode1_udp" | "network" | "udp" | "mode1" => {
+                                if let Ok(mut cfg) = CONFIG.lock() {
+                                    cfg.active_transport = "mode1_udp".to_string();
+                                    cfg.mode1 = true;
+                                    cfg.mode2 = false;
+                                    cfg.mode3 = false;
+                                }
+                                forward_config_to_sender("{\"action\":\"start\",\"transport\":\"network\"}");
+                                let pipe = pipeline_mgr.clone();
+                                thread::spawn(move || {
+                                    let default_kind = PipelineKind::RawH264Rtp { port: default_udp_port };
+                                    let _ = pipe.resume(default_kind);
+                                });
                             }
-                            // Notify host to stop stream while receiver is in Miracast mode
-                            forward_config_to_sender("{\"action\":\"stop\"}");
-                            let pipe = pipeline_mgr.clone();
-                            thread::spawn(move || {
-                                pipe.stop();
-                                crate::display::SplashEngine::show_miracast();
-                                println!("\x1b[1;32m[web-server]\x1b[0m Miracast connection guide splash displayed. Listening on RTSP 7236 / MS-MICE 7250.");
-                            });
+                            "mode2_miracast" | "miracast" | "mode2" => {
+                                if let Ok(mut cfg) = CONFIG.lock() {
+                                    cfg.active_transport = "mode2_miracast".to_string();
+                                    cfg.mode1 = false;
+                                    cfg.mode2 = true;
+                                    cfg.mode3 = false;
+                                }
+                                forward_config_to_sender("{\"action\":\"stop\"}");
+                                let pipe = pipeline_mgr.clone();
+                                thread::spawn(move || {
+                                    pipe.stop();
+                                    crate::display::SplashEngine::show_miracast();
+                                    println!("\x1b[1;32m[web-server]\x1b[0m Miracast connection guide splash displayed. Listening on RTSP 7236 / MS-MICE 7250.");
+                                });
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
-                } else if let Some(false) = m3_change {
-                    println!("\x1b[1;33m[web-server]\x1b[0m Mode 3 (USB Bulk Direct) listener disabled.");
-                } else if let Some(false) = m1_change {
-                    println!("\x1b[1;33m[web-server]\x1b[0m Mode 1 (Linux UDP) listener turned OFF.");
-                    let pipe = pipeline_mgr.clone();
-                    thread::spawn(move || {
-                        pipe.pause();
-                    });
+                    ModeSwitchResult::DisableListener(l) => {
+                        println!("\x1b[1;33m[web-server]\x1b[0m Mode listener {} disabled.", l);
+                    }
+                    ModeSwitchResult::NoChange => {}
                 }
             }
             send_response(&mut stream, "200 OK", "application/json", b"{\"status\":\"ok\"}");
@@ -1633,3 +1667,128 @@ fn serve_file_or_fallback(stream: &mut TcpStream, path: &str, content_type: &str
     let fallback = format!("File {} not available directly on Pi Zero flash yet. Please use /connect.sh to fetch or build directly.", path);
     send_response(stream, "404 Not Found", "text/plain", fallback.as_bytes());
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_evaluate_all_modes_disabled_enters_standby() {
+        let (m1, m2, m3, res) = evaluate_mode_switch(
+            r#"{"mode1":false,"mode2":false,"mode3":false}"#,
+            "mode1_udp",
+            true,
+            false,
+            false,
+        );
+        assert_eq!(m1, false);
+        assert_eq!(m2, false);
+        assert_eq!(m3, false);
+        assert_eq!(res, ModeSwitchResult::EnterStandby);
+    }
+
+    #[test]
+    fn test_evaluate_explicit_transport_activation_mode1() {
+        let (m1, _m2, m3, res) = evaluate_mode_switch(
+            r#"{"active_transport":"mode1_udp"}"#,
+            "mode3_usb_bulk",
+            true,
+            false,
+            true,
+        );
+        assert_eq!(m1, true);
+        assert_eq!(m3, true);
+        assert_eq!(res, ModeSwitchResult::SwitchTransport("mode1_udp".to_string()));
+    }
+
+    #[test]
+    fn test_evaluate_explicit_transport_activation_mode3() {
+        let (_m1, _m2, _m3, res) = evaluate_mode_switch(
+            r#"{"transport":"mode3_usb_bulk"}"#,
+            "mode1_udp",
+            true,
+            false,
+            true,
+        );
+        assert_eq!(res, ModeSwitchResult::SwitchTransport("mode3_usb_bulk".to_string()));
+    }
+
+    #[test]
+    fn test_evaluate_explicit_transport_activation_mode2() {
+        let (_m1, _m2, _m3, res) = evaluate_mode_switch(
+            r#"{"active_transport":"mode2_miracast"}"#,
+            "mode1_udp",
+            true,
+            true,
+            false,
+        );
+        assert_eq!(res, ModeSwitchResult::SwitchTransport("mode2_miracast".to_string()));
+    }
+
+    #[test]
+    fn test_evaluate_mode_toggle_transfers_active_stream() {
+        // Turning on mode3 switches active transport to mode3_usb_bulk
+        let (_m1, _m2, m3, res) = evaluate_mode_switch(
+            r#"{"mode3":true}"#,
+            "mode1_udp",
+            true,
+            false,
+            false,
+        );
+        assert_eq!(m3, true);
+        assert_eq!(res, ModeSwitchResult::SwitchTransport("mode3_usb_bulk".to_string()));
+
+        // Turning on mode1 switches active transport to mode1_udp
+        let (m1, _m2, _m3, res) = evaluate_mode_switch(
+            r#"{"mode1":true}"#,
+            "mode3_usb_bulk",
+            false,
+            false,
+            true,
+        );
+        assert_eq!(m1, true);
+        assert_eq!(res, ModeSwitchResult::SwitchTransport("mode1_udp".to_string()));
+    }
+
+    #[test]
+    fn test_evaluate_active_mode_disabled_fallback_to_other_mode() {
+        // Mode1 was active, but mode1 is toggled off while mode3 is enabled -> fallback to mode3
+        let (m1, _m2, m3, res) = evaluate_mode_switch(
+            r#"{"mode1":false}"#,
+            "mode1_udp",
+            true,
+            false,
+            true,
+        );
+        assert_eq!(m1, false);
+        assert_eq!(m3, true);
+        assert_eq!(res, ModeSwitchResult::SwitchTransport("mode3_usb_bulk".to_string()));
+
+        // Mode3 was active, but mode3 is toggled off while mode1 is enabled -> fallback to mode1
+        let (m1, _m2, m3, res) = evaluate_mode_switch(
+            r#"{"mode3":false}"#,
+            "mode3_usb_bulk",
+            true,
+            false,
+            true,
+        );
+        assert_eq!(m3, false);
+        assert_eq!(m1, true);
+        assert_eq!(res, ModeSwitchResult::SwitchTransport("mode1_udp".to_string()));
+    }
+
+    #[test]
+    fn test_evaluate_secondary_mode_disabled_does_not_switch_active() {
+        // Mode1 is active, and mode3 is turned off -> listener disabled, active remains mode1
+        let (_m1, _m2, m3, res) = evaluate_mode_switch(
+            r#"{"mode3":false}"#,
+            "mode1_udp",
+            true,
+            false,
+            true,
+        );
+        assert_eq!(m3, false);
+        assert_eq!(res, ModeSwitchResult::DisableListener("mode3".to_string()));
+    }
+}
+
