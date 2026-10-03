@@ -318,18 +318,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if is_paused {
             // Idle Standby Loop: poll UDP control listener without starting screencast session or pipelines
             while running.load(Ordering::SeqCst) && is_paused {
-                for action in ctrl_listener.poll_actions() {
+                let actions = ctrl_listener.poll_actions();
+                let mut should_unpause = false;
+                for action in actions {
                     match action {
                         ControlAction::StartStreaming => {
                             println!("\x1b[1;32m[+] Comando recebido: Iniciar Transmissão!\x1b[0m");
-                            if monitor_to_record == "HDMI-1" {
-                                pipewire::ensure_kernel_hdmi_connected();
-                                pipewire::ensure_gnome_displays(cfg.scale);
-                            } else {
-                                pipewire::collapse_gnome_displays();
-                            }
-                            is_paused = false;
-                            break;
+                            should_unpause = true;
                         }
                         ControlAction::ChromeCastLaunch => {
                             println!("\x1b[1;32m[+] Chrome Cast LAUNCH recebido: Seleção interativa de tela...\x1b[0m");
@@ -351,8 +346,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     pipewire::ensure_kernel_hdmi_connected();
                                     pipewire::ensure_gnome_displays(cfg.scale);
                                 }
-                                is_paused = false;
-                                break;
+                                should_unpause = true;
                             } else {
                                 println!("\x1b[1;33m[!] Chrome Cast cancelado pelo usuário no diálogo.\x1b[0m");
                                 continue;
@@ -360,21 +354,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         ControlAction::StopStreaming => {
                             pipewire::collapse_gnome_displays();
+                            should_unpause = false;
                             // Do not echo notify_receiver_stop here to prevent ping-pong loop with receiver
                         }
                         ControlAction::SetMode(ref m) => {
                             cfg.mode = m.clone();
                             if m == "clone" {
                                 monitor_to_record = "eDP-1".to_string();
-                                pipewire::collapse_gnome_displays();
-                                is_paused = false;
-                                break;
+                                should_unpause = true;
                             } else if m == "extend" {
                                 monitor_to_record = "HDMI-1".to_string();
-                                pipewire::ensure_kernel_hdmi_connected();
-                                pipewire::ensure_gnome_displays(cfg.scale);
-                                is_paused = false;
-                                break;
+                                should_unpause = true;
                             } else if m == "ask" || m == "interactive" {
                                 println!("\x1b[1;32m[+] Modo configurado para Perguntar ao Iniciar (Interativo).\x1b[0m");
                             }
@@ -394,6 +384,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         _ => {}
                     }
+                }
+                if should_unpause {
+                    if monitor_to_record == "HDMI-1" {
+                        pipewire::ensure_kernel_hdmi_connected();
+                        pipewire::ensure_gnome_displays(cfg.scale);
+                    } else {
+                        pipewire::collapse_gnome_displays();
+                    }
+                    is_paused = false;
+                    break;
                 }
                 if is_paused {
                     thread::sleep(Duration::from_millis(150));
@@ -444,6 +444,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (Some(session), nid, None)
             }
         };
+
+        if cfg.transport == TransportKind::UsbBulk {
+            if current_usb_pipe.is_none() {
+                current_usb_pipe = open_usb_pipe_transport(running.clone(), usb_writer_alive.clone());
+            }
+        } else if current_usb_pipe.is_some() {
+            close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
+        }
 
         let mut pipeline_builder = PipelineBuilder {
             node_id,
