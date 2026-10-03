@@ -3426,6 +3426,16 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 const targetTrans = modeKey === 'mode3' ? 'mode3_usb_bulk' : (modeKey === 'mode2' ? 'mode2_miracast' : 'mode1_udp');
                 setActiveTransport(targetTrans);
             } else {
+                const anyActive = activeModes.mode1 || activeModes.mode2 || activeModes.mode3;
+                const currentActiveKey = currentTransport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
+
+                if (!anyActive) {
+                    setExtensionAction('stop');
+                } else if (currentActiveKey === modeKey) {
+                    const fallbackTrans = activeModes.mode1 ? 'mode1_udp' : (activeModes.mode3 ? 'mode3_usb_bulk' : 'mode2_miracast');
+                    setActiveTransport(fallbackTrans);
+                }
+
                 fetch('/api/modes', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

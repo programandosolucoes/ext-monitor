@@ -349,20 +349,61 @@ fn handle_http_client(
                     }
                 }
 
+                let all_disabled = active_transport.is_none() && if let Ok(cfg) = CONFIG.lock() {
+                    !cfg.mode1 && !cfg.mode2 && !cfg.mode3
+                } else {
+                    false
+                };
+
                 let inferred_transport = active_transport.map(|s| s.to_string())
                     .or_else(|| {
-                        if let Some(true) = m3_change {
+                        if all_disabled {
+                            None
+                        } else if let Some(true) = m3_change {
                             Some("mode3_usb_bulk".to_string())
                         } else if let Some(true) = m1_change {
                             Some("mode1_udp".to_string())
                         } else if let Some(true) = extract_json_bool(body, "mode2") {
                             Some("mode2_miracast".to_string())
                         } else {
-                            None
+                            if let Ok(cfg) = CONFIG.lock() {
+                                if (cfg.active_transport.contains("mode1") && m1_change == Some(false))
+                                    || (cfg.active_transport.contains("mode3") && m3_change == Some(false))
+                                {
+                                    if cfg.mode1 {
+                                        Some("mode1_udp".to_string())
+                                    } else if cfg.mode3 {
+                                        Some("mode3_usb_bulk".to_string())
+                                    } else if cfg.mode2 {
+                                        Some("mode2_miracast".to_string())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
                         }
                     });
 
-                if let Some(transport) = inferred_transport.as_deref() {
+                if all_disabled {
+                    println!("\x1b[1;33m[web-server]\x1b[0m All video modes disabled via Web UI. Entering Standby...");
+                    if let Ok(mut cfg) = CONFIG.lock() {
+                        cfg.active_transport = "standby".to_string();
+                    }
+                    forward_config_to_sender("{\"action\":\"stop\"}");
+                    let pipe = pipeline_mgr.clone();
+                    thread::spawn(move || {
+                        pipe.pause();
+                        crate::wfd::terminate_active_sessions();
+                        if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+                            *lock = None;
+                        }
+                        crate::display::SplashEngine::show_ready();
+                    });
+                } else if let Some(transport) = inferred_transport.as_deref() {
                     if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
                         *lock = None;
                     }
