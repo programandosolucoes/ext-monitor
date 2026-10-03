@@ -129,8 +129,21 @@ curl -X POST http://192.168.7.2:8080/api/host/control \
 ### 3.3 Telemetria e Monitoramento em Tempo Real
 
 ```bash
-# Telemetria geral (temperatura SoC, uso CPU, RAM livre, estado do stream)
+# Telemetria geral (temperatura SoC, uso CPU, RAM livre, estado do stream e Árbitro de Hierarquia HDMI)
 curl -s http://192.168.7.2:8080/api/status | jq .
+# Exemplo de resposta:
+# {
+#   "temp": "44.4",
+#   "cpu": "0.31%",
+#   "ram": 287,
+#   "stream_state": "active",
+#   "hierarchy": {
+#     "level": 0,
+#     "level_name": "Level 0: Desktop Streaming (mode3_usb_bulk)",
+#     "display_owner": "KMS Plane 86",
+#     "visualizer_enabled": false
+#   }
+# }
 
 # Clocks reais de hardware do SoC via DebugFS (ARM, VPU, H.264, SDRAM)
 curl -s http://192.168.7.2:8080/api/debug/clocks | jq .
@@ -180,12 +193,12 @@ curl -s http://192.168.7.2:8080/api/screenshot -o fb_capture.raw
 - **CLI (`ext-sender`):** Comandos por terminal possuem intenção explícita e nunca abrem diálogos gráficos.
 - **Google Chrome Cast (LAUNCH):** É a **ÚNICA** fonte de sinal que invoca o diálogo interativo do desktop (`dialog.rs`).
 
-### 4.2 Robustez do Diálogo D-Bus
+### 4.2 Robustez do Diálogo Modal (Zenity + D-Bus Fallback)
 Quando o Chrome Cast inicia:
-1. **Prioridade:** Urgência Crítica (`urgency: 2u8`). Não se esconde sob outras janelas.
-2. **Residência:** Notificação residente (`resident: true`).
-3. **Timeout:** Janela de 60 segundos para interação.
-4. **Botão de Cancelamento:** `❌ Cancelar / Fechar` aborta a transmissão sem alterar o layout atual dos monitores.
+1. **Janela Modal em Primeiro Plano:** Utiliza `zenity --question` com janela nativa do desktop que retém foco e não se esconde sob outras janelas.
+2. **Temporizador de 30 Segundos:** Contagem regressiva visível com cancelamento automático se inativo.
+3. **Botão de Cancelamento Dedicado:** Permite abortar imediatamente sem alterar o layout das telas.
+4. **Fallback Suave:** Caso o `zenity` não esteja instalado, utiliza D-Bus Notification crítico residente.
 
 ---
 
@@ -218,3 +231,12 @@ Ao executar benchmarks de reprodução (ex.: Pluto TV em tela cheia com áudio):
    Conecte via cliente Miracast (`ext-miracast` ou `gnome-network-displays`).
 4. **Retorno a Repouso:**  
    `ext-sender switch standby`
+
+---
+
+## 7. Versão Congelada v2.8.0-final
+
+- **Bateria de Testes:** 100% verde em todo o workspace (`cargo test --workspace`) com 160 testes unitários cobrindo árbitro de serviços, parser de ações, pipelines e micro-blocos.
+- **Tag Git:** `v2.8.0-final`
+- **Release:** Congelamento final e blindagem de arquitetura.
+

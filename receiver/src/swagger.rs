@@ -168,7 +168,13 @@ pub const OPENAPI_JSON: &str = r##"{
                   "temp": "44.4",
                   "cpu": "0.31%",
                   "ram": 287,
-                  "stream_state": "active"
+                  "stream_state": "active",
+                  "hierarchy": {
+                    "level": 0,
+                    "level_name": "Level 0: Desktop Streaming (mode3_usb_bulk)",
+                    "display_owner": "KMS Plane 86",
+                    "visualizer_enabled": false
+                  }
                 }
               }
             }
@@ -1343,7 +1349,17 @@ pub const OPENAPI_JSON: &str = r##"{
           "temp": { "type": "string", "example": "44.4", "description": "Broadcom BCM2835 SoC temperature in °C" },
           "cpu": { "type": "string", "example": "0.31%", "description": "Receiver CPU utilization" },
           "ram": { "type": "integer", "example": 287, "description": "Free system memory in MiB" },
-          "stream_state": { "type": "string", "enum": ["active", "paused", "idle"], "example": "active" }
+          "stream_state": { "type": "string", "enum": ["active", "paused", "idle"], "example": "active" },
+          "hierarchy": {
+            "type": "object",
+            "description": "4-Level Service Hierarchy and HDMI Scanout Arbiter state",
+            "properties": {
+              "level": { "type": "integer", "enum": [0, 1, 2, 3], "example": 0, "description": "Active service hierarchy level (0: Desktop, 1: Media, 2: Audio, 3: Standby)" },
+              "level_name": { "type": "string", "example": "Level 0: Desktop Streaming (mode3_usb_bulk)" },
+              "display_owner": { "type": "string", "example": "KMS Plane 86" },
+              "visualizer_enabled": { "type": "boolean", "example": false }
+            }
+          }
         },
         "required": ["temp", "cpu", "ram", "stream_state"]
       },

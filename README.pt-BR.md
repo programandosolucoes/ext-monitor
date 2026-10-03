@@ -8,7 +8,7 @@
 [![Latency: Sub-Millisecond](https://img.shields.io/badge/Latency-%3C1ms_USB_Bulk-brightgreen.svg)]()
 [![OS: Linux & Windows](https://img.shields.io/badge/OS-Linux_Wayland_%26_Windows_10%2F11-blueviolet.svg)]()
 [![API: OpenAPI 3.0](https://img.shields.io/badge/API-OpenAPI_3.0_Swagger-green.svg)](http://192.168.7.2:8080/swagger)
-[![Version: v2.7.0](https://img.shields.io/badge/Release-v2.7.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.7.0-final)
+[![Version: v2.8.0](https://img.shields.io/badge/Release-v2.8.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.8.0-final)
 
 Um sistema de alta performance, 100% em Rust nativo puro, concebido para transformar um modesto **Raspberry Pi Zero (v1.2 / v1.3 / W / Zero 2 W)** conectado por um único **cabo Micro-USB comum** em um **monitor secundário HDMI de hardware com latência zero, sink de áudio digital, visualizador de espectro sonoro em tempo real e central multimídia IoT** para Linux (Wayland / GNOME Mutter) e Windows 10/11 (Miracast nativo / `Win + K`).
 
@@ -143,7 +143,7 @@ Os 20 blueprints fundamentais documentam a arquitetura de silício e o motor ess
 19. **[Blueprint 19: Appliance IoT Media Renderer: Cast e Visualizador HDMI](docs/blueprints/pt/19-iot-media-renderer-chromecast-upnp-e-visualizador-hdmi.md):** Dongle multimídia inteligente: Google Cast (CastV2), DIAL (YouTube), UPnP/DLNA e visualizador gráfico HDMI.
 20. **[Blueprint 20: Multiplexador HDMI de Porta Única e Zero-Reboot](docs/blueprints/pt/20-multiplexador-hdmi-scanout-fft-realtime-i18n-e-zero-reboot.md):** Exclusão mútua na porta HDMI física, FFT de 512 pontos com Hann, i18n simétrico e ciclo de vida zero-reboot.
 
-### A Suíte de Expansão Miracast, Benchmark, Áudio Hi-Res e Resiliência (Blueprints 21 a 33)
+### A Suíte de Expansão Miracast, Benchmark, Áudio Hi-Res e Resiliência (Blueprints 21 a 34)
 Para viabilizar projeção sem fio nativa, eliminação de dependências legadas, áudio de estúdio, transmissão Google Cast e testes automatizados de troca de modo, o projeto evoluiu continuamente:
 
 21. **[Blueprint 21: Miracast MS-MICE, Conexão Reversa RTSP WFD e SPS Dinâmico](docs/blueprints/pt/21-miracast-ms-mice-rtsp-wfd-sps-dinamico-e-gnome-network-displays.md):** Sinalização binária MS-MICE (TCP 7250), reversão RTSP WFD para o Source (7236), migração para UDP 5005 e parser puro em Rust de SPS dinâmico.
@@ -159,6 +159,7 @@ Para viabilizar projeção sem fio nativa, eliminação de dependências legadas
 31. **[Blueprint 31: Diagnóstico de Mismatch Visual na UI Web e Sincronização de Telemetria](docs/blueprints/pt/31-diagnostico-mismatch-transporte-ui-e-sincronizacao-telemetria-modo1-vs-modo3.md):** Resolução de discrepâncias estáticas na UI Web e sincronização imediata sub-100ms do estado de transporte no boot.
 32. **[Blueprint 32: Painel de Áudio Digital DAC na Aba Principal, Transmissão Estilo Chromecast e Testes Unitários](docs/blueprints/pt/blueprint-32-painel-audio-dac-e-transmissao-chromecast-com-testes-unitarios.md):** Consolidação dos controles de áudio Hi-Res DAC e transmissão estilo Chromecast (Web Cast 1-clique e Google Cast) diretamente na Aba 1 de Monitoramento, com 7 testes unitários em Rust para chaveamento determinístico de serviços e modo standby.
 33. **[Blueprint 33: Certificação TLS Estrita Chromium Cast, Handshake WebRTC Mirroring e Resolução de Conflitos SSDP](docs/blueprints/pt/blueprint-33-google-cast-v2-tls-webrtc-handshake-e-resolucao-conflitos-ssdp.md):** Validação estrita de certificados TLS Chromium (limite de 4 dias, extensões críticas e RSA-SHA256), negociação completa WebRTC Mirroring (OFFER/ANSWER), eliminação de dispositivo duplicado via SSDP/DIAL e correção de ativação lógica no GNOME Mutter (fim da imagem cinza).
+34. **[Blueprint 34: Hierarquia de Serviços em 4 Níveis, Árvore de Decisão e Micro-Blocos de Fluxo](docs/blueprints/pt/blueprint-34-hierarquia-de-servicos-arvore-de-decisao-e-microblocos.md):** Separação arquitetural de ingresso/egresso de transporte, decodificação VPU em hardware e scanout KMS DRM em micro-blocos isolados. Introdução do Árbitro de Serviços HDMI em 4 níveis, eliminando disputa visual e oscilação entre vídeo desktop, equalizador de espectro FFT e telas de splash/standby.
 
 ---
 

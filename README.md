@@ -8,7 +8,7 @@
 [![Latency: Sub-Millisecond](https://img.shields.io/badge/Latency-%3C1ms_USB_Bulk-brightgreen.svg)]()
 [![OS: Linux & Windows](https://img.shields.io/badge/OS-Linux_Wayland_%26_Windows_10%2F11-blueviolet.svg)]()
 [![API: OpenAPI 3.0](https://img.shields.io/badge/API-OpenAPI_3.0_Swagger-green.svg)](http://192.168.7.2:8080/swagger)
-[![Version: v2.7.0](https://img.shields.io/badge/Release-v2.7.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.7.0-final)
+[![Version: v2.8.0](https://img.shields.io/badge/Release-v2.8.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.8.0-final)
 
 A high-performance, 100% native Rust system designed to transform a modest **Raspberry Pi Zero (v1.2 / v1.3 / W / Zero 2 W)** connected via a single standard **Micro-USB cable** into a **zero-latency hardware HDMI secondary display, digital audio sink, real-time audio spectrum visualizer, and IoT media appliance** for Linux (Wayland / GNOME Mutter) and Windows 10/11 (native Miracast / `Win + K`).
 
@@ -278,6 +278,7 @@ To support native zero-driver wireless projection, studio-grade Hi-Res audio, mo
 31. **[Blueprint 31: Web UI Transport Mismatch Diagnosis & Telemetry Sync](docs/blueprints/en/31-ui-transport-mismatch-diagnosis-and-telemetry-sync-mode1-vs-mode3.md):** Resolving visual mismatch where Web UI buttons statically displayed "USB Bulk Direct" while streaming over Network UDP; updating HTML defaults and sub-100ms boot sync.
 32. **[Blueprint 32: Audio DAC Panel on Tab 1, Chromecast-Style Web Casting & Service Switching Unit Tests](docs/blueprints/en/blueprint-32-audio-dac-panel-and-chromecast-casting-with-unit-tests.md):** Consolidating Hi-Res Audio DAC controls and Chromecast-style web sharing (1-click Web Cast and Google Cast) directly onto Tab 1 Monitoring, with 7 formal Rust unit tests for deterministic service switching and standby behavior.
 33. **[Blueprint 33: Strict Chromium Cast TLS Certificate Validation, WebRTC Mirroring Handshake & SSDP Conflict Resolution](docs/blueprints/en/blueprint-33-google-cast-v2-tls-webrtc-handshake-and-ssdp-conflict-resolution.md):** Enforcing Chromium Cast strict certificate lifetimes (4-day max, critical X.509 extensions, RSA-SHA256 signature), complete WebRTC Mirroring OFFER/ANSWER negotiation, eliminating duplicate ghost devices via SSDP/DIAL routing, and fixing GNOME Mutter logical display detection (resolving gray screen).
+34. **[Blueprint 34: 4-Level Service Hierarchy, Decision Tree & Flow Micro-Blocks](docs/blueprints/en/blueprint-34-service-hierarchy-decision-tree-and-microblocks.md):** Architectural separation of transport ingress/egress, hardware VPU decoding, and KMS DRM scanout into isolated micro-blocks. Introduces the 4-level HDMI Service Arbiter, eliminating visual contention and flickering between desktop video, FFT spectrum visualizer, and standby splash screens.
 
 ---
 
