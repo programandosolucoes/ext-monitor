@@ -394,6 +394,7 @@ impl AudioReceiver {
                             } else {
                                 (vol as f32) / 100.0f32
                             };
+                            let is_unity_gain = !is_muted && vol == 100;
 
                             iec_buffer.clear();
 
@@ -401,8 +402,16 @@ impl AudioReceiver {
                                 let l_raw = i16::from_le_bytes([udp_buf[i * 4], udp_buf[i * 4 + 1]]);
                                 let r_raw = i16::from_le_bytes([udp_buf[i * 4 + 2], udp_buf[i * 4 + 3]]);
 
-                                let s_l = ((l_raw as f32) * vol_scale) as i16 as u16 as u32;
-                                let s_r = ((r_raw as f32) * vol_scale) as i16 as u16 as u32;
+                                let s_l = if is_unity_gain {
+                                    l_raw as u16 as u32
+                                } else {
+                                    ((l_raw as f32) * vol_scale) as i16 as u16 as u32
+                                };
+                                let s_r = if is_unity_gain {
+                                    r_raw as u16 as u32
+                                } else {
+                                    ((r_raw as f32) * vol_scale) as i16 as u16 as u32
+                                };
 
                                 let block_frame = frame_counter % 192;
                                 let status_byte = status_bytes[block_frame / 8];
