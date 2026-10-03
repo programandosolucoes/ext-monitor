@@ -237,6 +237,47 @@ impl AlsaHdmiDevice {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioTransport {
+    NetworkUdp,
+    UsbAudioClass,
+    UsbBulkMux,
+}
+
+impl AudioTransport {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::NetworkUdp => "network_udp",
+            Self::UsbAudioClass => "uac2_gadget",
+            Self::UsbBulkMux => "usb_bulk_mux",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "uac2" | "uac2_gadget" | "usb_audio" | "2" => Self::UsbAudioClass,
+            "bulk" | "usb_bulk" | "usb_bulk_mux" | "mux" | "3" => Self::UsbBulkMux,
+            _ => Self::NetworkUdp,
+        }
+    }
+
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            1 => Self::UsbAudioClass,
+            2 => Self::UsbBulkMux,
+            _ => Self::NetworkUdp,
+        }
+    }
+
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            Self::NetworkUdp => 0,
+            Self::UsbAudioClass => 1,
+            Self::UsbBulkMux => 2,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AudioStatus {
     pub enabled: bool,
@@ -245,13 +286,14 @@ pub struct AudioStatus {
     pub muted: bool,
     pub port: u16,
     pub rate: u32,
+    pub transport: &'static str,
 }
 
 impl AudioStatus {
     pub fn to_json(&self) -> String {
         format!(
-            "{{\"enabled\":{},\"active\":{},\"volume\":{},\"muted\":{},\"port\":{},\"rate\":{}}}",
-            self.enabled, self.active, self.volume, self.muted, self.port, self.rate
+            "{{\"enabled\":{},\"active\":{},\"volume\":{},\"muted\":{},\"port\":{},\"rate\":{},\"transport\":\"{}\"}}",
+            self.enabled, self.active, self.volume, self.muted, self.port, self.rate, self.transport
         )
     }
 }
@@ -263,6 +305,7 @@ pub struct AudioReceiver {
     volume: Arc<AtomicU32>,
     muted: Arc<AtomicBool>,
     rate: Arc<AtomicU32>,
+    transport: Arc<std::sync::atomic::AtomicU8>,
     port: u16,
     enabled: bool,
 }
@@ -276,6 +319,7 @@ impl AudioReceiver {
             volume: Arc::new(AtomicU32::new(100)),
             muted: Arc::new(AtomicBool::new(false)),
             rate: Arc::new(AtomicU32::new(96000)),
+            transport: Arc::new(std::sync::atomic::AtomicU8::new(0)),
             port,
             enabled: true,
         }
@@ -501,7 +545,14 @@ impl AudioReceiver {
         }
     }
 
+    pub fn set_transport(&mut self, t: AudioTransport) {
+        println!("\x1b[1;36m[audio-native]\x1b[0m Audio transport architecture switched: {:?}", t);
+        self.transport.store(t.to_u8(), Ordering::SeqCst);
+    }
+
     pub fn status(&mut self) -> AudioStatus {
+        let t_val = self.transport.load(Ordering::Relaxed);
+        let transport_str = AudioTransport::from_u8(t_val).as_str();
         AudioStatus {
             enabled: self.enabled,
             active: self.active.load(Ordering::Relaxed),
@@ -509,6 +560,7 @@ impl AudioReceiver {
             muted: self.muted.load(Ordering::Relaxed),
             port: self.port,
             rate: self.rate.load(Ordering::Relaxed),
+            transport: transport_str,
         }
     }
 }

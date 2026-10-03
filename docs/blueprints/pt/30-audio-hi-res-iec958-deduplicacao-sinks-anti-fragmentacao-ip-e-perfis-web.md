@@ -122,6 +122,18 @@ O painel web do receptor (`receiver/src/web_ui.rs`) conta agora com uma seção 
 
 ---
 
+### 3.1 Arquitetura de Transporte de Áudio (Matriz de Modos Físicos)
+
+O painel web disponibiliza agora a seleção das três modalidades de transporte de áudio do ecossistema:
+
+| Modalidade de Transporte | Meio Físico | Protocolo / Porta | Latência | Características Principais |
+| :--- | :--- | :--- | :---: | :--- |
+| 🌐 **Modo 1: Rede UDP (Low-Latency)** | USB CDC-ECM / LAN | UDP `5004` (RTP/PCM) | < 5 ms | Padrão ativo. Pacotes de 1024 B, zero fragmentação IP, A/V sync automático. |
+| 🔌 **Modo 2: USB Audio Class (UAC2)** | USB Gadget `dwc2` | UAC2 Endpoint Isochronous | < 1 ms | Hardware Plug & Play. Reconhecido nativamente como Placa de Som USB sem rede. |
+| 📦 **Modo 3: Multiplex USB Bulk** | Tubo `/dev/usb-display-bulk` | Mux PCM + H.264 | < 1 ms | Offline puro. Pacotes de áudio intercalados diretamente no pipe de vídeo Bulk. |
+
+---
+
 ## 4. Validação Empírica no Hardware
 
 * **Verificação de Pacotes no Barramento USB/Ethernet:**

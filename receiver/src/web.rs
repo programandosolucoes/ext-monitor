@@ -281,6 +281,19 @@ fn handle_http_client(
             }
             send_response(&mut stream, "400 Bad Request", "text/plain", b"Missing rate");
         }
+        ("POST", "/api/audio/transport") => {
+            if let Some(idx) = req_str.find("\r\n\r\n") {
+                let body = &req_str[idx + 4..];
+                if let Some(mode) = extract_json_str(body, "transport") {
+                    let transport = crate::audio::AudioTransport::from_str(mode);
+                    pipeline_mgr.set_audio_transport(transport);
+                    let audio_st = pipeline_mgr.audio_status();
+                    send_response(&mut stream, "200 OK", "application/json", audio_st.to_json().as_bytes());
+                    return;
+                }
+            }
+            send_response(&mut stream, "400 Bad Request", "text/plain", b"Missing transport");
+        }
         ("GET", "/api/config") => {
             let json = if let Ok(cfg) = CONFIG.lock() {
                 let col = if cfg.color.is_empty() { "full" } else { &cfg.color };

@@ -100,6 +100,18 @@ The receiver Web Dashboard features a dedicated **HDMI Master Audio Profile & Sa
 
 ---
 
+### 3.1 Audio Transport Architecture (Physical Modes Matrix)
+
+The Web Dashboard now supports on-the-fly selection of the three physical audio transport pathways:
+
+| Transport Mode | Physical Interface | Protocol / Endpoint | Latency | Key Characteristics |
+| :--- | :--- | :--- | :---: | :--- |
+| 🌐 **Mode 1: UDP Network (Low-Latency)** | USB CDC-ECM / LAN | UDP `5004` (RTP/PCM) | < 5 ms | Default active mode. 1024 B unfragmented packets, zero IP fragmentation, auto A/V sync. |
+| 🔌 **Mode 2: USB Audio Class (UAC2)** | USB Gadget `dwc2` | UAC2 Isochronous Endpoint | < 1 ms | Hardware Plug & Play. Recognized natively as a USB Sound Card without networking. |
+| 📦 **Mode 3: Multiplexed USB Bulk** | Pipe `/dev/usb-display-bulk` | PCM + H.264 Mux | < 1 ms | Offline direct. Audio packets interleaved directly into the high-speed Bulk pipe. |
+
+---
+
 ## 4. Empirical Validation on Real Hardware
 
 * **Wire Traffic Verification:**

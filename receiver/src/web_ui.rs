@@ -1263,6 +1263,26 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- Audio Transport Architecture: Network UDP vs UAC2 Gadget vs USB Bulk Mux -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span class="tip-wrap">
+                            <span data-i18n="audioTransportLabel">Audio Transport Architecture</span>
+                            <span class="tip-icon">?</span>
+                            <span class="tip-box" data-i18n="tipAudioTransport">Select how digital audio is carried from PC to Pi Zero: Mode 1 UDP Network Stream (Port 5004), Mode 2 USB Audio Class (UAC2 Gadget), or Mode 3 USB Bulk Multiplexed.</span>
+                        </span>
+                        <span class="control-value" id="valAudioTransport">Mode 1: UDP Stream (Port 5004 - Active)</span>
+                    </div>
+                    <div class="btn-grid" id="audioTransportGrid">
+                        <button class="btn-toggle active" id="btnAudioTransUdp" onclick="setAudioTransport('network_udp')" data-transport="network_udp">🌐 Mode 1: UDP Network (Low-Latency)</button>
+                        <button class="btn-toggle" id="btnAudioTransUac2" onclick="setAudioTransport('uac2_gadget')" data-transport="uac2_gadget">🔌 Mode 2: USB Audio Class (UAC2)</button>
+                        <button class="btn-toggle" id="btnAudioTransBulk" onclick="setAudioTransport('usb_bulk_mux')" data-transport="usb_bulk_mux">📦 Mode 3: USB Bulk Mux (Offline)</button>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.4rem; line-height: 1.4;" id="descAudioTransport" data-i18n="audioTransportDesc">
+                        Mode 1 UDP Network: Audio stream arrives via UDP port 5004 in 1024-byte unfragmented packets. True sub-5ms delay with automatic A/V synchronization.
+                    </div>
+                </div>
+
                 <!-- Transmission Mode: Continuous CFR vs Drop-Only Economy -->
                 <div class="control-group">
                     <div class="control-label">
@@ -2091,6 +2111,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 tipAudio: "Digital audio volume sent to monitor/TV via HDMI cable. Sub-25ms latency with A/V sync.",
                 audioProfileLabel: "HDMI Master Audio Profile & Sample Rate",
                 tipAudioProfile: "Select and force-load the hardware sample rate clock directly into the Pi Zero BCM2835 ALSA sound core. Supports true IEC958 subframe audio up to 192kHz 24-bit Hi-Res.",
+                audioTransportLabel: "Audio Transport Architecture",
+                tipAudioTransport: "Select the physical transport path for digital audio: Mode 1 UDP Network Stream (Port 5004), Mode 2 USB Audio Class (UAC2 Gadget), or Mode 3 USB Bulk Multiplexed.",
+                audioTransportDesc: "Mode 1 UDP Network: Audio stream arrives via UDP port 5004 in 1024-byte unfragmented packets. True sub-5ms delay with automatic A/V synchronization.",
+                audioTransUdpDesc: "Mode 1 UDP Network: Audio stream arrives via UDP port 5004 in 1024-byte unfragmented packets. True sub-5ms delay with automatic A/V synchronization.",
+                audioTransUac2Desc: "Mode 2 UAC2 Gadget: Pi Zero acts as a native USB Sound Card on PC. Zero network dependency, plug-and-play in Windows and Linux.",
+                audioTransBulkDesc: "Mode 3 USB Bulk: Audio is multiplexed into the /dev/usb-display-bulk pipe alongside H.264 video. Sub-1ms latency.",
                 docAltPlayersCmd: "# FFmpeg / ffplay (Low Latency):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
                 copied: "Copied!",
                 copiedSuccess: "✓ Copied to clipboard!",
@@ -2383,6 +2409,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 tipAudio: "Volume do áudio digital enviado ao monitor/TV via cabo HDMI. Latência sub-25ms com sincronismo A/V.",
                 audioProfileLabel: "Perfil de Áudio HDMI e Taxa de Amostragem",
                 tipAudioProfile: "Selecione e force o carregamento do clock de hardware diretamente no núcleo de áudio ALSA BCM2835 do Pi Zero. Suporta áudio subframe IEC958 real de até 192kHz 24-bit Hi-Res.",
+                audioTransportLabel: "Arquitetura de Transporte de Áudio",
+                tipAudioTransport: "Selecione a via física de transporte do áudio digital: Modo 1 Rede UDP (Porta 5004), Modo 2 USB Audio Class (Gadget UAC2) ou Modo 3 Multiplexação USB Bulk.",
+                audioTransportDesc: "Modo 1 Rede UDP: Fluxo de áudio via porta UDP 5004 em pacotes de 1024 bytes sem fragmentação. Latência sub-5ms com sincronismo A/V.",
+                audioTransUdpDesc: "Modo 1 Rede UDP: Fluxo de áudio via porta UDP 5004 em pacotes de 1024 bytes sem fragmentação. Latência sub-5ms com sincronismo A/V.",
+                audioTransUac2Desc: "Modo 2 Gadget UAC2: O Pi Zero opera como uma Placa de Som USB física no PC. Zero dependência de rede, Plug-and-Play no Windows e Linux.",
+                audioTransBulkDesc: "Modo 3 USB Bulk: O áudio é multiplexado no mesmo tubo /dev/usb-display-bulk junto com o vídeo H.264. Latência sub-1ms.",
                 docAltPlayersCmd: "# FFmpeg / ffplay (Baixa Latência):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
                 copied: "Copiado!",
                 copiedSuccess: "✓ Copiado para a área de transferência!",
@@ -2670,6 +2702,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 tipAudio: "Volume dell'audio digitale inviato al monitor/TV tramite cavo HDMI. Latenza inferiore a 25ms con sincronizzazione A/V.",
                 audioProfileLabel: "Profilo Audio HDMI e Frequenza di Campionamento",
                 tipAudioProfile: "Seleziona e forza il clock hardware direttamente nel core audio ALSA BCM2835 del Pi Zero. Supporta audio subframe IEC958 reale fino a 192kHz 24-bit Hi-Res.",
+                audioTransportLabel: "Architettura di Trasporto Audio",
+                tipAudioTransport: "Seleziona la via fisica di trasporto dell'audio digitale: Modalità 1 Rete UDP (Porta 5004), Modalità 2 USB Audio Class (Gadget UAC2) o Modalità 3 Multiplex USB Bulk.",
+                audioTransportDesc: "Modalità 1 Rete UDP: Flusso audio tramite porta UDP 5004 in pacchetti da 1024 byte senza frammentazione. Latenza inferiore a 5ms con sincronizzazione A/V.",
+                audioTransUdpDesc: "Modalità 1 Rete UDP: Flusso audio tramite porta UDP 5004 in pacchetti da 1024 byte senza frammentazione. Latenza inferiore a 5ms con sincronizzazione A/V.",
+                audioTransUac2Desc: "Modalità 2 Gadget UAC2: Il Pi Zero funge da scheda audio USB fisica sul PC. Zero dipendenza di rete, Plug-and-Play su Windows e Linux.",
+                audioTransBulkDesc: "Modalità 3 USB Bulk: L'audio è multiplexato nel canale /dev/usb-display-bulk insieme al video H.264. Latenza sub-1ms.",
                 docAltPlayersCmd: "# FFmpeg / ffplay (Bassa Latenza):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
                 copied: "Copiato!",
                 copiedSuccess: "✓ Copiato negli appunti!",
@@ -2957,6 +2995,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 tipAudio: "通过 HDMI 发送到监视器/电视的数字音频音量。低于 25ms 延迟并保证音画同步。",
                 audioProfileLabel: "HDMI 主音频配置与采样率",
                 tipAudioProfile: "选择并强制将硬件采样率时钟直接载入树莓派 Pi Zero BCM2835 ALSA 核心。支持高达 192kHz 24-bit Hi-Res 真实 IEC958 子帧音频。",
+                audioTransportLabel: "音频传输架构与物理通道",
+                tipAudioTransport: "选择数字音频的物理传输通道：模式 1 UDP 网络流 (端口 5004)、模式 2 USB 声卡设备 (UAC2 Gadget) 或模式 3 USB Bulk 复用传输。",
+                audioTransportDesc: "模式 1 UDP 网络：音频通过 UDP 端口 5004 传输，1024 字节防分片封包。低于 5ms 延迟并保证音画同步。",
+                audioTransUdpDesc: "模式 1 UDP 网络：音频通过 UDP 端口 5004 传输，1024 字节防分片封包。低于 5ms 延迟并保证音画同步。",
+                audioTransUac2Desc: "模式 2 UAC2 设备：树莓派 Pi Zero 在 PC 上识别为即插即用物理 USB 声卡。零网络协议依赖，免驱支持 Win/Linux。",
+                audioTransBulkDesc: "模式 3 USB Bulk 复用：音频与 H.264 视频直接复用在 /dev/usb-display-bulk 管道中。低于 1ms 极限延迟。",
                 docAltPlayersCmd: "# FFmpeg / ffplay (超低延迟播放):\nffplay -probesize 32 -analyzeduration 0 -sync ext -fflags nobuffer -flags low_delay -i 'rtp://192.168.7.2:5000'",
                 copied: "已复制!",
                 copiedSuccess: "✓ 已复制到剪贴板!",
@@ -3754,6 +3798,64 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
         }
 
+        let currentAudioTransport = 'network_udp';
+
+        function setAudioTransport(transport) {
+            currentAudioTransport = transport;
+            localStorage.setItem('ext_audio_transport', transport);
+            updateAudioTransportUI(transport);
+
+            fetch('/api/audio/transport', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transport: transport })
+            })
+            .then(r => r.json())
+            .then(st => {
+                showToast(`✓ Audio transport switched to: ${formatTransportName(transport)}`);
+                if (st.transport) updateAudioTransportUI(st.transport);
+            })
+            .catch(() => showToast(`Audio transport set to ${transport}`));
+        }
+
+        function formatTransportName(transport) {
+            if (transport === 'uac2_gadget') return 'Mode 2: USB Audio Class (UAC2)';
+            if (transport === 'usb_bulk_mux') return 'Mode 3: USB Bulk Mux (Offline)';
+            return 'Mode 1: UDP Network (Port 5004)';
+        }
+
+        function updateAudioTransportUI(transport) {
+            const btnUdp = document.getElementById('btnAudioTransUdp');
+            const btnUac2 = document.getElementById('btnAudioTransUac2');
+            const btnBulk = document.getElementById('btnAudioTransBulk');
+            const valLabel = document.getElementById('valAudioTransport');
+            const desc = document.getElementById('descAudioTransport');
+
+            if (btnUdp) btnUdp.classList.toggle('active', transport === 'network_udp');
+            if (btnUac2) btnUac2.classList.toggle('active', transport === 'uac2_gadget');
+            if (btnBulk) btnBulk.classList.toggle('active', transport === 'usb_bulk_mux');
+
+            if (valLabel) {
+                if (transport === 'uac2_gadget') {
+                    valLabel.textContent = 'Mode 2: USB Audio Class (UAC2 Gadget)';
+                } else if (transport === 'usb_bulk_mux') {
+                    valLabel.textContent = 'Mode 3: USB Bulk Mux (Offline)';
+                } else {
+                    valLabel.textContent = 'Mode 1: UDP Stream (Port 5004 - Active)';
+                }
+            }
+
+            if (desc) {
+                if (transport === 'uac2_gadget') {
+                    desc.textContent = t('audioTransUac2Desc') || 'Mode 2 UAC2 Gadget: Pi Zero acts as a native USB Sound Card on PC. Zero network dependency, plug-and-play in Windows and Linux.';
+                } else if (transport === 'usb_bulk_mux') {
+                    desc.textContent = t('audioTransBulkDesc') || 'Mode 3 USB Bulk: Audio is multiplexed into the /dev/usb-display-bulk pipe alongside H.264 video. Sub-1ms latency.';
+                } else {
+                    desc.textContent = t('audioTransUdpDesc') || 'Mode 1 UDP Network: Audio stream arrives via UDP port 5004 in 1024-byte unfragmented packets. True sub-5ms delay with automatic A/V synchronization.';
+                }
+            }
+        }
+
         // Highlight Active Streaming Card
         function highlightActiveCard(activeId) {
             ['cardMode1', 'cardMode2', 'cardMode3'].forEach(id => {
@@ -3937,6 +4039,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                         if (a.rate && typeof currentAudioRate !== 'undefined' && a.rate !== currentAudioRate) {
                             currentAudioRate = a.rate;
                             updateAudioRateUI(a.rate);
+                        }
+                        if (a.transport && typeof currentAudioTransport !== 'undefined' && a.transport !== currentAudioTransport) {
+                            currentAudioTransport = a.transport;
+                            updateAudioTransportUI(a.transport);
                         }
                     }
 
@@ -4262,6 +4368,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         const savedRate = localStorage.getItem('ext_audio_rate');
         if (savedRate) updateAudioRateUI(parseInt(savedRate, 10));
+
+        const savedTransport = localStorage.getItem('ext_audio_transport');
+        if (savedTransport) updateAudioTransportUI(savedTransport);
 
         const savedDropOnly = localStorage.getItem('ext_drop_only');
         if (savedDropOnly !== null) setDropOnly(savedDropOnly === 'true');

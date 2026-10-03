@@ -373,6 +373,10 @@ impl PipelineManager {
         self.audio.lock().unwrap().set_rate(rate);
     }
 
+    pub fn set_audio_transport(&self, transport: crate::audio::AudioTransport) {
+        self.audio.lock().unwrap().set_transport(transport);
+    }
+
     pub fn start_audio(&self) {
         let _ = self.audio.lock().unwrap().start();
     }
