@@ -274,29 +274,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if !is_paused {
-        if cfg.mode == "ask" || cfg.mode == "interactive" {
-            if let Some(selected) = prompt_user_mode_selection() {
-                if selected == "clone" {
-                    monitor_to_record = "eDP-1".to_string();
-                    pipewire::collapse_gnome_displays();
-                } else {
-                    monitor_to_record = "HDMI-1".to_string();
-                    pipewire::ensure_kernel_hdmi_connected();
-                    pipewire::ensure_gnome_displays(cfg.scale);
-                }
-            } else {
-                is_paused = true;
-                pipewire::collapse_gnome_displays();
-            }
-        } else if monitor_to_record == "HDMI-1" {
+        if monitor_to_record == "HDMI-1" {
             pipewire::ensure_kernel_hdmi_connected();
             pipewire::ensure_gnome_displays(cfg.scale);
         } else {
             pipewire::collapse_gnome_displays();
         }
-        if !is_paused {
-            println!("\x1b[1;34m[*] Recording Monitor:\x1b[0m {}", monitor_to_record);
-        }
+        println!("\x1b[1;34m[*] Recording Monitor:\x1b[0m {}", monitor_to_record);
     } else {
         println!("\x1b[1;33m[i] Ext-Monitor iniciado em modo Standby (auto-connect: desativado).\x1b[0m");
         println!("\x1b[1;36m    Aguardando ativação pelo Painel Web (http://192.168.7.2:8080) ou comando CLI.\x1b[0m");

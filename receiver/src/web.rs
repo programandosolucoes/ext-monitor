@@ -1338,8 +1338,31 @@ fn get_system_telemetry_json(
     let est_watts = 0.55 + (cpu_pct / 100.0) * 0.35 + (if is_active { 0.35 } else { 0.05 });
     let est_ma = (est_watts / 5.0) * 1000.0;
 
+    let (h_lvl, h_name, h_owner, h_vis) = {
+        let arb = &crate::flow::ARBITER;
+        let lvl = arb.current_level();
+        let lvl_num = match lvl {
+            crate::flow::ServiceLevel::Level0Desktop(_) => 0u8,
+            crate::flow::ServiceLevel::Level1Media(_) => 1u8,
+            crate::flow::ServiceLevel::Level2AudioOnly { .. } => 2u8,
+            crate::flow::ServiceLevel::Level3Standby => 3u8,
+        };
+        let lvl_name = match lvl {
+            crate::flow::ServiceLevel::Level0Desktop(m) => format!("Level 0: Desktop Streaming ({})", m.as_str()),
+            crate::flow::ServiceLevel::Level1Media(_) => "Level 1: Dedicated Media Cast".to_string(),
+            crate::flow::ServiceLevel::Level2AudioOnly { .. } => "Level 2: Standalone PC Audio".to_string(),
+            crate::flow::ServiceLevel::Level3Standby => "Level 3: Standby / Ready Splash".to_string(),
+        };
+        let owner = match arb.display_owner() {
+            crate::flow::DisplayOwner::KmsPlane(id) => format!("KMS Plane {}", id),
+            crate::flow::DisplayOwner::Framebuffer => "Framebuffer (/dev/fb0)".to_string(),
+            crate::flow::DisplayOwner::Unassigned => "Unassigned".to_string(),
+        };
+        (lvl_num, lvl_name, owner, arb.is_visualizer_user_enabled())
+    };
+
     format!(
-        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_transport\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"displays\":{},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
+        "{{\"temp\":\"{:.1}\",\"cpu\":\"{}%\",\"ram\":{},\"stream_state\":\"{}\",\"active_transport\":\"{}\",\"active_mode\":{{\"id\":\"{}\",\"name\":\"{}\",\"icon\":\"{}\",\"protocol\":\"{}\",\"port\":{},\"details\":\"{}\"}},\"hierarchy\":{{\"level\":{},\"level_name\":\"{}\",\"display_owner\":\"{}\",\"visualizer_enabled\":{}}},\"displays\":{},\"hdmi\":{{\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\",\"connected\":{},\"name\":\"{}\",\"active_mode\":\"{}\",\"preferred_mode\":\"{}\",\"vpu\":\"{}\"}},\"monitor\":{{\"connected\":{},\"name\":\"{}\",\"preferred_mode\":\"{}\",\"active_mode\":\"{}\",\"vpu\":\"{}\",\"connector\":\"{}\",\"connector_friendly\":\"{}\",\"hardware_model\":\"{}\"}},\"audio\":{},\"clocks\":{{\"h264_mhz\":{},\"vpu_mhz\":{},\"arm_mhz\":{},\"v3d_mhz\":{},\"core_mhz\":{},\"sdram_mhz\":{}}},\"power\":{{\"estimated_watts\":{:.2},\"current_ma\":{:.0},\"voltage_core_volts\":1.20}}}}",
         temp_val,
         cpu_load,
         mem_free_mb,
@@ -1351,6 +1374,10 @@ fn get_system_telemetry_json(
         mode_proto,
         mode_port,
         mode_details,
+        h_lvl,
+        h_name,
+        h_owner,
+        h_vis,
         displays_str,
         mon.connector,
         mon.connector_friendly,

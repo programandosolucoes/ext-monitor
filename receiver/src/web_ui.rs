@@ -665,6 +665,21 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                 </div>
             </div>
 
+            <!-- Hardware Arbiter & 4-Level Service Hierarchy Status -->
+            <div class="glass-card" style="margin-bottom: 1.5rem; padding: 0.9rem 1.6rem; border: 1px solid rgba(179, 136, 255, 0.25); background: rgba(16, 23, 38, 0.7); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);">
+                <div style="display: flex; align-items: center; gap: 0.8rem;">
+                    <span style="font-size: 1.4rem;">⚖️</span>
+                    <div>
+                        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); font-weight: 700;">Árbitro de Display HDMI & Hierarquia de Serviços</div>
+                        <div id="descHierarchy" style="font-size: 0.88rem; color: #fff; font-weight: 600;">Carregando estado do árbitro...</div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <span id="badgeHierarchy" class="stat-badge badge-green">NÍVEL 0: DESKTOP (EXCLUSIVO)</span>
+                    <span id="badgeDisplayOwner" class="stat-badge badge-purple" style="font-family: monospace;">KMS Plane</span>
+                </div>
+            </div>
+
             <!-- Stat Cards Row -->
             <div class="stats-grid">
                 <div class="stat-card">
@@ -3331,8 +3346,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 return;
             }
 
-            const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
-            const modeLabel = currentTopology === 'clone' ? 'Clonar (eDP-1)' : 'Estender (HDMI-1)';
+            const targetMode = (currentTopology === 'clone') ? 'clone' : 'extend';
+            currentTopology = targetMode;
+            const modeLabel = targetMode === 'clone' ? 'Clonar (eDP-1)' : 'Estender (HDMI-1)';
             const transLabel = transport.includes('usb') ? 'USB Bulk Direct' : 'Rede UDP';
             showToast(`🚀 Ativando ${transLabel} no modo ${modeLabel}...`);
 
@@ -3344,7 +3360,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }).catch(() => {});
 
             // 2. Tell host sender to switch transport and mode
-            sendHostControl({ action: 'start', mode: currentTopology, transport: activeTrans });
+            sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans });
             fetch('/api/stream/start', { method: 'POST' }).then(() => {
                 setTimeout(pollTelemetry, 250);
                 setTimeout(pollTelemetry, 800);
@@ -3402,9 +3418,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                     body: JSON.stringify({ mode: 'mode2_miracast' })
                 }).catch(() => {});
             } else {
-                showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (currentTopology === 'clone' ? 'Clonar' : 'Estender') + ')...');
+                const targetMode = (currentTopology === 'clone') ? 'clone' : 'extend';
+                currentTopology = targetMode;
+                showToast('Chaveando transporte para ' + shortKey.toUpperCase() + ' (' + (targetMode === 'clone' ? 'Clonar' : 'Estender') + ')...');
                 const activeTrans = transport.includes('usb') ? 'usb_bulk' : 'network';
-                sendHostControl({ action: 'start', mode: currentTopology, transport: activeTrans });
+                sendHostControl({ action: 'start', mode: targetMode, transport: activeTrans });
                 fetch('/api/stream/start', { method: 'POST' }).catch(() => {});
             }
 
@@ -4234,6 +4252,35 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                         if (a.transport && typeof currentAudioTransport !== 'undefined' && a.transport !== currentAudioTransport) {
                             currentAudioTransport = a.transport;
                             updateAudioTransportUI(a.transport);
+                        }
+                    }
+
+                    // 0. Hardware Arbiter & 4-Level Service Hierarchy Feedback
+                    if (data.hierarchy) {
+                        const h = data.hierarchy;
+                        const badgeH = document.getElementById('badgeHierarchy');
+                        const descH = document.getElementById('descHierarchy');
+                        const badgeOwner = document.getElementById('badgeDisplayOwner');
+                        if (badgeH) {
+                            if (h.level === 0) {
+                                badgeH.textContent = '● NÍVEL 0: DESKTOP (EXCLUSIVO)';
+                                badgeH.className = 'stat-badge badge-green';
+                            } else if (h.level === 1) {
+                                badgeH.textContent = '● NÍVEL 1: STREAMING MÍDIA';
+                                badgeH.className = 'stat-badge badge-cyan';
+                            } else if (h.level === 2) {
+                                badgeH.textContent = '● NÍVEL 2: ÁUDIO STANDALONE';
+                                badgeH.className = 'stat-badge badge-purple';
+                            } else {
+                                badgeH.textContent = '● NÍVEL 3: MODO STANDBY';
+                                badgeH.className = 'stat-badge badge-amber';
+                            }
+                        }
+                        if (descH) {
+                            descH.textContent = h.level_name;
+                        }
+                        if (badgeOwner) {
+                            badgeOwner.textContent = h.display_owner;
                         }
                     }
 

@@ -238,6 +238,16 @@ impl ServiceArbiter {
             }
         }
     }
+
+    /// Returns the current active display scanout owner
+    pub fn display_owner(&self) -> DisplayOwner {
+        *self.display_owner.lock().unwrap()
+    }
+
+    /// Returns whether the user has enabled the visualizer preference
+    pub fn is_visualizer_user_enabled(&self) -> bool {
+        self.visualizer_user_enabled.load(Ordering::Relaxed)
+    }
 }
 
 /// Global shared instance of the Service Arbiter
