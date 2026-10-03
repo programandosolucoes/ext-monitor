@@ -100,12 +100,6 @@ impl UsbBulkIngress {
                 decoder.drain_decoded_frames(|frame_rgb565| {
                     display.render_frame(frame_rgb565);
                 });
-
-                if !splash_active && total_bytes > 0 && last_packet_time.elapsed() >= Duration::from_secs(2) {
-                    println!("\x1b[1;33m[usb-ingress]\x1b[0m USB stream idle / disconnected -> Returning to Ready Splash Screen.");
-                    crate::display::SplashEngine::show_ready();
-                    splash_active = true;
-                }
                 continue;
             }
 

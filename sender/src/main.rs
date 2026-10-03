@@ -300,14 +300,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Transmissao ativa para o monitor secundario (Pi Zero)",
     );
 
-    // 4.1 Wayland Damage Pacer (Optional - only if explicitly enabled via --enable-damage-pacer and capture is Mutter):
-    // By default KMS direct capture does not require X11 damage events and avoids dock window tracking glitches.
-    let _pacer_handle = if cfg.enable_damage_pacer && cfg.capture == CaptureEngine::Mutter {
-        let (pacer_x, pacer_y) = if monitor_to_record == "HDMI-1" {
-            (1920 + 1280 - 2, 720 - 2)
-        } else {
-            (1280 - 2, 720 - 2)
-        };
+    // 4.1 Wayland Damage Pacer (Blueprint 28):
+    // Forces GNOME Mutter to maintain a continuous 60 FPS frame clock on HDMI-1 by invalidating a 1x1 transparent pixel.
+    // Eliminates quiescence/sleep state when mouse is stationary or outside the screen.
+    let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("XDG_SESSION_TYPE").map(|v| v == "wayland").unwrap_or(false);
+    let _pacer_handle = if is_wayland || cfg.enable_damage_pacer {
+        let (pacer_x, pacer_y) = (1920 + 1280 - 2, 720 - 2);
         damage_pacer::spawn_damage_pacer(running.clone(), pacer_x, pacer_y)
     } else {
         None

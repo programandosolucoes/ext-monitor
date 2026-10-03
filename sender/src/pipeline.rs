@@ -212,8 +212,7 @@ impl PipelineBuilder {
                 .arg("!")
                 .arg("fdsink")
                 .arg(format!("fd={}", fd))
-                .arg("sync=false")
-                .arg("blocksize=65536");
+                .arg("sync=false");
 
             use std::os::unix::process::CommandExt;
             unsafe {
@@ -775,7 +774,6 @@ impl PipelineBuilder {
             args.push("fdsink".to_string());
             args.push(format!("fd={}", fd));
             args.push("sync=false".to_string());
-            args.push("blocksize=65536".to_string());
         } else {
             args.push("h264parse".to_string());
             args.push("!".to_string());
