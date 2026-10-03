@@ -607,5 +607,25 @@ Qualquer computador antigo rodando Linux pode se transformar em um receptor de u
 
 ---
 
-*Fim do Livro do Ext-Monitor — Versão 2.3.0-final.*  
+## Apêndice D: Evolução Contínua de Engenharia (Blueprints 29 a 32)
+
+### D.1 Pacer 100% Rust e Eliminação do Eco Multicast mDNS (Blueprint 29)
+* **Pacer in-process:** Eliminação da dependência de interpretadores Python externos; o laço de batimento cardíaco opera nativamente dentro do binário `ext-sender` em Rust puro.
+* **Fim do Loop de Eco Multicast:** Desativação do echo loop na porta mDNS (`IP_MULTICAST_LOOP = 0`), evitando que rajadas de anúncios DNS-SD consumam buffers do kernel e causem micro-pausas periódicas de 1 segundo.
+
+### D.2 Áudio Hi-Res ALSA IEC958 e Anti-Fragmentação IP (Blueprint 30)
+* **Subframe IEC 60958-3 em Hardware:** Saída de áudio direta nos clocks de 96kHz e 192kHz 24-bit no controlador de áudio BCM2835 do Pi Zero com bits de status de canal SCMS anti-mute.
+* **Anti-Fragmentação UDP:** Pacotes de áudio estritamente limitados a 1024 bytes com timestamps RTP monotônicos garantindo alinhamento labial A/V perfeito e ausência de clipping.
+
+### D.3 Sincronização de Telemetria de Transporte (Blueprint 31)
+* **Sincronismo Bidirecional Imediato:** Sincronização em menos de 100ms no boot entre o estado real do stream e a indicação visual dos botões no painel web, eliminando falsos positivos de modo USB Bulk vs Rede UDP.
+
+### D.4 Painel de Áudio DAC na Aba 1, Transmissão Chromecast e Testes Unitários (Blueprint 32)
+* **Consolidação na Aba Principal:** Todos os seletores de áudio de alta fidelidade (volume master, mute, taxas de 44.1k a 192k, e vias de transporte UDP / Gadget UAC2 / USB Bulk) agora residem na Aba 1 (Monitoramento).
+* **Experiência Chromecast Nativa:** Descoberta mDNS Google Cast V2 (portas 8008 e 8009), espelhamento WebCodecs via navegador (`/cast`) com 1 clique e reprodutor direto de URLs de vídeo na TV.
+* **Máquina de Estados com Testes Formais:** 7 testes unitários em Rust validando que desligar todos os modos entra rigorosamente em Standby e que selecionar qualquer modo transfere a transmissão de forma atômica e resiliente.
+
+---
+
+*Fim do Livro do Ext-Monitor — Versão 2.4.0.*  
 *Projeto de Engenharia de Sistemas Embarcados por Carlos Alberto <carlosalberto4ti@gmail.com>.*
