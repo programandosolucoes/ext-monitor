@@ -8,7 +8,6 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::decoder::V4l2DecoderSession;
-use crate::display::FramebufferSink;
 use crate::stream::{TsDemuxer, parse_sps_dimensions};
 use std::io;
 use std::net::UdpSocket;
@@ -99,17 +98,6 @@ impl MiracastIngress {
             revents: 0,
         };
 
-        let mut display = match FramebufferSink::open(1280, 720) {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!(
-                    "\x1b[1;31m[miracast-ingress]\x1b[0m Failed to open display: {}",
-                    e
-                );
-                return;
-            }
-        };
-
         let mut current_dims = (1280u32, 720u32);
         let mut decoder = match V4l2DecoderSession::new(current_dims.0, current_dims.1) {
             Some(s) => Some(s),
@@ -125,7 +113,7 @@ impl MiracastIngress {
         let mut completed_frames: Vec<Vec<u8>> = Vec::with_capacity(16);
 
         println!(
-            "\x1b[1;32m[miracast-ingress]\x1b[0m Listening for MPEG-TS stream on UDP port {} (Native: 1280x720p60 + Dynamic SPS) -> HDMI Display active.",
+            "\x1b[1;32m[miracast-ingress]\x1b[0m Listening for MPEG-TS stream on UDP port {} (Native: 1280x720p60 + Dynamic SPS) -> HDMI KMS scanout active.",
             port
         );
 
@@ -163,16 +151,12 @@ impl MiracastIngress {
                     }
 
                     if let Some(ref mut dec) = decoder {
-                        dec.decode_chunk(&frame, |frame_rgb565| {
-                            display.render_frame(frame_rgb565);
-                        });
+                        dec.decode_chunk(&frame);
                     }
                 }
 
                 if let Some(ref mut dec) = decoder {
-                    dec.drain_decoded_frames(|frame_rgb565| {
-                        display.render_frame(frame_rgb565);
-                    });
+                    dec.drain_decoded_frames();
                 }
 
                 // If stream was active and now idle for > 2 seconds: return to splash screen
@@ -227,18 +211,14 @@ impl MiracastIngress {
                 }
 
                 if let Some(ref mut dec) = decoder {
-                    dec.decode_chunk(&frame, |frame_rgb565| {
-                        display.render_frame(frame_rgb565);
-                    });
+                    dec.decode_chunk(&frame);
                 }
             }
 
             // Immediately drain ready frames from V4L2 capture queue to eliminate frame latency
             if burst_packets > 0 {
                 if let Some(ref mut dec) = decoder {
-                    dec.drain_decoded_frames(|frame_rgb565| {
-                        display.render_frame(frame_rgb565);
-                    });
+                    dec.drain_decoded_frames();
                 }
             }
         }

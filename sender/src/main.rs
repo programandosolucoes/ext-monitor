@@ -766,7 +766,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         });
                     }
                     ControlAction::SetTransport(new_trans) => {
-                        if new_trans == cfg.transport && !is_paused && child.is_some() {
+                        let is_redundant = new_trans == cfg.transport
+                            && !is_paused
+                            && child.is_some()
+                            && (new_trans != TransportKind::UsbBulk || current_usb_pipe.is_some());
+                        if is_redundant {
                             println!("\x1b[1;32m[+] Web Command: Transporte '{:?}' já ativo e transmitindo. Ignorando comando redundante.\x1b[0m", new_trans);
                             continue;
                         }

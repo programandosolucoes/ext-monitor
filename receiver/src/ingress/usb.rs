@@ -9,7 +9,6 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::decoder::V4l2DecoderSession;
-use crate::display::FramebufferSink;
 use crate::stream::{AnnexBAssembler, Rfc4571Assembler, RtpDepayloader};
 use std::io;
 use std::os::unix::io::RawFd;
@@ -30,14 +29,6 @@ pub struct UsbBulkIngress;
 impl UsbBulkIngress {
     /// Runs the USB Bulk ingress decode and display loop until `running` becomes false
     pub fn run(read_fd: RawFd, running: Arc<AtomicBool>) {
-        let mut display = match FramebufferSink::open(1280, 720) {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("\x1b[1;31m[usb-ingress]\x1b[0m Failed to open framebuffer /dev/fb0: {}", e);
-                return;
-            }
-        };
-
         let mut decoder = match V4l2DecoderSession::new(1280, 720) {
             Some(s) => s,
             None => {
@@ -91,14 +82,10 @@ impl UsbBulkIngress {
                 // Idle: flush any assembled AU and ready decoded frames to screen
                 annexb_assembler.flush(&mut completed_frames);
                 for frame in &completed_frames {
-                    decoder.decode_chunk(frame, |frame_rgb565| {
-                        display.render_frame(frame_rgb565);
-                    });
+                    decoder.decode_chunk(frame);
                 }
                 completed_frames.clear();
-                decoder.drain_decoded_frames(|frame_rgb565| {
-                    display.render_frame(frame_rgb565);
-                });
+                decoder.drain_decoded_frames();
                 continue;
             }
 
@@ -125,18 +112,14 @@ impl UsbBulkIngress {
                     IngressFramingMode::AutoDetect | IngressFramingMode::AnnexB => {
                         annexb_assembler.push(chunk, &mut completed_frames);
                         for frame in &completed_frames {
-                            decoder.decode_chunk(frame, |frame_rgb565| {
-                                display.render_frame(frame_rgb565);
-                            });
+                            decoder.decode_chunk(frame);
                         }
                         completed_frames.clear();
                     }
                     IngressFramingMode::Rfc4571 => {
                         rfc_assembler.push(chunk, &mut rtp_depayloader, &mut completed_frames);
                         for frame in &completed_frames {
-                            decoder.decode_chunk(frame, |frame_rgb565| {
-                                display.render_frame(frame_rgb565);
-                            });
+                            decoder.decode_chunk(frame);
                         }
                         completed_frames.clear();
                     }
@@ -177,14 +160,10 @@ impl UsbBulkIngress {
 
         annexb_assembler.flush(&mut completed_frames);
         for frame in &completed_frames {
-            decoder.decode_chunk(frame, |frame_rgb565| {
-                display.render_frame(frame_rgb565);
-            });
+            decoder.decode_chunk(frame);
         }
         completed_frames.clear();
-        decoder.drain_decoded_frames(|frame_rgb565| {
-            display.render_frame(frame_rgb565);
-        });
+        decoder.drain_decoded_frames();
 
         if let Ok(cfg) = crate::web::CONFIG.lock() {
             if cfg.mode3 && !crate::flow::ARBITER.is_level0_active() {

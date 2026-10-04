@@ -218,7 +218,13 @@ pub fn spawn_native_audio_subsystem(
                     let _ = std::process::Command::new("pactl")
                         .args(["set-default-sink", "Raspberry_Pi_HDMI_Audio"])
                         .output();
-                    println!("\x1b[1;32m[audio-native]\x1b[0m Áudio roteado para Raspberry_Pi_HDMI_Audio (laptop speakers silenciados)");
+                    let _ = std::process::Command::new("pactl")
+                        .args(["set-sink-mute", "Raspberry_Pi_HDMI_Audio", "0"])
+                        .output();
+                    let _ = std::process::Command::new("pactl")
+                        .args(["set-sink-volume", "Raspberry_Pi_HDMI_Audio", "100%"])
+                        .output();
+                    println!("\x1b[1;32m[audio-native]\x1b[0m Áudio roteado para Raspberry_Pi_HDMI_Audio (laptop speakers silenciados, sink desmutado a 100%)");
                 }
             }
 

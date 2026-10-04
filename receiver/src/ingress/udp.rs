@@ -8,7 +8,6 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 use crate::decoder::V4l2DecoderSession;
-use crate::display::FramebufferSink;
 use crate::stream::RtpDepayloader;
 use std::io;
 use std::net::UdpSocket;
@@ -89,14 +88,6 @@ impl UdpRtpIngress {
             revents: 0,
         };
 
-        let mut display = match FramebufferSink::open(1280, 720) {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("\x1b[1;31m[udp-ingress]\x1b[0m Failed to open framebuffer /dev/fb0: {}", e);
-                return;
-            }
-        };
-
         let mut decoder = match V4l2DecoderSession::new(1280, 720) {
             Some(s) => s,
             None => {
@@ -109,11 +100,9 @@ impl UdpRtpIngress {
         let mut completed_frames: Vec<Vec<u8>> = Vec::with_capacity(16);
 
         println!(
-            "\x1b[1;32m[udp-ingress]\x1b[0m Listening for RTP H.264 stream on UDP port {} -> HDMI Display active.",
+            "\x1b[1;32m[udp-ingress]\x1b[0m Listening for RTP H.264 stream on UDP port {} -> HDMI KMS plane scanout active.",
             port
         );
-
-
 
         while running.load(Ordering::SeqCst) {
             let ret = unsafe { libc::poll(&mut pfd, 1, 15) };
@@ -126,9 +115,7 @@ impl UdpRtpIngress {
             }
             if ret == 0 {
                 // Socket idle for 15ms: drain any pending decoded frames from hardware VPU
-                decoder.drain_decoded_frames(|frame_rgb565| {
-                    display.render_frame(frame_rgb565);
-                });
+                decoder.drain_decoded_frames();
                 continue;
             }
 
@@ -148,9 +135,7 @@ impl UdpRtpIngress {
 
             // Decode all complete Access Units assembled from the drained burst
             for frame in completed_frames.drain(..) {
-                decoder.decode_chunk(&frame, |frame_rgb565| {
-                    display.render_frame(frame_rgb565);
-                });
+                decoder.decode_chunk(&frame);
             }
         }
 

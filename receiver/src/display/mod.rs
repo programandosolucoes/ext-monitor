@@ -4,11 +4,9 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 pub mod edid;
-pub mod framebuffer;
 pub mod kms;
 pub mod splash;
 
 pub use edid::MonitorInfo;
-pub use framebuffer::FramebufferSink;
 pub use kms::KmsPlaneSink;
 pub use splash::SplashEngine;
