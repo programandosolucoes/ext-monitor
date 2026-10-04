@@ -345,13 +345,13 @@ Isso criava uma situação bizarra para monitores secundários:
 2. Como o mouse não se movia na tela secundária, o compositor reduzia a taxa de emissão de frames do screencast para 0 FPS.
 3. O vídeo congelava visualmente na TV, mesmo com o áudio continuando a tocar.
 
-### A Solução: Damage Pacer Heartbeat (`scripts/wayland-damage-pacer.py`)
-Em vez de usar filtros de software pesados no GStreamer (como `imagefreeze`, que inflava a latência para mais de 200 ms), o `ext-monitor` utiliza um **marcador de passo sintético invisível**:
-- Um processo Python leve cria uma janela Xwayland de dimensão `1x1` pixel.
-- A janela é posicionada na coordenada exata da segunda tela (`x=1920, y=0`), com 100% de transparência alfa (`RGBA 0,0,0,0`) e sem foco (`accept_focus = false`).
+### A Solução: Damage Pacer Heartbeat In-Process (`sender/src/damage_pacer.rs`)
+Em vez de usar filtros de software pesados no GStreamer (como `imagefreeze`, que inflava a latência para mais de 200 ms) ou scripts externos em Python, o `ext-monitor` utiliza um **marcador de passo sintético invisível compilado nativamente em Rust**:
+- Uma thread nativa em Rust cria uma superfície Wayland/Xwayland de dimensão `1x1` pixel.
+- A superfície é posicionada na coordenada exata da segunda tela virtual, com 100% de transparência alfa (`RGBA 0,0,0,0`) e com `input_region` vazia (100% click-through).
 - A cada **16.6 milissegundos (60 Hz)**, o pacer emite um pulso elétrico de redesenho (`queue_draw`).
 - O compositor Mutter detecta que a região da segunda tela sofreu "dano" e força o disparo imediato do pipeline gráfico.
-- **Resultado:** Vídeos do YouTube, clocks e terminais passam a rodar a **60 FPS perfeitos e ininterruptos**, independentemente de onde o cursor do mouse esteja.
+- **Resultado:** Vídeos do YouTube, clocks e terminais rodam a **60 FPS perfeitos e ininterruptos**, sem interferir em nenhum clique, dock ou janela.
 
 ---
 
@@ -660,7 +660,7 @@ Com 142 testes unitários passando com 100% de sucesso no workspace, telemetria 
 | :--- | :--- | :--- |
 | **Tela HDMI preta ao conectar cabo USB** | Pi Zero ainda no ciclo de boot (1.8s) ou porta USB sem energia. | Verifique se o cabo está na porta USB OTG central. A tela de splash quadrilíngue surge em 1.8s. |
 | **GNOME desloga imediatamente ao iniciar** | Caps forçadas `format=BGRx` no `pipewiresrc` causando assert no Mutter. | Recompile o sender com a versão 2.3.0 que utiliza negociação dinâmica e cursor embutido. |
-| **Vídeo congela quando o mouse para de mover** | Quiescência do compositor Wayland desligando o ciclo de renderização. | Inicie o pacer de batimento cardíaco com `python3 scripts/wayland-damage-pacer.py`. |
+| **Vídeo congela quando o mouse para de mover** | Quiescência do compositor Wayland desligando o ciclo de renderização. | O damage pacer in-process em Rust (`sender/src/damage_pacer.rs`) auto-ativa a 60 Hz ao iniciar o streaming. |
 | **Áudio toca no notebook e não na TV** | Sink virtual da TV não selecionado como saída padrão. | Execute `./scripts/audio-route.sh pi` ou ative o botão de áudio no Painel Web. |
 | **Bluetooth do celular não encontra a TV** | Modo pareável inativo no Pi Zero W. | Clique em `[📡 Parear Bluetooth A2DP]` no painel ou execute `./scripts/bluetooth-audio.sh pair`. |
 | **Travamento ao alternar entre USB Bulk e Rede** | Leituras síncronas bloqueando o driver dwc2 do kernel. | Resolvido na v2.3.0 via `libc::poll` com timeout de 100ms e liberação limpa de descritores sem reiniciar. |

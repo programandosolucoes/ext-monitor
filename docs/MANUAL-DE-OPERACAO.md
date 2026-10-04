@@ -465,11 +465,11 @@ O projeto dispõe de 33 scripts especializados para automação, deploy, telemet
 | Script | Função Principal | Sintaxe de Uso |
 | :--- | :--- | :--- |
 | **`start.sh`** | Inicializa o emissor `ext-sender` no host com seleção de modo, resolução, FPS, encoder e áudio. Auto-inicia o Damage Pacer no Wayland. | `./scripts/start.sh [extend\|mirror] [auto\|vaapi] [30\|60] [hud] [full\|256]` |
-| **`stop.sh`** | Finaliza todos os processos do `ext-sender`, streamers de áudio, pipelines GStreamer e o daemon `wayland-damage-pacer`. | `./scripts/stop.sh` |
+| **`stop.sh`** | Finaliza todos os processos do `ext-sender`, streamers de áudio e pipelines GStreamer. | `./scripts/stop.sh` |
 | **`status.sh`** | Executa verificação em 4 pontos: interface de rede USB, conectividade IP `192.168.7.2`, portas abertas e resposta do dashboard. | `./scripts/status.sh` |
 | **`connect.sh`** | Script de download e inicialização rápida para máquinas clientes (utilizado pelo endpoint `curl \| bash`). | `./scripts/connect.sh` |
 | **`install-host.sh`** | Instalador do sistema Host Linux: compilação, `setcap cap_sys_admin`, drivers gráficos VA-API, regras udev e atalho no menu. | `sudo ./scripts/install-host.sh` |
-| **`wayland-damage-pacer.py`** | Daemon Wayland/Xwayland invisível que emite pulso de dano a 60 Hz no monitor estendido, impedindo que o GNOME Mutter durma. | `python3 scripts/wayland-damage-pacer.py [X] [Y]` |
+| **Damage Pacer (Rust)** | Módulo in-process 100% Rust (`sender/src/damage_pacer.rs`) que emite pulso de dano a 60 Hz no monitor virtual com 100% click-through, impedindo que o GNOME Mutter durma. | Integrado no binário `ext-sender` |
 | **`setup-autoconnect.sh`** | Configura serviço udev e systemd para iniciar a transmissão automaticamente ao plugar o cabo Micro-USB. | `./scripts/setup-autoconnect.sh` |
 | **`autoconnect.sh`** | Script disparado pela regra udev na conexão do Pi Zero, iniciando o streaming após aguardar a subida da rede. | `./scripts/autoconnect.sh` |
 | **`usb-watcher.sh`** | Monitor de barramento USB em background que reinicia o pipeline caso a porta USB caia ou seja reconectada. | `./scripts/usb-watcher.sh` |

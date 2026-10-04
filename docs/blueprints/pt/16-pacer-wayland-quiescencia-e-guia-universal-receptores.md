@@ -18,9 +18,9 @@ Isso fazia com que:
 2. Vídeos, animações de navegadores (como YouTube) ou tarefas em segundo plano pausassem na tela secundária assim que o cursor deixava a geometria do monitor.
 3. O mesmo sintoma ocorre nativamente no Miracast oficial do GNOME (`gnome-network-displays`).
 
-### A Solução: Wayland Damage Pacer (`scripts/wayland-damage-pacer.py`)
-Em vez de hacks de duplicação na CPU (como `imagefreeze`, que destruía o zero-copy e inflava a latência para > 200ms), implementamos um **agente de batimento cardíaco gráfico sintético**:
-- Cria uma superfície invisível de 1x1 pixel 100% transparente (`RGBA 0.0, 0.0, 0.0, 0.0`), sem bordas, sem foco (`accept_focus = false`) e com `GDK_BACKEND=x11` para mapeamento exato nas coordenadas globais da tela estendida (`x=1920, y=0`).
+### A Solução: Wayland Damage Pacer In-Process em Rust (`sender/src/damage_pacer.rs`)
+Em vez de hacks de duplicação na CPU (como `imagefreeze`, que destruía o zero-copy e inflava a latência para > 200ms) ou scripts externos em Python, implementamos um **agente de batimento cardíaco gráfico sintético compilado nativamente em Rust**:
+- Uma thread nativa em Rust cria uma superfície invisível de 1x1 pixel 100% transparente (`RGBA 0.0, 0.0, 0.0, 0.0`), sem bordas, sem foco (`accept_focus = false`), com região de input vazia (100% click-through) nas coordenadas da tela estendida.
 - A cada 16.6 ms (60 Hz), emite um pulso de dano (`queue_draw`).
 - O Mutter detecta a região suja e é forçado a executar `clutter_stage_schedule_update()` -> `stage_painted()` a 60 FPS ininterruptos.
 - **Resultado:** Vídeos do YouTube, clocks e terminais rodam a 60 FPS cravados e ultra-fluidos com menos de 15ms de latência, sem intervenção do mouse.

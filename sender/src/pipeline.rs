@@ -1,7 +1,7 @@
 //! Streaming Pipeline Builder and Process Management
 //!
-//! Encapsulates process execution and command synthesis for GStreamer, FFmpeg,
-//! and native Rust streaming engines following the Builder Pattern.
+//! Encapsulates hardware-accelerated GStreamer process execution and command synthesis
+//! for Linux DRM/KMS and GNOME Mutter following the Builder Pattern.
 //!
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
