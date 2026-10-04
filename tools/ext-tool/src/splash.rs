@@ -54,8 +54,13 @@ impl FontSet {
 
         let cjk_paths = [
             "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+            "/usr/share/fonts/truetype/arphic/ukai.ttc",
+            "/usr/share/fonts/truetype/arphic/uming.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         ];
         let mut cjk = None;
         for p in cjk_paths {
@@ -69,6 +74,28 @@ impl FontSet {
 
         Self { bold, regular, cjk }
     }
+}
+
+/// Selects the appropriate font for a given character, falling back to CJK when missing
+#[inline]
+pub fn select_font<'a>(
+    primary: &'a fontdue::Font,
+    cjk: Option<&'a fontdue::Font>,
+    ch: char,
+) -> &'a fontdue::Font {
+    if let Some(cjk_font) = cjk {
+        let is_cjk = ('\u{2E80}'..='\u{9FFF}').contains(&ch)
+            || ('\u{F900}'..='\u{FAFF}').contains(&ch)
+            || ('\u{FF00}'..='\u{FFEF}').contains(&ch)
+            || ('\u{3000}'..='\u{303F}').contains(&ch)
+            || ('\u{20000}'..='\u{2FA1F}').contains(&ch);
+        if is_cjk || primary.lookup_glyph_index(ch) == 0 {
+            if cjk_font.lookup_glyph_index(ch) != 0 {
+                return cjk_font;
+            }
+        }
+    }
+    primary
 }
 
 pub struct ImageBuffer {
@@ -229,10 +256,17 @@ impl ImageBuffer {
         }
     }
 
-    pub fn measure_text_width(&self, font: &fontdue::Font, text: &str, size: f32) -> usize {
+    pub fn measure_text_width(
+        &self,
+        font: &fontdue::Font,
+        cjk: Option<&fontdue::Font>,
+        text: &str,
+        size: f32,
+    ) -> usize {
         let mut width = 0.0f32;
         for ch in text.chars() {
-            let (metrics, _) = font.rasterize(ch, size);
+            let active = select_font(font, cjk, ch);
+            let (metrics, _) = active.rasterize(ch, size);
             width += metrics.advance_width;
         }
         width.round() as usize
@@ -241,6 +275,7 @@ impl ImageBuffer {
     pub fn draw_text(
         &mut self,
         font: &fontdue::Font,
+        cjk: Option<&fontdue::Font>,
         text: &str,
         size: f32,
         mut x: usize,
@@ -249,7 +284,8 @@ impl ImageBuffer {
     ) {
         let baseline_y = y as isize + (size * 0.8) as isize;
         for ch in text.chars() {
-            let (metrics, bitmap) = font.rasterize(ch, size);
+            let active = select_font(font, cjk, ch);
+            let (metrics, bitmap) = active.rasterize(ch, size);
             let glyph_x = x as isize + metrics.xmin as isize;
             let glyph_y = baseline_y - metrics.ymin as isize - metrics.height as isize;
 
@@ -272,15 +308,16 @@ impl ImageBuffer {
     pub fn draw_text_centered(
         &mut self,
         font: &fontdue::Font,
+        cjk: Option<&fontdue::Font>,
         text: &str,
         size: f32,
         center_x: usize,
         y: usize,
         color: [u8; 3],
     ) {
-        let w = self.measure_text_width(font, text, size);
+        let w = self.measure_text_width(font, cjk, text, size);
         let x = center_x.saturating_sub(w / 2);
-        self.draw_text(font, text, size, x, y, color);
+        self.draw_text(font, cjk, text, size, x, y, color);
     }
 
     /// Converts RGB888 to RGB565 Little-Endian (framebuffer format for BCM2835 /dev/fb0)
@@ -364,14 +401,15 @@ pub fn save_splash(img: &ImageBuffer, output_dir: &Path, name: &str) -> Result<(
 
 /// Generates the early boot "Loading..." splash screen in 100% Pure Rust
 pub fn generate_loading_splash(output_dir: &Path, fonts: &FontSet, version: &str) -> Result<(), String> {
+    let cjk = fonts.cjk.as_ref();
     let mut img = ImageBuffer::new(WIDTH, HEIGHT, [10, 14, 23]);
     img.draw_gradient_vertical([10, 14, 23], [16, 22, 36]);
     img.draw_grid(80, [20, 28, 45]);
 
     // Top Brand Header
-    img.draw_text_centered(&fonts.bold, "EXT-MONITOR PI ZERO", 26.0, WIDTH / 2, 50, [88, 166, 255]);
+    img.draw_text_centered(&fonts.bold, cjk, "EXT-MONITOR PI ZERO", 26.0, WIDTH / 2, 50, [88, 166, 255]);
     let sub = format!("Appliance Minimal 33MB • VideoCore IV KMS • Áudio HDMI (Opus 48k) • Bluetooth A2DP • {}", version);
-    img.draw_text_centered(&fonts.regular, &sub, 13.0, WIDTH / 2, 90, [139, 148, 158]);
+    img.draw_text_centered(&fonts.regular, cjk, &sub, 13.0, WIDTH / 2, 90, [139, 148, 158]);
 
     // Center Gear Badge
     let cx = (WIDTH / 2) as isize;
@@ -379,10 +417,10 @@ pub fn generate_loading_splash(output_dir: &Path, fonts: &FontSet, version: &str
     img.draw_circle(cx, cy, 55, 3, [31, 111, 235]);
     img.fill_circle(cx, cy, 45, [22, 27, 34]);
     img.draw_circle(cx, cy, 45, 2, [88, 166, 255]);
-    img.draw_text_centered(&fonts.bold, "EXT", 18.0, WIDTH / 2, 230, [56, 189, 248]);
+    img.draw_text_centered(&fonts.bold, cjk, "EXT", 18.0, WIDTH / 2, 230, [56, 189, 248]);
 
     // Central Title
-    img.draw_text_centered(&fonts.bold, "INICIANDO SISTEMA • INITIALIZING APPLIANCE", 20.0, WIDTH / 2, 325, [240, 246, 252]);
+    img.draw_text_centered(&fonts.bold, cjk, "INICIANDO SISTEMA • INITIALIZING APPLIANCE", 20.0, WIDTH / 2, 325, [240, 246, 252]);
 
     // Progress bar frame
     let bx = WIDTH / 2 - 260;
@@ -404,35 +442,36 @@ pub fn generate_loading_splash(output_dir: &Path, fonts: &FontSet, version: &str
         ("[PT]", "Carregando GPU VideoCore IV, áudio HDMI, Bluetooth A2DP, UPnP/Cast e Visualizador 30 FPS...", [56, 189, 248]),
         ("[EN]", "Initializing VideoCore IV GPU, HDMI audio, Bluetooth A2DP, UPnP/Cast & 30 FPS Visualizer...", [88, 166, 255]),
         ("[IT]", "Caricamento GPU VideoCore IV, audio HDMI, Bluetooth A2DP, UPnP/Cast e Visualizzatore 30 FPS...", [163, 113, 247]),
-        ("[ZH]", "Initializing VideoCore IV GPU, HDMI audio, Bluetooth A2DP, UPnP/Cast & 30 FPS Visualizer...", [63, 185, 80]),
+        ("[ZH]", "正在載入 VideoCore IV GPU、HDMI 音訊、藍牙 A2DP、UPnP/Cast 與 30 FPS 視覺化...", [63, 185, 80]),
     ];
 
     for (idx, (tag, text, col)) in messages.iter().enumerate() {
         let row_y = card_y + 16 + (idx * 50);
-        img.draw_text(&fonts.bold, tag, 14.0, card_x + 25, row_y, *col);
-        img.draw_text(&fonts.regular, text, 13.0, card_x + 85, row_y, [201, 209, 217]);
+        img.draw_text(&fonts.bold, cjk, tag, 14.0, card_x + 25, row_y, *col);
+        img.draw_text(&fonts.regular, cjk, text, 13.0, card_x + 85, row_y, [201, 209, 217]);
     }
 
     let foot = format!("Iniciando USB Gadget, Wi-Fi Display, Bluetooth A2DP, UPnP/DLNA e Painel Web 8080 • {}", version);
-    img.draw_text_centered(&fonts.regular, &foot, 12.0, WIDTH / 2, 665, [110, 118, 129]);
+    img.draw_text_centered(&fonts.regular, cjk, &foot, 12.0, WIDTH / 2, 665, [110, 118, 129]);
 
     save_splash(&img, output_dir, "splash_loading")
 }
 
 /// Generates the idle "Ready for Connection" splash screen with 4 quadrants and badges
 pub fn generate_ready_splash(output_dir: &Path, fonts: &FontSet, version: &str) -> Result<(), String> {
+    let cjk = fonts.cjk.as_ref();
     let mut img = ImageBuffer::new(WIDTH, HEIGHT, [8, 12, 20]);
     img.draw_gradient_vertical([8, 12, 20], [14, 18, 30]);
 
     // Top Banner Header
-    img.draw_text(&fonts.bold, "EXT-MONITOR PI ZERO", 20.0, 40, 22, [56, 189, 248]);
-    img.draw_text(&fonts.bold, "•  ÁUDIO DIGITAL HDMI & IOT MEDIA RENDERER", 12.0, 310, 26, [163, 113, 247]);
+    img.draw_text(&fonts.bold, cjk, "EXT-MONITOR PI ZERO", 20.0, 40, 22, [56, 189, 248]);
+    img.draw_text(&fonts.bold, cjk, "•  ÁUDIO DIGITAL HDMI & IOT MEDIA RENDERER", 12.0, 310, 26, [163, 113, 247]);
 
     // Badge top right
     let badge_rect_x = WIDTH - 520;
     img.fill_rounded_rect(badge_rect_x, 18, 480, 28, 5, [18, 48, 28]);
     img.draw_rect_outline(badge_rect_x, 18, 480, 28, 1, [46, 160, 67]);
-    img.draw_text_centered(&fonts.bold, "● 60 FPS • ÁUDIO OPUS • BLUETOOTH A2DP • IOT CAST • VISUALIZADOR", 10.0, badge_rect_x + 240, 25, [86, 211, 100]);
+    img.draw_text_centered(&fonts.bold, cjk, "● 60 FPS • ÁUDIO OPUS • BLUETOOTH A2DP • IOT CAST • VISUALIZADOR", 10.0, badge_rect_x + 240, 25, [86, 211, 100]);
 
     img.draw_line(40, 56, WIDTH - 40, 56, [33, 38, 45], 1);
 
@@ -496,17 +535,17 @@ pub fn generate_ready_splash(output_dir: &Path, fonts: &FontSet, version: &str) 
         },
         Quad {
             flag: "[ZH]",
-            lang: "CHINESE (PINYIN)",
+            lang: "繁體中文 (TRADITIONAL CHINESE)",
             x: 660,
             y: 346,
             w: 580,
             h: 268,
             border: [63, 185, 80],
             modes: [
-                ("Moshe 1 (Wayland Wangluo IP):", "Yunxing ./scripts/start.sh (H.264 60 FPS + HDMI Yinpin 48k)"),
-                ("Moshe 2 (Windows Miracast):", "Windows 10/11 an Win+K touping pingmu yu sheng"),
-                ("Moshe 3 (USB Zhilian Bulk):", "Lianjie USB xian bing shiyong --transport=usb (< 1ms)"),
-                ("Moshe 4 (Lanya yu IoT Touping):", "Shouji Lanya A2DP lianjie, UPnP yu YouTube dongtai pinpu"),
+                ("模式 1 (Wayland 網路 IP):", "執行 ./scripts/start.sh (H.264 60 FPS + HDMI 音訊 48k)"),
+                ("模式 2 (Windows Miracast):", "在 Windows 10/11 按 Win+K 投影螢幕與音訊"),
+                ("模式 3 (USB 直連 Bulk):", "連接 USB 傳輸線並使用 --transport=usb (延遲 < 1ms)"),
+                ("模式 4 (藍牙與 IoT 投影):", "配對手機藍牙 A2DP、UPnP 與 YouTube 即時頻譜"),
             ],
         },
     ];
@@ -517,14 +556,14 @@ pub fn generate_ready_splash(output_dir: &Path, fonts: &FontSet, version: &str) 
         img.draw_line(q.x + 12, q.y, q.x + q.w - 12, q.y, q.border, 3);
 
         let title = format!("{}  {}", q.flag, q.lang);
-        img.draw_text(&fonts.bold, &title, 13.0, q.x + 18, q.y + 12, [240, 246, 252]);
+        img.draw_text(&fonts.bold, cjk, &title, 13.0, q.x + 18, q.y + 12, [240, 246, 252]);
 
         let start_y = q.y + 36;
         for (m_idx, (m_label, m_desc)) in q.modes.iter().enumerate() {
             let item_y = start_y + (m_idx * 54);
             img.fill_rounded_rect(q.x + 12, item_y, q.w - 24, 48, 5, [24, 30, 44]);
-            img.draw_text(&fonts.bold, m_label, 11.5, q.x + 20, item_y + 6, q.border);
-            img.draw_text(&fonts.regular, m_desc, 10.5, q.x + 20, item_y + 24, [180, 190, 205]);
+            img.draw_text(&fonts.bold, cjk, m_label, 11.5, q.x + 20, item_y + 6, q.border);
+            img.draw_text(&fonts.regular, cjk, m_desc, 10.5, q.x + 20, item_y + 24, [180, 190, 205]);
         }
     }
 
@@ -542,11 +581,11 @@ pub fn generate_ready_splash(output_dir: &Path, fonts: &FontSet, version: &str) 
 
     let mut bx = 40;
     for (b_text, b_col) in &badges {
-        let text_w = img.measure_text_width(&fonts.bold, b_text, 10.5);
+        let text_w = img.measure_text_width(&fonts.bold, cjk, b_text, 10.5);
         let bw = text_w + 20;
         img.fill_rounded_rect(bx, 634, bw, 24, 5, [20, 25, 38]);
         img.draw_rect_outline(bx, 634, bw, 24, 1, *b_col);
-        img.draw_text_centered(&fonts.bold, b_text, 10.5, bx + bw / 2, 640, [230, 237, 243]);
+        img.draw_text_centered(&fonts.bold, cjk, b_text, 10.5, bx + bw / 2, 640, [230, 237, 243]);
         bx += bw + 10;
     }
 
@@ -554,25 +593,26 @@ pub fn generate_ready_splash(output_dir: &Path, fonts: &FontSet, version: &str) 
         "Raspberry Pi Zero W  •  Alsa HDMI (bcm2835)  •  VideoCore IV KMS Framebuffer  •  Zero-Copy DMA  •  Freeze Final {}",
         version
     );
-    img.draw_text_centered(&fonts.regular, &foot, 11.5, WIDTH / 2, 680, [120, 130, 142]);
+    img.draw_text_centered(&fonts.regular, cjk, &foot, 11.5, WIDTH / 2, 680, [120, 130, 142]);
 
     save_splash(&img, output_dir, "splash_ready")
 }
 
 /// Generates the dedicated Miracast WFD splash screen in 100% Pure Rust
 pub fn generate_miracast_splash(output_dir: &Path, fonts: &FontSet, version: &str) -> Result<(), String> {
+    let cjk = fonts.cjk.as_ref();
     let mut img = ImageBuffer::new(WIDTH, HEIGHT, [8, 14, 26]);
     img.draw_gradient_vertical([8, 14, 26], [15, 22, 38]);
     img.draw_grid(80, [18, 26, 44]);
 
     // Header
-    img.draw_text(&fonts.bold, "EXT-MONITOR PI ZERO", 20.0, 40, 22, [56, 189, 248]);
-    img.draw_text(&fonts.bold, "•  MODO 2: WINDOWS MIRACAST (WI-FI DISPLAY)", 12.0, 310, 26, [0, 164, 239]);
+    img.draw_text(&fonts.bold, cjk, "EXT-MONITOR PI ZERO", 20.0, 40, 22, [56, 189, 248]);
+    img.draw_text(&fonts.bold, cjk, "•  MODO 2: WINDOWS MIRACAST (WI-FI DISPLAY)", 12.0, 310, 26, [0, 164, 239]);
 
     let badge_rect_x = WIDTH - 520;
     img.fill_rounded_rect(badge_rect_x, 18, 480, 28, 5, [18, 48, 28]);
     img.draw_rect_outline(badge_rect_x, 18, 480, 28, 1, [46, 160, 67]);
-    img.draw_text_centered(&fonts.bold, "● RTSP 7236 • MS-MICE 7250 • 60 FPS • ÁUDIO ESTÉREO", 10.0, badge_rect_x + 240, 25, [86, 211, 100]);
+    img.draw_text_centered(&fonts.bold, cjk, "● RTSP 7236 • MS-MICE 7250 • 60 FPS • ÁUDIO ESTÉREO", 10.0, badge_rect_x + 240, 25, [86, 211, 100]);
 
     img.draw_line(40, 56, WIDTH - 40, 56, [33, 44, 65], 1);
 
@@ -587,19 +627,19 @@ pub fn generate_miracast_splash(output_dir: &Path, fonts: &FontSet, version: &st
     // Win key
     img.fill_rounded_rect(65, 86, 105, 64, 7, [10, 35, 70]);
     img.draw_rect_outline(65, 86, 105, 64, 2, [0, 164, 239]);
-    img.draw_text_centered(&fonts.bold, "Win", 18.0, 65 + 52, 106, [240, 246, 252]);
+    img.draw_text_centered(&fonts.bold, cjk, "Win", 18.0, 65 + 52, 106, [240, 246, 252]);
 
-    img.draw_text_centered(&fonts.bold, "+", 22.0, 192, 104, [56, 189, 248]);
+    img.draw_text_centered(&fonts.bold, cjk, "+", 22.0, 192, 104, [56, 189, 248]);
 
     // K key
     img.fill_rounded_rect(215, 86, 70, 64, 7, [10, 35, 70]);
     img.draw_rect_outline(215, 86, 70, 64, 2, [0, 164, 239]);
-    img.draw_text_centered(&fonts.bold, "K", 20.0, 215 + 35, 106, [240, 246, 252]);
+    img.draw_text_centered(&fonts.bold, cjk, "K", 20.0, 215 + 35, 106, [240, 246, 252]);
 
     // Hero instructions
-    img.draw_text(&fonts.bold, "Pressione as teclas Win + K no Windows 10 ou 11 para conectar", 16.0, 315, 84, [255, 255, 255]);
-    img.draw_text(&fonts.regular, "Abra o menu de Transmissão (Cast) e selecione Ext-Monitor na lista de Telas Sem Fio.", 12.0, 315, 110, [160, 185, 220]);
-    img.draw_text(&fonts.bold, "● Status do Receptor: Aguardando requisição RTSP na porta TCP 7236 (WFD Ativo)...", 11.5, 315, 134, [86, 211, 100]);
+    img.draw_text(&fonts.bold, cjk, "Pressione as teclas Win + K no Windows 10 ou 11 para conectar", 16.0, 315, 84, [255, 255, 255]);
+    img.draw_text(&fonts.regular, cjk, "Abra o menu de Transmissão (Cast) e selecione Ext-Monitor na lista de Telas Sem Fio.", 12.0, 315, 110, [160, 185, 220]);
+    img.draw_text(&fonts.bold, cjk, "● Status do Receptor: Aguardando requisição RTSP na porta TCP 7236 (WFD Ativo)...", 11.5, 315, 134, [86, 211, 100]);
 
     // 4 Instructions Quadrants
     struct InstQuad<'a> {
@@ -658,16 +698,16 @@ pub fn generate_miracast_splash(output_dir: &Path, fonts: &FontSet, version: &st
         },
         InstQuad {
             flag: "[ZH]",
-            lang: "CHINESE (PINYIN)",
+            lang: "繁體中文 (TRADITIONAL CHINESE)",
             x: 660,
             y: 408,
             w: 580,
             h: 212,
             border: [63, 185, 80],
             steps: [
-                ("Buzhou 1:", "Zai Windows 10/11 diannao shang ankuai jiejian Win + K touping"),
-                ("Buzhou 2:", "Zai sousuodao de wuxian xianshiqi liebiao zhong dianji Ext-Monitor"),
-                ("Buzhou 3:", "Xuanze kuozhan zhuomian huo fuzhi zhuping, xiangshou di yanchi yuyin"),
+                ("步驟 1:", "在 Windows 10/11 電腦上按下快速鍵 Win + K 進行投放"),
+                ("步驟 2:", "在搜尋到的無線顯示器清單中點擊 Ext-Monitor"),
+                ("步驟 3:", "選擇延伸桌面或同步複製螢幕，享受超低延遲音訊"),
             ],
         },
     ];
@@ -678,14 +718,14 @@ pub fn generate_miracast_splash(output_dir: &Path, fonts: &FontSet, version: &st
         img.draw_line(q.x + 12, q.y, q.x + q.w - 12, q.y, q.border, 3);
 
         let title = format!("{}  {}", q.flag, q.lang);
-        img.draw_text(&fonts.bold, &title, 13.0, q.x + 16, q.y + 12, [240, 246, 252]);
+        img.draw_text(&fonts.bold, cjk, &title, 13.0, q.x + 16, q.y + 12, [240, 246, 252]);
 
         let start_y = q.y + 36;
         for (s_idx, (s_num, s_desc)) in q.steps.iter().enumerate() {
             let sy = start_y + (s_idx * 54);
             img.fill_rounded_rect(q.x + 12, sy, q.w - 24, 48, 5, [24, 30, 46]);
-            img.draw_text(&fonts.bold, s_num, 11.5, q.x + 20, sy + 6, q.border);
-            img.draw_text(&fonts.regular, s_desc, 10.5, q.x + 20, sy + 24, [180, 195, 215]);
+            img.draw_text(&fonts.bold, cjk, s_num, 11.5, q.x + 20, sy + 6, q.border);
+            img.draw_text(&fonts.regular, cjk, s_desc, 10.5, q.x + 20, sy + 24, [180, 195, 215]);
         }
     }
 
@@ -702,11 +742,11 @@ pub fn generate_miracast_splash(output_dir: &Path, fonts: &FontSet, version: &st
 
     let mut bx = 40;
     for (b_text, b_col) in &badges {
-        let text_w = img.measure_text_width(&fonts.bold, b_text, 10.5);
+        let text_w = img.measure_text_width(&fonts.bold, cjk, b_text, 10.5);
         let bw = text_w + 20;
         img.fill_rounded_rect(bx, 638, bw, 24, 5, [20, 25, 38]);
         img.draw_rect_outline(bx, 638, bw, 24, 1, *b_col);
-        img.draw_text_centered(&fonts.bold, b_text, 10.5, bx + bw / 2, 644, [230, 237, 243]);
+        img.draw_text_centered(&fonts.bold, cjk, b_text, 10.5, bx + bw / 2, 644, [230, 237, 243]);
         bx += bw + 10;
     }
 
@@ -714,7 +754,7 @@ pub fn generate_miracast_splash(output_dir: &Path, fonts: &FontSet, version: &st
         "Raspberry Pi Zero W  •  Wi-Fi Display (Miracast WFD)  •  VideoCore IV KMS Framebuffer  •  Freeze Final {}",
         version
     );
-    img.draw_text_centered(&fonts.regular, &foot, 11.5, WIDTH / 2, 686, [120, 130, 142]);
+    img.draw_text_centered(&fonts.regular, cjk, &foot, 11.5, WIDTH / 2, 686, [120, 130, 142]);
 
     save_splash(&img, output_dir, "splash_miracast")
 }
@@ -741,4 +781,34 @@ pub fn generate_all_splashes(project_root: &Path) -> Result<(), String> {
 
     println!("\x1b[1;32m[+] Todas as telas de splash geradas com sucesso em Pure Rust com versão {}!\x1b[0m", version);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fontset_cjk_loading() {
+        let fonts = FontSet::load();
+        assert!(fonts.cjk.is_some(), "CJK font must be loaded");
+        let cjk = fonts.cjk.as_ref().unwrap();
+        let idx = cjk.lookup_glyph_index('繁');
+        assert!(idx != 0, "Glyph index for 繁 must be non-zero");
+        let (metrics, bitmap) = cjk.rasterize('繁', 14.0);
+        assert!(metrics.width > 0, "繁 should have positive width");
+        assert!(!bitmap.is_empty(), "繁 should have non-empty bitmap");
+    }
+
+    #[test]
+    fn test_traditional_chinese_rendering() {
+        let fonts = FontSet::load();
+        let cjk = fonts.cjk.as_ref();
+        let mut img = ImageBuffer::new(400, 100, [0, 0, 0]);
+        let zh_sample = "繁體中文 模式 1 執行 投影 螢幕";
+        let w = img.measure_text_width(&fonts.bold, cjk, zh_sample, 14.0);
+        assert!(w > 100, "Measured width should be positive and substantial: {}", w);
+        img.draw_text(&fonts.bold, cjk, zh_sample, 14.0, 10, 10, [255, 255, 255]);
+        let non_zero_pixels = img.data.iter().any(|&p| p != [0, 0, 0]);
+        assert!(non_zero_pixels, "Pixels must be drawn for Traditional Chinese text");
+    }
 }
