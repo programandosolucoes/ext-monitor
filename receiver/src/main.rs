@@ -164,7 +164,7 @@ fn main() {
     if let Ok(mut cfg) = web::CONFIG.lock() {
         cfg.mode3 = is_usb_bulk_mode;
         cfg.mode1 = !is_usb_bulk_mode;
-        cfg.mode2 = false;
+        cfg.mode2 = !is_usb_bulk_mode;
         cfg.active_transport = if is_usb_bulk_mode {
             "mode3_usb_bulk".to_string()
         } else {
@@ -232,11 +232,12 @@ fn main() {
     println!("\x1b[1;32m[ext-receiver]\x1b[0m Receiver terminated cleanly.");
 }
 
-/// Set up OS signal handlers for graceful shutdown (SIGINT & SIGTERM)
+/// Set up OS signal handlers for graceful shutdown (SIGINT & SIGTERM) and thread interruption (SIGUSR2)
 fn setup_signal_handler(running: Arc<AtomicBool>) {
     unsafe {
         register_libc_signal(libc::SIGINT, signal_handler);
         register_libc_signal(libc::SIGTERM, signal_handler);
+        register_libc_signal(libc::SIGUSR2, noop_signal_handler);
     }
     let r = running.clone();
     thread::spawn(move || {
@@ -250,6 +251,8 @@ fn setup_signal_handler(running: Arc<AtomicBool>) {
 extern "C" fn signal_handler(_: libc::c_int) {
     RUNNING.store(false, Ordering::SeqCst);
 }
+
+extern "C" fn noop_signal_handler(_: libc::c_int) {}
 
 unsafe fn register_libc_signal(sig: libc::c_int, handler: extern "C" fn(libc::c_int)) {
     libc::signal(sig, handler as usize);

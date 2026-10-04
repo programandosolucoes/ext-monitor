@@ -58,12 +58,6 @@ pub fn ensure_gnome_displays(scale: crate::config::ScaleMode) {
         _ => 1,
     };
 
-    if CURRENT_GNOME_LAYOUT.load(Ordering::SeqCst) == 2
-        && CURRENT_GNOME_SCALE.load(Ordering::SeqCst) == scale_id
-    {
-        return;
-    }
-
     let target_mode = match scale {
         crate::config::ScaleMode::Scale1600x900 => "1600x900@59.946",
         _ => "1280x720@59.855",
@@ -117,10 +111,6 @@ pub fn ensure_gnome_displays(scale: crate::config::ScaleMode) {
 
 /// Collapses GNOME extended display layout, turning off HDMI-1 and retaining only eDP-1.
 pub fn collapse_gnome_displays() {
-    if CURRENT_GNOME_LAYOUT.load(Ordering::SeqCst) == 1 {
-        return;
-    }
-
     let check = Command::new("gdbus")
         .args([
             "call",

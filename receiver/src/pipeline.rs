@@ -146,7 +146,8 @@ impl PipelineManager {
         let mut kind_guard = self.active_kind.lock().unwrap();
         *kind_guard = None;
 
-        self.audio.lock().unwrap().stop();
+        // NOTE: We do NOT stop audio here! Audio operates independently from video
+        // so that in Level 2 (Soundbox / Equalizer mode) the user can stream audio even when video is paused or in standby.
     }
 
     /// Stops the active pipeline cleanly with op_lock synchronization

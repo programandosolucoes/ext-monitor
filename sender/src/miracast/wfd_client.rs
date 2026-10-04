@@ -357,7 +357,6 @@ impl WfdClient {
         // -------------------------------------------------------------
         // M7: PLAY (start streaming)
         // -------------------------------------------------------------
-
         let sid = self.session_id.as_deref().unwrap_or("12345678");
         let m7 = Self::build_play_request(&presentation_url, self.cseq, sid);
         let m7_cseq = self.cseq;

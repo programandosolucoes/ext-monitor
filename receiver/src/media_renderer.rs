@@ -341,6 +341,7 @@ pub fn update_audio_spectrum(bands: &[f32; 24], rms_db: f32) {
             spec.rms_db = rms_db;
             spec.is_active = true;
             spec.last_update = std::time::Instant::now();
+            crate::flow::ARBITER.set_audio_active(true);
             for i in 0..24 {
                 let val = bands[i].clamp(0.0, 1.0);
                 spec.bands[i] = val;
@@ -356,6 +357,7 @@ pub fn update_audio_spectrum(bands: &[f32; 24], rms_db: f32) {
             spec.rms_db = -60.0;
             spec.bands = [0.0; 24];
             spec.peaks = [0.0; 24];
+            crate::flow::ARBITER.set_audio_active(false);
         }
     }
 

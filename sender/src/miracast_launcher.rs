@@ -302,15 +302,22 @@ pub fn launch_miracast_client_with_port(target_ip: Option<&str>, target_port: Op
                 "\x1b[1;32m[miracast-launcher]\x1b[0m Native Miracast session started successfully! Streaming to {}:{}",
                 ip, session.sink_rtp_port()
             );
+            let _ = std::process::Command::new("notify-send")
+                .arg("Ext-Monitor: Miracast Conectado")
+                .arg(format!("Transmitindo tela e áudio para a TV em {}:{} (720p60)", ip, session.sink_rtp_port()))
+                .spawn();
             *lock = Some(session);
         }
         Err(e) => {
             eprintln!(
-                "\x1b[1;31m[miracast-launcher]\x1b[0m Failed to start native Miracast session to {}:{}: {}. Attempting fallback to gnome-network-displays...",
+                "\x1b[1;31m[miracast-launcher]\x1b[0m Failed to start native Miracast session to {}:{}: {}. (Headless mode: gnome-network-displays fallback disabled to protect Wayland session)",
                 ip, port, e
             );
+            let _ = std::process::Command::new("notify-send")
+                .arg("Ext-Monitor: Miracast Falhou")
+                .arg(format!("Falha no handshake nativo RTSP ({}:{}): {}", ip, port, e))
+                .spawn();
             drop(lock);
-            launch_gnome_network_displays();
         }
     }
 }

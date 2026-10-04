@@ -27,6 +27,9 @@ pub mod miracast_launcher;
 #[path = "../screencast.rs"]
 pub mod screencast;
 
+#[path = "../damage_pacer.rs"]
+pub mod damage_pacer;
+
 #[path = "../miracast/mod.rs"]
 pub mod miracast;
 
@@ -356,6 +359,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup signal handler for graceful Ctrl+C / SIGTERM teardown
     setup_signals();
 
+    // For extend mode, ensure kernel HDMI-1 is connected and GNOME multi-monitor layout is applied
+    let is_extend_mode = cli.mode.to_lowercase() == "extend";
+    if is_extend_mode {
+        ensure_gnome_extended_display();
+    }
+
     // Configure Miracast session
     let config = MiracastConfig::new(&target_ip, target_port)
         .with_resolution(cli.width, cli.height)
@@ -373,9 +382,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(s) => s,
         Err(e) => {
             eprintln!("\x1b[1;31m[miracast]\x1b[0m Failed to start Miracast session: {}", e);
+            if is_extend_mode {
+                collapse_gnome_extended_display();
+            }
             std::process::exit(1);
         }
     };
+
+    // 1. Start 60 Hz Wayland Damage Pacer on extended display to guarantee continuous 60 FPS without freezing
+    let mut pacer: Option<damage_pacer::DamagePacer> = None;
+    if is_extend_mode {
+        pacer = Some(damage_pacer::DamagePacer::start(1920, 0));
+        println!("\x1b[1;32m[miracast-pacer]\x1b[0m 60 Hz Damage Heartbeat active on extended screen (1920, 0) to prevent video freezing");
+    }
+
+    // 2. Start background audio streaming to UDP 5004 with automatic sink routing
+    let mut audio_session = spawn_miracast_audio_streamer(&target_ip);
 
     println!("\x1b[1;32m[miracast]\x1b[0m Streaming active! Press Ctrl+C to terminate cleanly.");
 
@@ -385,7 +407,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\n\x1b[1;33m[miracast]\x1b[0m Signal received. Shutting down session with RTSP TEARDOWN...");
+
+    // Stop damage pacer first
+    if let Some(mut p) = pacer.take() {
+        p.stop();
+        println!("\x1b[1;32m[+] Damage pacer stopped cleanly.\x1b[0m");
+    }
+
+    // Stop audio streamer and restore audio routing
+    if let Some((mut child, prev_sink)) = audio_session.take() {
+        if let Some(ref mut c) = child {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+        if let Some(orig_sink) = prev_sink {
+            let _ = std::process::Command::new("pactl")
+                .args(["set-default-sink", &orig_sink])
+                .output();
+            let inputs = std::process::Command::new("pactl")
+                .args(["list", "sink-inputs", "short"])
+                .output();
+            if let Ok(out) = inputs {
+                let text = String::from_utf8_lossy(&out.stdout);
+                for line in text.lines() {
+                    if let Some(stream_id) = line.split_whitespace().next() {
+                        let _ = std::process::Command::new("pactl")
+                            .args(["move-sink-input", stream_id, &orig_sink])
+                            .output();
+                    }
+                }
+            }
+        }
+        println!("\x1b[1;32m[+] Audio streaming process terminated and default sink restored.\x1b[0m");
+    }
+
     session.stop();
+
+    if is_extend_mode {
+        collapse_gnome_extended_display();
+    }
 
     // Instant terminal restore (cursor visible + formatting reset)
     print!("\x1b[?25h\x1b[0m");
@@ -393,6 +453,202 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;32m[miracast]\x1b[0m Clean shutdown complete (< 100ms teardown).");
 
     Ok(())
+}
+
+fn spawn_miracast_audio_streamer(target_ip: &str) -> Option<(Option<std::process::Child>, Option<String>)> {
+    // 0. Detect and save current default sink name (fallback to physical speaker if already set to Raspberry)
+    let prev_sink = std::process::Command::new("pactl")
+        .args(["get-default-sink"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.contains("Raspberry") {
+                let list = std::process::Command::new("pactl")
+                    .args(["list", "sinks", "short"])
+                    .output()
+                    .ok()?;
+                let txt = String::from_utf8_lossy(&list.stdout);
+                for line in txt.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 2 && !parts[1].contains("Raspberry") {
+                        return Some(parts[1].to_string());
+                    }
+                }
+                None
+            } else {
+                Some(s)
+            }
+        });
+
+    // 1. Ensure PulseAudio sink Raspberry_Pi_HDMI_Audio exists
+    let check = std::process::Command::new("pactl")
+        .args(["list", "sinks", "short"])
+        .output();
+    let has_sink = check
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("Raspberry_Pi_HDMI_Audio"))
+        .unwrap_or(false);
+
+    if !has_sink {
+        let _ = std::process::Command::new("pactl")
+            .args([
+                "load-module",
+                "module-null-sink",
+                "sink_name=Raspberry_Pi_HDMI_Audio",
+                "sink_properties=device.description=Raspberry_Pi_HDMI_Audio device.icon_name=video-display media.class=Audio/Sink",
+            ])
+            .output();
+    }
+
+    // 2. Set Raspberry_Pi_HDMI_Audio as default sink, unmuted, 100% volume
+    let _ = std::process::Command::new("pactl")
+        .args(["set-default-sink", "Raspberry_Pi_HDMI_Audio"])
+        .output();
+    let _ = std::process::Command::new("pactl")
+        .args(["set-sink-mute", "Raspberry_Pi_HDMI_Audio", "0"])
+        .output();
+    let _ = std::process::Command::new("pactl")
+        .args(["set-sink-volume", "Raspberry_Pi_HDMI_Audio", "100%"])
+        .output();
+
+    // 3. Move all currently playing audio streams (Chrome, Spotify, media players) to Raspberry_Pi_HDMI_Audio
+    let inputs = std::process::Command::new("pactl")
+        .args(["list", "sink-inputs", "short"])
+        .output();
+    if let Ok(out) = inputs {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            if let Some(stream_id) = line.split_whitespace().next() {
+                let _ = std::process::Command::new("pactl")
+                    .args(["move-sink-input", stream_id, "Raspberry_Pi_HDMI_Audio"])
+                    .output();
+            }
+        }
+    }
+
+    // 4. Set receiver audio sample rate to 48000 Hz
+    let client_ip = target_ip.to_string();
+    std::thread::spawn(move || {
+        let body = r#"{"rate":48000}"#;
+        let _ = std::process::Command::new("curl")
+            .args([
+                "-s",
+                "-X", "POST",
+                &format!("http://{}:8080/api/audio/rate", client_ip),
+                "-H", "Content-Type: application/json",
+                "-d", body,
+            ])
+            .output();
+    });
+
+    println!(
+        "\x1b[1;32m[miracast-audio]\x1b[0m Audio streaming active on UDP {}:5004 (Routed to 'Raspberry_Pi_HDMI_Audio', volume 100%)",
+        target_ip
+    );
+
+    let child = std::process::Command::new("gst-launch-1.0")
+        .env("PULSE_SOURCE", "Raspberry_Pi_HDMI_Audio.monitor")
+        .env("PULSE_PROP", "media.role=filter stream.dont-route=true node.dont-reconnect=true")
+        .args([
+            "-q",
+            "pulsesrc", "device=Raspberry_Pi_HDMI_Audio.monitor", "buffer-time=20000", "latency-time=5000", "do-timestamp=true",
+            "!", "audioconvert",
+            "!", "audioresample",
+            "!", "audio/x-raw,format=S16LE,rate=48000,channels=2",
+            "!", "audiobuffersplit", "output-buffer-size=1024",
+            "!", "udpsink", &format!("host={}", target_ip), "port=5004", "sync=false", "async=false",
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok();
+
+    Some((child, prev_sink))
+}
+
+fn ensure_gnome_extended_display() {
+    let status_path = "/sys/class/drm/card1-HDMI-A-1/status";
+    let is_connected = std::fs::read_to_string(status_path)
+        .map(|s| s.trim() == "connected")
+        .unwrap_or(false);
+
+    if !is_connected {
+        println!("\x1b[1;33m[*] Forcing kernel HDMI-A-1 connected with Pi monitor EDID...\x1b[0m");
+        let cmd = "sudo tee /sys/kernel/debug/dri/1/HDMI-A-1/edid_override < /home/carlos/ide/ext-monitor/edid/pi-monitor.edid > /dev/null && \
+                   echo 'on' | sudo tee /sys/kernel/debug/dri/1/HDMI-A-1/force > /dev/null && \
+                   echo 1 | sudo tee /sys/kernel/debug/dri/1/HDMI-A-1/trigger_hotplug > /dev/null";
+        let _ = std::process::Command::new("bash").arg("-c").arg(cmd).status();
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    // Poll in a loop up to 10 attempts (3 seconds) to ensure HDMI-1 is registered in Mutter logical_monitors
+    for attempt in 1..=10 {
+        let check = std::process::Command::new("gdbus")
+            .args([
+                "call", "--session", "--dest", "org.gnome.Mutter.DisplayConfig",
+                "--object-path", "/org/gnome/Mutter/DisplayConfig",
+                "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState",
+            ])
+            .output();
+
+        if let Ok(out) = check {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let serial = if let Some(start) = stdout.find("(uint32 ") {
+                let rest = &stdout[start + 8..];
+                rest.find(',').and_then(|end| rest[..end].trim().parse::<u32>().ok()).unwrap_or(1)
+            } else {
+                1
+            };
+
+            let is_configured = if let Some(pos) = stdout.rfind("], [(") {
+                stdout[pos + 3..].contains("'HDMI-1'")
+            } else {
+                false
+            };
+
+            if is_configured {
+                println!("\x1b[1;32m[+] GNOME extended display layout verified active for HDMI-1.\x1b[0m");
+                std::thread::sleep(Duration::from_millis(250));
+                return;
+            }
+
+            println!("\x1b[1;33m[*] Applying GNOME extended display layout for Miracast (serial={}, attempt {})...\x1b[0m", serial, attempt);
+            let apply_cmd = format!(
+                r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 2 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})]), (1920, 0, 1.0, 0, false, [('HDMI-1', '1280x720@59.855', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+                serial
+            );
+            let _ = std::process::Command::new("bash").arg("-c").arg(&apply_cmd).status();
+            std::thread::sleep(Duration::from_millis(400));
+        } else {
+            std::thread::sleep(Duration::from_millis(300));
+        }
+    }
+}
+
+fn collapse_gnome_extended_display() {
+    let check = std::process::Command::new("gdbus")
+        .args([
+            "call", "--session", "--dest", "org.gnome.Mutter.DisplayConfig",
+            "--object-path", "/org/gnome/Mutter/DisplayConfig",
+            "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState",
+        ])
+        .output();
+
+    if let Ok(out) = check {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let serial = if let Some(start) = stdout.find("(uint32 ") {
+            let rest = &stdout[start + 8..];
+            rest.find(',').and_then(|end| rest[..end].trim().parse::<u32>().ok()).unwrap_or(1)
+        } else {
+            1
+        };
+        let apply_cmd = format!(
+            r#"gdbus call --session --dest org.gnome.Mutter.DisplayConfig --object-path /org/gnome/Mutter/DisplayConfig --method org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig {} 2 "[(0, 0, 1.0, 0, true, [('eDP-1', '1920x1080@60.003', @a{{sv}} {{}})])]" "@a{{sv}} {{}}""#,
+            serial
+        );
+        let _ = std::process::Command::new("bash").arg("-c").arg(&apply_cmd).status();
+        println!("\x1b[1;32m[+] GNOME displays cleanly collapsed on Miracast exit.\x1b[0m");
+    }
 }
 
 #[cfg(test)]

@@ -254,7 +254,7 @@ impl MiracastSession {
 
         if pipeline_ready {
             cmd.arg("videorate");
-            cmd.arg("drop-only=true");
+            cmd.arg("drop-only=false");
             cmd.arg("skip-to-first=true");
             cmd.arg("!");
             cmd.arg(format!("video/x-raw,framerate={}/1", config.fps));

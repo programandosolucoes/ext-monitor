@@ -255,15 +255,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.contrast,
         cfg.saturation
     );
-    let mut audio_tx_running = Arc::new(AtomicBool::new(cfg.audio));
-    if cfg.audio {
+    let mut is_paused = !cfg.auto_connect || cfg.transport == TransportKind::Miracast;
+    let mut audio_tx_running = Arc::new(AtomicBool::new(false));
+    if cfg.audio && !is_paused {
         println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Enabled (100% In-Process Native PCM {}:{} @ {} Hz Hi-Res, Spectrum: 5006)", cfg.target_ip, cfg.audio_port, cfg.audio_rate);
+        audio_tx_running.store(true, Ordering::SeqCst);
         let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+    } else if cfg.audio {
+        println!("\x1b[1;33m[*] Audio Subsystem:\x1b[0m Standby (transmissão de áudio pausada aguardando início da sessão)");
     } else {
         println!("\x1b[1;33m[*] Audio Subsystem:\x1b[0m Disabled (--no-audio)");
     }
-
-    let mut is_paused = !cfg.auto_connect || cfg.transport == TransportKind::Miracast;
 
     let mut monitor_to_record = if cfg.mode == "clone" {
         "eDP-1".to_string()
@@ -348,6 +350,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         ControlAction::StopStreaming => {
                             pipewire::collapse_gnome_displays();
+                            audio_tx_running.store(false, Ordering::SeqCst);
                             should_unpause = false;
                             // Do not echo notify_receiver_stop here to prevent ping-pong loop with receiver
                         }
@@ -368,11 +371,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             cfg.transport = new_trans;
                         }
                         ControlAction::SetAudio(a) => {
-                            if a != cfg.audio {
-                                println!("\x1b[1;35m[*] Standby: Áudio simultâneo configurado para {}\x1b[0m", a);
-                                cfg.audio = a;
-                                audio_tx_running.store(false, Ordering::SeqCst);
-                                if a {
+                            println!("\x1b[1;35m[*] Standby: Áudio configurado para {}\x1b[0m", a);
+                            cfg.audio = a;
+                            audio_tx_running.store(false, Ordering::SeqCst);
+                            if a {
+                                audio_tx_running = Arc::new(AtomicBool::new(true));
+                                let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+                            }
+                        }
+                        ControlAction::SetAudioRate(rate) => {
+                            if [44100, 48000, 88200, 96000, 192000].contains(&rate) && rate != cfg.audio_rate {
+                                println!("\x1b[1;35m[*] Standby: Switching Audio Sample Rate {} Hz -> {} Hz\x1b[0m", cfg.audio_rate, rate);
+                                cfg.audio_rate = rate;
+                                if cfg.audio {
+                                    audio_tx_running.store(false, Ordering::SeqCst);
+                                    std::thread::sleep(std::time::Duration::from_millis(80));
                                     audio_tx_running = Arc::new(AtomicBool::new(true));
                                     let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
                                 }
@@ -387,6 +400,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         pipewire::ensure_gnome_displays(cfg.scale);
                     } else {
                         pipewire::collapse_gnome_displays();
+                    }
+                    if cfg.audio && !audio_tx_running.load(Ordering::SeqCst) {
+                        println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Ativando transmissão de áudio nativo {}:{} @ {} Hz", cfg.target_ip, cfg.audio_port, cfg.audio_rate);
+                        audio_tx_running = Arc::new(AtomicBool::new(true));
+                        let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
                     }
                     is_paused = false;
                     break;
@@ -557,10 +575,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             is_paused = true;
                             close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                             pipeline_builder.usb_pipe_fd = None;
-                            std::thread::spawn(|| {
-                                crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+                            let tip = cfg.target_ip.clone();
+                            std::thread::spawn(move || {
+                                crate::miracast_launcher::launch_miracast_client(Some(&tip));
                             });
                         } else {
+                            if cfg.audio && !audio_tx_running.load(Ordering::SeqCst) {
+                                println!("\x1b[1;34m[*] Audio Subsystem:\x1b[0m Ativando transmissão de áudio nativo {}:{} @ {} Hz", cfg.target_ip, cfg.audio_port, cfg.audio_rate);
+                                audio_tx_running = Arc::new(AtomicBool::new(true));
+                                let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+                            }
                             is_paused = false;
                             restart_pipeline = true;
                         }
@@ -598,6 +622,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     ControlAction::StopStreaming => {
                         println!("\x1b[1;33m[*] Web Command: Parar Transmissão / Standby recebido! Encerrando transmissores e recolhendo display...\x1b[0m");
+                        audio_tx_running.store(false, Ordering::SeqCst);
                         if let Some(mut p) = pacer.take() {
                             p.stop();
                         }
@@ -615,7 +640,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         is_paused = true;
                         pipewire::collapse_gnome_displays();
                         // Do not echo notify_receiver_stop here to prevent ping-pong loop with receiver
-                        println!("\x1b[1;32m[*] Todos os transmissores de vídeo do Host foram finalizados e tela estendida recolhida do GNOME Mutter. Modo Standby ativo.\x1b[0m");
+                        println!("\x1b[1;32m[*] Todos os transmissores (vídeo e áudio) do Host foram finalizados e tela estendida recolhida do GNOME Mutter. Modo Standby ativo.\x1b[0m");
                         break;
                     }
                     ControlAction::SetMode(m) => {
@@ -626,8 +651,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                             pipeline_builder.usb_pipe_fd = None;
                             restart_pipeline = true;
-                            std::thread::spawn(|| {
-                                crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+                            let tip = cfg.target_ip.clone();
+                            std::thread::spawn(move || {
+                                crate::miracast_launcher::launch_miracast_client(Some(&tip));
                             });
                         } else if m == "ask" || m == "interactive" {
                             cfg.mode = "ask".to_string();
@@ -755,14 +781,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     ControlAction::LaunchMiracast => {
                         println!("\x1b[1;35m[*] Web Command: Lançar Miracast (cliente nativo pure-Rust)\x1b[0m");
+                        let _ = std::process::Command::new("notify-send")
+                            .arg("Ext-Monitor: Modo 2 Miracast")
+                            .arg("Iniciando cliente Wi-Fi Display para a TV (RTSP 7236)...")
+                            .spawn();
                         is_paused = true;
                         cfg.transport = TransportKind::Miracast;
                         close_usb_transport(&mut current_usb_pipe, &usb_writer_alive);
                         pipeline_builder.usb_pipe_fd = None;
                         restart_pipeline = true;
 
-                        std::thread::spawn(|| {
-                            crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+                        let target_ip_clone = cfg.target_ip.clone();
+                        std::thread::spawn(move || {
+                            crate::miracast_launcher::launch_miracast_client(Some(&target_ip_clone));
                         });
                     }
                     ControlAction::SetTransport(new_trans) => {
@@ -784,8 +815,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 restart_pipeline = true;
 
                                 // Auto-launch native pure-Rust Miracast client with GPU hardware acceleration
-                                std::thread::spawn(|| {
-                                    crate::miracast_launcher::launch_miracast_client(Some("192.168.7.2"));
+                                let target_ip_clone = cfg.target_ip.clone();
+                                std::thread::spawn(move || {
+                                    crate::miracast_launcher::launch_miracast_client(Some(&target_ip_clone));
                                 });
                             }
                             TransportKind::UsbBulk => {

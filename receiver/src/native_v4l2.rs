@@ -77,7 +77,7 @@ impl NativeV4l2Decoder {
         }
     }
 
-    /// Terminates the native decoding worker
+    /// Terminates the native decoding worker cleanly, interrupting any blocking syscalls
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
         if let Some(fd) = self.active_fd.take() {
@@ -86,6 +86,14 @@ impl NativeV4l2Decoder {
             }
         }
         if let Some(handle) = self.worker_handle.take() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::thread::JoinHandleExt;
+                let pthread = handle.as_pthread_t();
+                unsafe {
+                    libc::pthread_kill(pthread as _, libc::SIGUSR2);
+                }
+            }
             let _ = handle.join();
         }
         println!("\x1b[1;33m[native-v4l2]\x1b[0m Hardware Decoder stopped cleanly.");

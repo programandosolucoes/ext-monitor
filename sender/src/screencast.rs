@@ -38,31 +38,22 @@ impl MutterScreenCastSession {
         println!("\x1b[1;32m[+] Mutter Session created:\x1b[0m {}", session_path);
 
         // 2. Request monitor recording with cursor embedded (mode 1)
-        // If monitor is virtual, auto, or extend, create virtual display via RecordVirtual
         let is_virtual = monitor.to_lowercase() == "virtual"
-            || monitor.to_lowercase() == "auto"
-            || monitor.to_lowercase() == "extend";
+            || monitor.to_lowercase() == "auto";
         let target_connector = if monitor.to_lowercase() == "clone" {
             "eDP-1"
+        } else if monitor.to_lowercase() == "extend" {
+            "HDMI-1"
         } else {
             monitor
         };
 
-        let (stream_path, active_monitor) = if is_virtual {
-            let mut virtual_props: HashMap<&str, Value> = HashMap::new();
-            virtual_props.insert("is-platform", Value::from(true));
-            virtual_props.insert("cursor-mode", Value::from(1u32));
-            let stream_reply = conn.call_method(
-                Some("org.gnome.Mutter.ScreenCast"),
-                session_path.as_str(),
-                Some("org.gnome.Mutter.ScreenCast.Session"),
-                "RecordVirtual",
-                &(virtual_props,),
-            )?;
-            let sp: OwnedObjectPath = stream_reply.body().deserialize()?;
-            println!("\x1b[1;32m[+] Mutter Virtual ScreenCast Stream created (Extend Mode):\x1b[0m {}", sp);
-            (sp, "Virtual-Display".to_string())
-        } else {
+        let (stream_path, active_monitor) = {
+            let actual_connector = if is_virtual {
+                "eDP-1"
+            } else {
+                target_connector
+            };
             let mut monitor_props: HashMap<&str, Value> = HashMap::new();
             monitor_props.insert("cursor-mode", Value::from(1u32));
             match conn.call_method(
@@ -70,34 +61,23 @@ impl MutterScreenCastSession {
                 session_path.as_str(),
                 Some("org.gnome.Mutter.ScreenCast.Session"),
                 "RecordMonitor",
-                &(target_connector, monitor_props),
+                &(actual_connector, monitor_props),
             ) {
                 Ok(stream_reply) => {
                     let sp: OwnedObjectPath = stream_reply.body().deserialize()?;
-                    println!("\x1b[1;32m[+] {} ScreenCast Stream created (Clone Mode):\x1b[0m {}", target_connector, sp);
-                    (sp, target_connector.to_string())
+                    println!("\x1b[1;32m[+] {} ScreenCast Stream created:\x1b[0m {}", actual_connector, sp);
+                    (sp, actual_connector.to_string())
                 }
                 Err(err) => {
-                    println!(
-                        "\x1b[1;33m[!] RecordMonitor('{}') failed ({}). Fallback: Criando monitor virtual estendido via RecordVirtual...\x1b[0m",
-                        monitor, err
+                    eprintln!(
+                        "\x1b[1;31m[!] RecordMonitor('{}') failed: {}. (RecordVirtual disabled to prevent libmutter SIGSEGV)\x1b[0m",
+                        actual_connector, err
                     );
-                    let mut virtual_props: HashMap<&str, Value> = HashMap::new();
-                    virtual_props.insert("is-platform", Value::from(true));
-                    virtual_props.insert("cursor-mode", Value::from(1u32));
-                    let stream_reply = conn.call_method(
-                        Some("org.gnome.Mutter.ScreenCast"),
-                        session_path.as_str(),
-                        Some("org.gnome.Mutter.ScreenCast.Session"),
-                        "RecordVirtual",
-                        &(virtual_props,),
-                    )?;
-                    let sp: OwnedObjectPath = stream_reply.body().deserialize()?;
-                    println!("\x1b[1;32m[+] Mutter Virtual ScreenCast Stream created:\x1b[0m {}", sp);
-                    (sp, format!("Virtual-{}", monitor))
+                    return Err(format!("RecordMonitor('{}') failed: {}", actual_connector, err).into());
                 }
             }
         };
+
 
         // 3. Subscribe to PipeWireStreamAdded signal BEFORE calling Start()
         let stream_proxy = Proxy::new(

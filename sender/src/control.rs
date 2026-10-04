@@ -370,5 +370,17 @@ mod tests {
         })));
         assert!(actions2.contains(&ControlAction::SetAudio(true)));
     }
+
+    #[test]
+    fn test_parse_control_audio_rate_192khz() {
+        let payload = br#"{"audio_rate":192000}"#;
+        let actions = parse_control_payload(payload);
+        assert!(actions.contains(&ControlAction::SetAudioRate(192000)));
+
+        let payload_combo = br#"{"audio":true,"audio_rate":192000}"#;
+        let actions2 = parse_control_payload(payload_combo);
+        assert!(actions2.contains(&ControlAction::SetAudio(true)));
+        assert!(actions2.contains(&ControlAction::SetAudioRate(192000)));
+    }
 }
 

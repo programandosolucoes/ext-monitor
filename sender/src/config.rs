@@ -532,7 +532,7 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
                     None
                 }
             })
-            .unwrap_or(96000);
+            .unwrap_or(48000);
 
         let color_profile = if args.iter().any(|a| {
             let s = a.to_lowercase();

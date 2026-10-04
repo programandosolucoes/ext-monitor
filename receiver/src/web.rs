@@ -155,10 +155,11 @@ pub fn evaluate_mode_switch(
         m3_change = Some(m3);
     }
 
-    let all_disabled = active_transport.is_none() && !mode1 && !mode2 && !mode3;
+    let is_standby_requested = active_transport == Some("standby");
+    let all_disabled = is_standby_requested || (active_transport.is_none() && !mode1 && !mode2 && !mode3);
 
     if all_disabled {
-        return (mode1, mode2, mode3, ModeSwitchResult::EnterStandby);
+        return (false, false, false, ModeSwitchResult::EnterStandby);
     }
 
     let inferred_transport = active_transport.map(|s| s.to_string())
@@ -190,21 +191,34 @@ pub fn evaluate_mode_switch(
         });
 
     if let Some(transport) = inferred_transport {
-        // Enforce strict mutual exclusivity across hardware display modes
-        let (m1, m2, m3) = match transport.as_str() {
-            "mode3_usb_bulk" | "usb_bulk" | "mode3" => (false, false, true),
-            "mode2_miracast" | "miracast" | "mode2" => (false, true, false),
-            "mode1_udp" | "network" | "udp" | "mode1" => (true, false, false),
-            _ => (mode1, mode2, mode3),
-        };
-        (m1, m2, m3, ModeSwitchResult::SwitchTransport(transport))
+        (mode1, mode2, mode3, ModeSwitchResult::SwitchTransport(transport))
     } else if let Some(false) = m3_change {
-        (mode1, mode2, false, ModeSwitchResult::DisableListener("mode3".to_string()))
+        (mode1, mode2, mode3, ModeSwitchResult::DisableListener("mode3".to_string()))
     } else if let Some(false) = m1_change {
-        (false, mode2, mode3, ModeSwitchResult::DisableListener("mode1".to_string()))
+        (mode1, mode2, mode3, ModeSwitchResult::DisableListener("mode1".to_string()))
     } else {
         (mode1, mode2, mode3, ModeSwitchResult::NoChange)
     }
+}
+
+pub fn transition_to_standby_or_visualizer(pipeline_mgr: Arc<PipelineManager>) {
+    let pipe = pipeline_mgr.clone();
+    thread::spawn(move || {
+        pipe.pause();
+        crate::wfd::terminate_active_sessions();
+        if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
+            *lock = None;
+        }
+        let vis = crate::flow::ARBITER.is_visualizer_user_enabled();
+        if vis {
+            println!("\x1b[1;36m[web-server]\x1b[0m Transitioning to Level 2 (Audio Soundbox + FFT Visualizer)...");
+            let _ = crate::flow::ARBITER.request_level2(true);
+        } else {
+            println!("\x1b[1;33m[web-server]\x1b[0m Transitioning to Level 3 (Standby Splash Screen)...");
+            let _ = crate::flow::ARBITER.request_standby();
+            crate::display::SplashEngine::show_ready();
+        }
+    });
 }
 
 fn handle_http_client(
@@ -429,21 +443,12 @@ fn handle_http_client(
 
                 match result {
                     ModeSwitchResult::EnterStandby => {
-                        println!("\x1b[1;33m[web-server]\x1b[0m All video modes disabled via Web UI. Entering Standby...");
-                        let _ = crate::flow::ARBITER.request_standby();
+                        println!("\x1b[1;33m[web-server]\x1b[0m All video modes disabled via Web UI. Entering Standby / Audio Visualizer...");
                         if let Ok(mut cfg) = CONFIG.lock() {
                             cfg.active_transport = "standby".to_string();
                         }
                         forward_config_to_sender("{\"action\":\"stop\"}");
-                        let pipe = pipeline_mgr.clone();
-                        thread::spawn(move || {
-                            pipe.pause();
-                            crate::wfd::terminate_active_sessions();
-                            if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
-                                *lock = None;
-                            }
-                            crate::display::SplashEngine::show_ready();
-                        });
+                        transition_to_standby_or_visualizer(pipeline_mgr.clone());
                     }
                     ModeSwitchResult::SwitchTransport(transport) => {
                         if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
@@ -513,7 +518,7 @@ fn handle_http_client(
                                     cfg.mode2 = true;
                                     cfg.mode3 = false;
                                 }
-                                forward_config_to_sender("{\"action\":\"stop\"}");
+                                forward_config_to_sender("{\"action\":\"launch_miracast\",\"transport\":\"miracast\"}");
                                 let pipe = pipeline_mgr.clone();
                                 thread::spawn(move || {
                                     pipe.stop();
@@ -551,16 +556,9 @@ fn handle_http_client(
                         cfg.mode1 = false;
                         cfg.mode2 = false;
                         cfg.mode3 = false;
+                        cfg.active_transport = "standby".to_string();
                     }
-                    let pipe = pipeline_mgr.clone();
-                    thread::spawn(move || {
-                        pipe.pause();
-                        crate::wfd::terminate_active_sessions();
-                        if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
-                            *lock = None;
-                        }
-                        crate::display::SplashEngine::show_ready();
-                    });
+                    transition_to_standby_or_visualizer(pipeline_mgr.clone());
                 } else if body.contains("\"action\":\"start\"") || body.contains("\"action\":\"launch_miracast\"") {
                     let pipe = pipeline_mgr.clone();
                     let run = running.clone();
@@ -747,9 +745,21 @@ fn handle_http_client(
                 let body = req_str[idx + 4..].trim();
                 let st = crate::media_renderer::get_media_state();
                 if let Ok(mut m) = st.lock() {
-                    if let Some(vis) = extract_json_bool(body, "enabled") {
+                    let vis_opt = extract_json_bool(body, "enabled")
+                        .or_else(|| extract_json_bool(body, "visualizer"));
+                    if let Some(vis) = vis_opt {
                         m.visualizer_enabled = vis;
                         crate::flow::ARBITER.set_visualizer_user_enabled(vis);
+                        if !crate::flow::ARBITER.is_level0_active() {
+                            if vis {
+                                println!("\x1b[1;36m[web-server]\x1b[0m Visualizer enabled: requesting Level 2 Audio Soundbox...");
+                                let _ = crate::flow::ARBITER.request_level2(true);
+                            } else {
+                                println!("\x1b[1;33m[web-server]\x1b[0m Visualizer disabled: entering Standby Splash...");
+                                let _ = crate::flow::ARBITER.request_standby();
+                                crate::display::SplashEngine::show_ready();
+                            }
+                        }
                     }
                 };
             }
@@ -1014,15 +1024,7 @@ fn handle_http_client(
                 println!("\x1b[1;33m[web-server]\x1b[0m User requested stream STOP / STANDBY via Web UI. Stopping all 3 video services...");
                 forward_config_to_sender("{\"action\":\"stop\"}");
             }
-            let pipe = pipeline_mgr.clone();
-            thread::spawn(move || {
-                pipe.pause();
-                crate::wfd::terminate_active_sessions();
-                if let Ok(mut lock) = crate::decoder::v4l2_m2m::LATEST_SCREENSHOT_FRAME.lock() {
-                    *lock = None;
-                }
-                crate::display::SplashEngine::show_ready();
-            });
+            transition_to_standby_or_visualizer(pipeline_mgr.clone());
             send_response(
                 &mut stream,
                 "200 OK",
@@ -1777,12 +1779,12 @@ mod tests {
         let (m1, _m2, m3, res) = evaluate_mode_switch(
             r#"{"active_transport":"mode1_udp"}"#,
             "mode3_usb_bulk",
-            false,
+            true,
             false,
             true,
         );
         assert_eq!(m1, true);
-        assert_eq!(m3, false);
+        assert_eq!(m3, true);
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode1_udp".to_string()));
     }
 
@@ -1793,7 +1795,7 @@ mod tests {
             "mode1_udp",
             true,
             false,
-            false,
+            true,
         );
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode3_usb_bulk".to_string()));
     }
@@ -1804,7 +1806,7 @@ mod tests {
             r#"{"active_transport":"mode2_miracast"}"#,
             "mode1_udp",
             true,
-            false,
+            true,
             false,
         );
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode2_miracast".to_string()));
@@ -1812,8 +1814,8 @@ mod tests {
 
     #[test]
     fn test_evaluate_mode_toggle_transfers_active_stream() {
-        // Turning on mode3 switches active transport to mode3_usb_bulk and deactivates others
-        let (m1, _m2, m3, res) = evaluate_mode_switch(
+        // Turning on mode3 switches active transport to mode3_usb_bulk
+        let (_m1, _m2, m3, res) = evaluate_mode_switch(
             r#"{"mode3":true}"#,
             "mode1_udp",
             true,
@@ -1821,11 +1823,10 @@ mod tests {
             false,
         );
         assert_eq!(m3, true);
-        assert_eq!(m1, false);
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode3_usb_bulk".to_string()));
 
-        // Turning on mode1 switches active transport to mode1_udp and deactivates others
-        let (m1, _m2, m3, res) = evaluate_mode_switch(
+        // Turning on mode1 switches active transport to mode1_udp
+        let (m1, _m2, _m3, res) = evaluate_mode_switch(
             r#"{"mode1":true}"#,
             "mode3_usb_bulk",
             false,
@@ -1833,7 +1834,6 @@ mod tests {
             true,
         );
         assert_eq!(m1, true);
-        assert_eq!(m3, false);
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode1_udp".to_string()));
     }
 
@@ -1876,6 +1876,21 @@ mod tests {
         );
         assert_eq!(m3, false);
         assert_eq!(res, ModeSwitchResult::DisableListener("mode3".to_string()));
+    }
+
+    #[test]
+    fn test_evaluate_explicit_standby_transport() {
+        let (m1, m2, m3, res) = evaluate_mode_switch(
+            r#"{"active_transport":"standby"}"#,
+            "mode1_udp",
+            true,
+            false,
+            false,
+        );
+        assert_eq!(m1, false);
+        assert_eq!(m2, false);
+        assert_eq!(m3, false);
+        assert_eq!(res, ModeSwitchResult::EnterStandby);
     }
 }
 

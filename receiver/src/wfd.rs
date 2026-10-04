@@ -311,6 +311,7 @@ impl WfdSession {
         rtsp_port: u16,
         pipeline_mgr: Arc<PipelineManager>,
     ) -> Self {
+        let _ = stream.set_nonblocking(false);
         let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
         Self {
@@ -568,6 +569,50 @@ impl WfdSession {
                         } else {
                             self.is_streaming = true;
                         }
+                    }
+                }
+            }
+            "SETUP" => {
+                let sid = if self.session_id.is_empty() {
+                    "12345678".to_string()
+                } else {
+                    self.session_id.clone()
+                };
+                let transport_hdr = format!(
+                    "RTP/AVP/UDP;unicast;client_port={}-{};server_port={}",
+                    WFD_RTP_PORT,
+                    WFD_RTP_PORT + 1,
+                    WFD_RTP_PORT
+                );
+                self.send_response(
+                    &cseq,
+                    "200 OK",
+                    &[("Session", &sid), ("Transport", &transport_hdr)],
+                    "",
+                )?;
+            }
+            "PLAY" => {
+                let sid = if self.session_id.is_empty() {
+                    "12345678".to_string()
+                } else {
+                    self.session_id.clone()
+                };
+                self.send_response(&cseq, "200 OK", &[("Session", &sid)], "")?;
+
+                if !self.is_streaming {
+                    println!(
+                        "\x1b[1;32m[wfd-rust]\x1b[0m Starting VideoCore IV Miracast decode on UDP port {}...",
+                        WFD_RTP_PORT
+                    );
+                    if let Err(e) = self.pipeline_mgr.start(PipelineKind::MiracastMp2t {
+                        port: WFD_RTP_PORT,
+                    }) {
+                        eprintln!(
+                            "\x1b[1;31m[wfd-rust]\x1b[0m Failed to start Miracast pipeline: {}",
+                            e
+                        );
+                    } else {
+                        self.is_streaming = true;
                     }
                 }
             }

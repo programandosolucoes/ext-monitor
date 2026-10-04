@@ -503,7 +503,32 @@ pub fn ensure_audio_sink_exists(rate: u32) {
         }
     }
 
-    if module_ids.is_empty() {
+    // Check if existing sink has the expected sample rate
+    let sinks_output = Command::new("pactl")
+        .args(["list", "sinks", "short"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    let rate_str = format!("{}Hz", rate);
+    let mut needs_recreation = module_ids.is_empty();
+
+    if !module_ids.is_empty() {
+        for line in sinks_output.lines() {
+            if line.contains("Raspberry_Pi_HDMI_Audio") {
+                if !line.contains(&rate_str) {
+                    println!("\x1b[1;33m[audio-pcm] Existing sink rate differs from requested {} Hz. Recreating...\x1b[0m", rate);
+                    for id in &module_ids {
+                        let _ = Command::new("pactl").args(["unload-module", id]).output();
+                    }
+                    needs_recreation = true;
+                }
+                break;
+            }
+        }
+    }
+
+    if needs_recreation {
         println!("\x1b[1;34m[audio-pcm] Creating unified PulseAudio sink 'Raspberry_Pi_HDMI_Audio' at {} Hz...\x1b[0m", rate);
         let _ = Command::new("pactl")
             .args([

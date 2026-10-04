@@ -151,6 +151,10 @@ impl UsbBulkIngress {
                     break;
                 }
                 if err.kind() == io::ErrorKind::Interrupted || err.kind() == io::ErrorKind::WouldBlock {
+                    if !running.load(Ordering::SeqCst) {
+                        println!("\x1b[1;33m[usb-ingress]\x1b[0m Interrupted while stopping. Exiting ingress loop.");
+                        break;
+                    }
                     thread::sleep(Duration::from_millis(1));
                     continue;
                 }

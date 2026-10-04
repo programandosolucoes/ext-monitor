@@ -128,7 +128,7 @@ impl NativeAudioRecorder {
             tlength: 0,
             prebuf: 0,
             minreq: 0,
-            fragsize: 1024, // low-latency fragments of 1024 bytes (~10.6ms at 48kHz)
+            fragsize: 2048, // optimal latency fragment of 2048 bytes (~10.66ms at 48kHz, aligned with FFT)
         };
 
         let mut err: c_int = 0;
@@ -197,6 +197,24 @@ impl Drop for NativeAudioRecorder {
     }
 }
 
+static AUDIO_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn migrate_all_streams_to_sink(sink_name: &str) {
+    let inputs = std::process::Command::new("pactl")
+        .args(["list", "sink-inputs", "short"])
+        .output();
+    if let Ok(out) = inputs {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            if let Some(stream_id) = line.split_whitespace().next() {
+                let _ = std::process::Command::new("pactl")
+                    .args(["move-sink-input", stream_id, sink_name])
+                    .output();
+            }
+        }
+    }
+}
+
 /// Spawns a 100% In-Process, Native Rust Audio Streamer and Spectrum Monitor.
 /// Eliminates `parec` and `gst-launch-1.0 pulsesrc` subprocesses completely.
 pub fn spawn_native_audio_subsystem(
@@ -205,28 +223,28 @@ pub fn spawn_native_audio_subsystem(
     audio_rate: u32,
     running: Arc<AtomicBool>,
 ) -> thread::JoinHandle<()> {
+    let my_gen = AUDIO_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     thread::Builder::new()
         .name("audio-native-inprocess".to_string())
         .spawn(move || {
             // 1. Ensure PulseAudio virtual sink exists
             crate::pipeline::ensure_audio_sink_exists(audio_rate);
 
-            // 2. Remember previous default sink and set Raspberry_Pi_HDMI_Audio as default sink
+            // 2. Remember previous physical default sink and set Raspberry_Pi_HDMI_Audio as default sink
             let prev_sink = get_default_sink_name();
-            if let Some(ref sink) = prev_sink {
-                if sink != "Raspberry_Pi_HDMI_Audio" {
-                    let _ = std::process::Command::new("pactl")
-                        .args(["set-default-sink", "Raspberry_Pi_HDMI_Audio"])
-                        .output();
-                    let _ = std::process::Command::new("pactl")
-                        .args(["set-sink-mute", "Raspberry_Pi_HDMI_Audio", "0"])
-                        .output();
-                    let _ = std::process::Command::new("pactl")
-                        .args(["set-sink-volume", "Raspberry_Pi_HDMI_Audio", "100%"])
-                        .output();
-                    println!("\x1b[1;32m[audio-native]\x1b[0m Áudio roteado para Raspberry_Pi_HDMI_Audio (laptop speakers silenciados, sink desmutado a 100%)");
-                }
-            }
+            let prev_physical_sink = prev_sink.filter(|s| s != "Raspberry_Pi_HDMI_Audio");
+
+            let _ = std::process::Command::new("pactl")
+                .args(["set-default-sink", "Raspberry_Pi_HDMI_Audio"])
+                .output();
+            let _ = std::process::Command::new("pactl")
+                .args(["set-sink-mute", "Raspberry_Pi_HDMI_Audio", "0"])
+                .output();
+            let _ = std::process::Command::new("pactl")
+                .args(["set-sink-volume", "Raspberry_Pi_HDMI_Audio", "100%"])
+                .output();
+            migrate_all_streams_to_sink("Raspberry_Pi_HDMI_Audio");
+            println!("\x1b[1;32m[audio-native]\x1b[0m Áudio roteado para Raspberry_Pi_HDMI_Audio (streams migrados, volume 100%, desmutado)");
 
             // 3. Notify receiver of audio sample rate via pure Rust HTTP client
             let client_ip = target_ip.clone();
@@ -235,7 +253,20 @@ pub fn spawn_native_audio_subsystem(
                 &format!("{{\"rate\":{}}}", audio_rate),
             );
 
-            // 4. Prepare UDP sockets for raw PCM audio and Spectrum
+            // 4. Background thread to migrate newly opened browser tabs or players without EVER blocking realtime PCM loop
+            let bg_running = running.clone();
+            let _ = thread::Builder::new()
+                .name("audio-stream-migrator".to_string())
+                .spawn(move || {
+                    while bg_running.load(Ordering::Relaxed) {
+                        thread::sleep(Duration::from_secs(4));
+                        if bg_running.load(Ordering::Relaxed) {
+                            migrate_all_streams_to_sink("Raspberry_Pi_HDMI_Audio");
+                        }
+                    }
+                });
+
+            // 5. Prepare UDP sockets for raw PCM audio and Spectrum
             let audio_sock = match UdpSocket::bind("0.0.0.0:0") {
                 Ok(s) => s,
                 Err(e) => {
@@ -247,17 +278,13 @@ pub fn spawn_native_audio_subsystem(
             let spectrum_dest = format!("{}:5006", target_ip);
 
             println!(
-                "\x1b[1;32m[audio-native]\x1b[0m 100% In-Process Audio Streamer ativo ({} Hz PCM S16LE -> {} & Spectrum -> {})",
-                audio_rate, audio_dest, spectrum_dest
+                "\x1b[1;32m[audio-native]\x1b[0m 100% In-Process Audio Streamer ativo ({} Hz PCM S16LE -> {} & Spectrum -> {}) [gen: {}]",
+                audio_rate, audio_dest, spectrum_dest, my_gen
             );
 
-            // 1024 bytes = 256 stereo samples (s16le = 4 bytes/sample) = ~5.3ms latency at 48kHz
-            let mut pcm_buf = [0u8; 1024];
+            // 2048 bytes = 512 stereo samples (s16le = 4 bytes/sample) = ~10.66ms latency at 48kHz
+            let mut pcm_buf = [0u8; 2048];
             let mut spectrum_packet = [0u8; 25];
-
-            // 2048 bytes buffer for FFT (512 stereo samples)
-            let mut fft_accum = [0u8; 2048];
-            let mut fft_pos = 0;
 
             let source_candidates = [
                 Some("Raspberry_Pi_HDMI_Audio.monitor"),
@@ -291,34 +318,29 @@ pub fn spawn_native_audio_subsystem(
                     // 1. Envia chunk de PCM direto para a porta de áudio da TV via UDP
                     let _ = audio_sock.send_to(&pcm_buf, &audio_dest);
 
-                    // 2. Acumula para cálculo do Espectro Matemático FFT (a cada 2048 bytes)
-                    let to_copy = (2048 - fft_pos).min(pcm_buf.len());
-                    fft_accum[fft_pos..fft_pos + to_copy].copy_from_slice(&pcm_buf[..to_copy]);
-                    fft_pos += to_copy;
-
-                    if fft_pos >= 2048 {
-                        let (_rms, _is_silence) = crate::pipeline::compute_spectrum_packet(&fft_accum, &mut spectrum_packet);
-                        let _ = audio_sock.send_to(&spectrum_packet, &spectrum_dest);
-                        fft_pos = 0;
-                    }
+                    // 2. Cálculo do Espectro Matemático FFT e telemetria (exatamente 2048 bytes)
+                    let (_rms, _is_silence) = crate::pipeline::compute_spectrum_packet(&pcm_buf, &mut spectrum_packet);
+                    let _ = audio_sock.send_to(&spectrum_packet, &spectrum_dest);
                 }
 
                 thread::sleep(Duration::from_millis(200));
             }
 
-            // Restore previous default sink so laptop speakers resume playing normally only if we're still on Raspberry_Pi_HDMI_Audio
-            if let Some(ref sink) = prev_sink {
-                if let Some(cur) = get_default_sink_name() {
-                    if cur == "Raspberry_Pi_HDMI_Audio" && sink != "Raspberry_Pi_HDMI_Audio" {
-                        let _ = std::process::Command::new("pactl")
-                            .args(["set-default-sink", sink])
-                            .output();
-                        println!("\x1b[1;34m[audio-native]\x1b[0m Saída padrão de áudio restaurada para: {}", sink);
-                    }
+            // Restore previous physical sink only if NO newer audio thread has taken over (my_gen == current)
+            let current_gen = AUDIO_GENERATION.load(Ordering::SeqCst);
+            if current_gen == my_gen {
+                if let Some(ref sink) = prev_physical_sink {
+                    let _ = std::process::Command::new("pactl")
+                        .args(["set-default-sink", sink])
+                        .output();
+                    migrate_all_streams_to_sink(sink);
+                    println!("\x1b[1;34m[audio-native]\x1b[0m Saída padrão de áudio e streams restaurados para: {}", sink);
                 }
+            } else {
+                println!("\x1b[1;33m[audio-native]\x1b[0m Gen {} finalizada; gen {} já ativa (ignoring default sink rollback)", my_gen, current_gen);
             }
 
-            println!("\x1b[1;34m[audio-native]\x1b[0m In-process audio subsystem encerrado com sucesso.");
+            println!("\x1b[1;34m[audio-native]\x1b[0m In-process audio subsystem [gen: {}] encerrado com sucesso.", my_gen);
         })
         .expect("Failed to spawn native audio thread")
 }

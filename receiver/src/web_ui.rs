@@ -3597,22 +3597,33 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         }
 
         function toggleMode(modeKey, enabled) {
-            if (enabled) {
-                // Mutual exclusivity: only one hardware mode can own the display plane at a time!
-                ['mode1', 'mode2', 'mode3'].forEach(k => {
-                    const isTarget = (k === modeKey);
-                    setModeToggleUI(k, isTarget);
-                    localStorage.setItem('ext_' + k, isTarget);
-                });
-                showToast(`✓ ${modeKey.toUpperCase()} ativo (exclusivo)`);
-                const targetTrans = modeKey === 'mode3' ? 'mode3_usb_bulk' : (modeKey === 'mode2' ? 'mode2_miracast' : 'mode1_udp');
-                setActiveTransport(targetTrans);
-            } else {
-                setModeToggleUI(modeKey, false);
-                localStorage.setItem('ext_' + modeKey, false);
-                showToast(`✕ ${modeKey.toUpperCase()} desativado • Standby`);
+            setModeToggleUI(modeKey, enabled);
+            localStorage.setItem('ext_' + modeKey, enabled);
+            
+            showToast(enabled ? `✓ ${modeKey.toUpperCase()} daemon enabled!` : `✕ ${modeKey.toUpperCase()} daemon disabled.`);
+            
+            const anyActive = activeModes.mode1 || activeModes.mode2 || activeModes.mode3;
+            const currentActiveKey = currentTransport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
+
+            if (!anyActive) {
                 setExtensionAction('stop');
+            } else if (currentActiveKey === modeKey && !enabled) {
+                const fallbackTrans = activeModes.mode1 ? 'mode1_udp' : (activeModes.mode3 ? 'mode3_usb_bulk' : 'mode2_miracast');
+                setActiveTransport(fallbackTrans);
             }
+
+            fetch('/api/modes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    [modeKey]: enabled,
+                    mode1: activeModes.mode1,
+                    mode2: activeModes.mode2,
+                    mode3: activeModes.mode3
+                })
+            }).then(() => {
+                setTimeout(pollTelemetry, 300);
+            }).catch(() => {});
         }
 
         function setCapture(cap) {

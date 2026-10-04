@@ -173,14 +173,9 @@ impl AlsaHdmiDevice {
         set_int(&mut hw_params, SNDRV_PCM_HW_PARAM_CHANNELS, 2);
         set_int(&mut hw_params, SNDRV_PCM_HW_PARAM_RATE, rate);
 
-        let period_size: u32 = match rate {
-            192000 => 2048,
-            96000 => 2048,
-            88200 => 2048,
-            _ => 1024,
-        };
+        let (period_size, periods, _total_buffer) = calculate_alsa_buffer_params(rate);
         set_min(&mut hw_params, SNDRV_PCM_HW_PARAM_PERIOD_SIZE, period_size);
-        set_int(&mut hw_params, SNDRV_PCM_HW_PARAM_PERIODS, 4);
+        set_int(&mut hw_params, SNDRV_PCM_HW_PARAM_PERIODS, periods);
 
         let ret = unsafe { libc::ioctl(fd, SNDRV_PCM_IOCTL_HW_PARAMS as _, &mut hw_params) };
         if ret < 0 {
@@ -190,7 +185,7 @@ impl AlsaHdmiDevice {
         let mut sw_params: SndPcmSwParams = unsafe { std::mem::zeroed() };
         sw_params.avail_min = period_size as libc::c_ulong;
         sw_params.start_threshold = period_size as libc::c_ulong;
-        sw_params.stop_threshold = (period_size * 4) as libc::c_ulong;
+        sw_params.stop_threshold = (period_size * periods) as libc::c_ulong;
 
         let ret = unsafe { libc::ioctl(fd, SNDRV_PCM_IOCTL_SW_PARAMS as _, &mut sw_params) };
         if ret < 0 {
@@ -214,16 +209,19 @@ impl AlsaHdmiDevice {
 
         let ret = unsafe { libc::ioctl(self.fd, SNDRV_PCM_IOCTL_WRITEI_FRAMES as _, &mut xfer) };
         if ret < 0 {
-            let err = std::io::Error::last_os_error();
-            if err.raw_os_error() == Some(libc::EPIPE) {
-                // Buffer underrun: re-prepare PCM and immediately retry write so no initial audio frames are dropped
-                unsafe { libc::ioctl(self.fd, SNDRV_PCM_IOCTL_PREPARE as _) };
+            let raw_err = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+            if raw_err == libc::EPIPE || raw_err == libc::ESTRPIPE {
+                // Buffer underrun / stream suspended: drop stale frames and re-prepare ALSA hardware
+                unsafe {
+                    libc::ioctl(self.fd, SNDRV_PCM_IOCTL_DROP as _);
+                    libc::ioctl(self.fd, SNDRV_PCM_IOCTL_PREPARE as _);
+                }
                 let retry_ret = unsafe { libc::ioctl(self.fd, SNDRV_PCM_IOCTL_WRITEI_FRAMES as _, &mut xfer) };
                 if retry_ret >= 0 {
                     return Ok(());
                 }
             }
-            return Err(err);
+            return Err(std::io::Error::from_raw_os_error(raw_err));
         }
         Ok(())
     }
@@ -336,6 +334,9 @@ impl AudioReceiver {
 
     pub fn start(&mut self) -> Result<(), std::io::Error> {
         if !self.enabled {
+            return Ok(());
+        }
+        if self.running.load(Ordering::SeqCst) {
             return Ok(());
         }
         self.stop();
@@ -490,7 +491,15 @@ impl AudioReceiver {
                             }
 
                             if let Some(ref mut dev) = pcm_device {
-                                let _ = dev.write_frames(&iec_buffer, frame_count);
+                                if let Err(_e) = dev.write_frames(&iec_buffer, frame_count) {
+                                    // Robust underrun recovery: force DROP + PREPARE so audio never freezes or goes silent
+                                    let _ = unsafe { libc::ioctl(dev.fd, SNDRV_PCM_IOCTL_DROP as _) };
+                                    let _ = unsafe { libc::ioctl(dev.fd, SNDRV_PCM_IOCTL_PREPARE as _) };
+                                    if let Err(_retry_err) = dev.write_frames(&iec_buffer, frame_count) {
+                                        eprintln!("\x1b[1;33m[audio-native] ALSA write_frames failed after retry. Resetting hardware fd.\x1b[0m");
+                                        pcm_device = None;
+                                    }
+                                }
                             }
                         }
                         Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -564,5 +573,96 @@ impl AudioReceiver {
             rate: self.rate.load(Ordering::Relaxed),
             transport: transport_str,
         }
+    }
+}
+
+/// Computes the optimal ALSA period size, period count, and total buffer frame count.
+/// For 192 kHz studio master audio, buffer depth is 16,384 frames (~85.3 ms) for jitter immunity.
+pub fn calculate_alsa_buffer_params(rate: u32) -> (u32, u32, u32) {
+    let (period_size, periods): (u32, u32) = match rate {
+        192000 => (2048, 8), // 16384 frames buffer (~85.3ms) for 192kHz rock-solid jitter immunity
+        96000 => (2048, 4),  // 8192 frames buffer (~85.3ms)
+        88200 => (2048, 4),
+        _ => (1024, 4),      // 4096 frames buffer (~85.3ms at 48kHz)
+    };
+    let total_buffer = period_size * periods;
+    (period_size, periods, total_buffer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_iec958_rate_codes() {
+        assert_eq!(get_iec958_rate_code(32000), 0x03);
+        assert_eq!(get_iec958_rate_code(44100), 0x00);
+        assert_eq!(get_iec958_rate_code(48000), 0x02);
+        assert_eq!(get_iec958_rate_code(88200), 0x08);
+        assert_eq!(get_iec958_rate_code(96000), 0x0A);
+        assert_eq!(get_iec958_rate_code(176400), 0x0C);
+        assert_eq!(get_iec958_rate_code(192000), 0x0E);
+        // Default fallback to 48kHz
+        assert_eq!(get_iec958_rate_code(99999), 0x02);
+    }
+
+    #[test]
+    fn test_audio_buffer_and_period_sizing() {
+        let (period, periods, total) = calculate_alsa_buffer_params(192000);
+        assert_eq!(period, 2048);
+        assert_eq!(periods, 8);
+        assert_eq!(total, 16384);
+
+        let (period, periods, total) = calculate_alsa_buffer_params(96000);
+        assert_eq!(period, 2048);
+        assert_eq!(periods, 4);
+        assert_eq!(total, 8192);
+
+        let (period, periods, total) = calculate_alsa_buffer_params(48000);
+        assert_eq!(period, 1024);
+        assert_eq!(periods, 4);
+        assert_eq!(total, 4096);
+    }
+
+    #[test]
+    fn test_audio_status_json_and_state_mutations() {
+        let mut rx = AudioReceiver::new(5004);
+        assert_eq!(rx.enabled, true);
+        assert_eq!(rx.rate(), 96000);
+
+        rx.set_rate(192000);
+        assert_eq!(rx.rate(), 192000);
+
+        rx.set_volume(85);
+        rx.set_muted(true);
+        rx.set_transport(AudioTransport::NetworkUdp);
+
+        let status = rx.status();
+        assert_eq!(status.rate, 192000);
+        assert_eq!(status.volume, 85);
+        assert_eq!(status.muted, true);
+        assert_eq!(status.transport, "network_udp");
+
+        let json = status.to_json();
+        assert!(json.contains("\"rate\":192000"));
+        assert!(json.contains("\"volume\":85"));
+        assert!(json.contains("\"muted\":true"));
+        assert!(json.contains("\"transport\":\"network_udp\""));
+    }
+
+    #[test]
+    fn test_audio_transport_serialization() {
+        assert_eq!(AudioTransport::NetworkUdp.to_u8(), 0);
+        assert_eq!(AudioTransport::UsbAudioClass.to_u8(), 1);
+        assert_eq!(AudioTransport::UsbBulkMux.to_u8(), 2);
+
+        assert_eq!(AudioTransport::from_u8(0), AudioTransport::NetworkUdp);
+        assert_eq!(AudioTransport::from_u8(1), AudioTransport::UsbAudioClass);
+        assert_eq!(AudioTransport::from_u8(2), AudioTransport::UsbBulkMux);
+        assert_eq!(AudioTransport::from_u8(99), AudioTransport::NetworkUdp);
+
+        assert_eq!(AudioTransport::from_str("uac2"), AudioTransport::UsbAudioClass);
+        assert_eq!(AudioTransport::from_str("usb_bulk"), AudioTransport::UsbBulkMux);
+        assert_eq!(AudioTransport::from_str("unknown"), AudioTransport::NetworkUdp);
     }
 }
