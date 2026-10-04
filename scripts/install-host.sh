@@ -114,10 +114,6 @@ if [ -f "$SCRIPT_DIR/connect.sh" ]; then
     sudo cp "$SCRIPT_DIR/connect.sh" /usr/local/bin/ext-monitor-connect
     sudo chmod +x /usr/local/bin/ext-monitor-connect
 fi
-if [ -f "$SCRIPT_DIR/wayland-damage-pacer.py" ]; then
-    sudo cp "$SCRIPT_DIR/wayland-damage-pacer.py" /usr/local/bin/wayland-damage-pacer.py
-    sudo chmod +x /usr/local/bin/wayland-damage-pacer.py
-fi
 
 # 5. Instala regras udev
 echo -e "\x1b[1;34m[*] Instalando regras udev para plug-and-play imediato...\x1b[0m"

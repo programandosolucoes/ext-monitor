@@ -6,53 +6,30 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
-use crate::config::{CaptureEngine, ColorProfile, EncoderApi, ScaleMode, StreamEngine};
+use crate::config::{CaptureEngine, ColorProfile, EncoderApi, ScaleMode};
 use crate::kms::KmsOutputInfo;
-use crate::native_streamer;
 use std::io::{self, BufRead, BufReader, Read};
 use std::net::UdpSocket;
 use std::os::unix::io::RawFd;
-use std::os::unix::process::ExitStatusExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-pub enum StreamerHandle {
-    Child(Child),
-    Native(native_streamer::NativeStreamer),
-}
+pub struct StreamerHandle(Child);
 
 impl StreamerHandle {
     pub fn kill(&mut self) -> Result<(), io::Error> {
-        match self {
-            StreamerHandle::Child(ref mut c) => c.kill(),
-            StreamerHandle::Native(ref mut n) => {
-                n.stop();
-                Ok(())
-            }
-        }
+        self.0.kill()
     }
 
     pub fn wait(&mut self) -> Result<ExitStatus, io::Error> {
-        match self {
-            StreamerHandle::Child(ref mut c) => c.wait(),
-            StreamerHandle::Native(_) => Ok(ExitStatus::from_raw(0)),
-        }
+        self.0.wait()
     }
 
     pub fn try_wait(&mut self) -> Result<Option<ExitStatus>, io::Error> {
-        match self {
-            StreamerHandle::Child(ref mut c) => c.try_wait(),
-            StreamerHandle::Native(ref n) => {
-                if n.is_running() {
-                    Ok(None)
-                } else {
-                    Ok(Some(ExitStatus::from_raw(0)))
-                }
-            }
-        }
+        self.0.try_wait()
     }
 }
 
@@ -70,7 +47,6 @@ pub struct PipelineBuilder {
     pub skip_to_first: bool,
     pub key_int_max: u32,
     pub usb_pipe_fd: Option<RawFd>,
-    pub engine: StreamEngine,
     #[allow(dead_code)]
     pub capture: CaptureEngine,
     #[allow(dead_code)]
@@ -87,21 +63,8 @@ pub struct PipelineBuilder {
 impl PipelineBuilder {
     /// Spawns the configured streaming pipeline process
     pub fn spawn(&self) -> io::Result<StreamerHandle> {
-        let video_handle = if self.engine == StreamEngine::NativeRust {
-            let streamer = native_streamer::NativeStreamer::start(
-                self.target_ip.clone(),
-                self.target_port,
-                self.bitrate,
-                self.fps,
-                self.usb_pipe_fd,
-            )?;
-            StreamerHandle::Native(streamer)
-        } else {
-            let child = self.spawn_gstreamer()?;
-            StreamerHandle::Child(child)
-        };
-
-        Ok(video_handle)
+        let child = self.spawn_gstreamer()?;
+        Ok(StreamerHandle(child))
     }
 
     fn spawn_gstreamer(&self) -> io::Result<Child> {
@@ -848,7 +811,6 @@ mod tests {
             skip_to_first: true,
             key_int_max: 30,
             usb_pipe_fd: Some(15),
-            engine: StreamEngine::NativeRust,
             capture: CaptureEngine::Mutter,
             kms_info: None,
             audio: true,

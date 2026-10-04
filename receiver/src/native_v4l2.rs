@@ -6,7 +6,6 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
-use crate::decoder::V4l2DecoderSession;
 use crate::ingress::{MiracastIngress, UdpRtpIngress, UsbBulkIngress};
 use std::io;
 use std::os::unix::io::RawFd;
@@ -21,11 +20,6 @@ pub struct NativeV4l2Decoder {
 }
 
 impl NativeV4l2Decoder {
-    /// Probes whether `/dev/video10` (VideoCore IV decoder) is available
-    pub fn is_supported() -> bool {
-        V4l2DecoderSession::is_supported()
-    }
-
     /// Starts a native background decode loop from a UDP RTP socket
     pub fn start_udp_stream(port: u16) -> io::Result<Self> {
         let running = Arc::new(AtomicBool::new(true));

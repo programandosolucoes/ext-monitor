@@ -42,19 +42,6 @@ pub struct V4l2DecoderSession {
 }
 
 impl V4l2DecoderSession {
-    /// Probes whether `/dev/video10` is supported on this platform
-    pub fn is_supported() -> bool {
-        if let Ok(file) = OpenOptions::new().read(true).write(true).open("/dev/video10") {
-            let fd = file.as_raw_fd();
-            let mut cap: V4l2Capability = unsafe { std::mem::zeroed() };
-            if unsafe { libc::ioctl(fd, VIDIOC_QUERYCAP as _, &mut cap) } == 0 {
-                let card = String::from_utf8_lossy(&cap.card);
-                return card.contains("bcm2835") || card.contains("codec");
-            }
-        }
-        false
-    }
-
     /// Initializes a new hardware decoder session for 1280x720 H.264 -> RGB565
     pub fn new(width: u32, height: u32) -> Option<Self> {
         let video_file = OpenOptions::new()
@@ -331,11 +318,6 @@ impl V4l2DecoderSession {
             kms,
             held: VecDeque::new(),
         })
-    }
-
-    /// Feeds an encoded chunk/AU quickly without blitting or presentation overhead
-    pub fn decode_chunk_fast(&mut self, chunk: &[u8]) {
-        self.decode_chunk(chunk, |_| {});
     }
 
     /// Feeds an encoded chunk/AU and drains decoded frames, ensuring the CAPTURE queue never starves the OUTPUT queue

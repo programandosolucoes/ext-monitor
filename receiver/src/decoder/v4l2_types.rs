@@ -8,7 +8,6 @@
 
 // ARM 32-bit ioctl constants (verified against Linux kernel videodev2.h)
 pub const VIDIOC_ENUM_FMT: libc::c_ulong = 0xC0405602;
-pub const VIDIOC_QUERYCAP: libc::c_ulong = 0x80685600;
 pub const VIDIOC_REQBUFS: libc::c_ulong = 0xC0145608;
 pub const VIDIOC_QUERYBUF: libc::c_ulong = 0xC0445609;
 pub const VIDIOC_QBUF: libc::c_ulong = 0xC044560F;

@@ -29,7 +29,6 @@ pub mod flow;
 pub mod kms;
 pub mod miracast;
 pub mod miracast_launcher;
-pub mod native_streamer;
 pub mod pipeline;
 pub mod pipewire;
 pub mod screencast;
@@ -248,7 +247,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;34m[*] Color Profile:\x1b[0m {}", cfg.color_profile.name());
     println!("\x1b[1;34m[*] Display Mode:\x1b[0m {}", cfg.mode);
     println!("\x1b[1;34m[*] Encoder API:\x1b[0m {:?}", cfg.encoder);
-    println!("\x1b[1;34m[*] Stream Engine:\x1b[0m {}", cfg.engine.name());
     println!("\x1b[1;34m[*] Capture Engine:\x1b[0m {}", cfg.capture.name());
     println!("\x1b[1;34m[*] Scale Mode:\x1b[0m {}", cfg.scale.name());
     println!(
@@ -462,7 +460,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             skip_to_first: cfg.skip_to_first,
             key_int_max: cfg.key_int_max,
             usb_pipe_fd: current_usb_pipe.as_ref().map(|h| h.write_fd),
-            engine: cfg.engine,
             capture: cfg.capture,
             kms_info: kms_info.clone(),
             audio: cfg.audio,
@@ -475,9 +472,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut child: Option<StreamerHandle> = if !is_paused {
             println!(
-                "\x1b[1;33m[*] Starting {:?} hardware streaming pipeline via {} [Capture: {:?}] ({} FPS, Stream: {}, HUD: {})...\x1b[0m",
+                "\x1b[1;33m[*] Starting {:?} hardware streaming pipeline [Capture: {:?}] ({} FPS, Stream: {}, HUD: {})...\x1b[0m",
                 cfg.encoder,
-                cfg.engine.name(),
                 cfg.capture,
                 cfg.fps,
                 if cfg.drop_only { "Economy (drop-only)" } else { "Continuous (CFR Anti-Freeze)" },

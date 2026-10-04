@@ -1708,7 +1708,7 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                     <div style="background: rgba(46, 160, 67, 0.08); border-left: 4px solid #2ea043; border-radius: 6px; padding: 1rem; margin: 1.5rem 0;">
                         <h3 style="color: #2ea043; margin: 0 0 0.5rem 0;" data-i18n="docPacerTitle">13. 🚀 Wayland Damage Pacer: Continuous 60 FPS YouTube without Pausing</h3>
                         <p data-i18n="docPacerDesc" style="margin: 0; color: #fff;">
-                            ext-monitor runs wayland-damage-pacer.py in the background on the Host. It emits 60 Hz micro-damage pulses to an invisible sub-surface with an empty Cairo click-through mask on the extended monitor, keeping the GNOME Mutter compositor active. YouTube videos, clocks, and terminals render at 60 FPS even when the mouse is motionless or on the primary screen.
+                            ext-monitor runs an in-process, pure Rust Damage Pacer in the background on the Host. It emits 60 Hz micro-damage pulses to an invisible sub-surface with an empty XShape click-through mask on the extended monitor, keeping the GNOME Mutter compositor active. YouTube videos, clocks, and terminals render at 60 FPS even when the mouse is motionless or on the primary screen.
                         </p>
                     </div>
 

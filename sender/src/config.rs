@@ -66,21 +66,6 @@ impl CaptureEngine {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StreamEngine {
-    NativeRust, // 100% Pure Rust Native In-Process GPU Pipeline
-    GStreamer,  // GStreamer 1.0 (Hardware)
-}
-
-impl StreamEngine {
-    pub fn name(&self) -> &'static str {
-        match self {
-            StreamEngine::NativeRust => "100% Native Rust (In-Process GPU Pipeline)",
-            StreamEngine::GStreamer => "GStreamer 1.0 (Hardware)",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EncoderApi {
     Vaapi,    // AMD & Intel hardware encoding via VA-API
     Nvenc,    // NVIDIA hardware encoding via NVENC
@@ -143,7 +128,6 @@ pub struct SenderConfig {
     pub skip_to_first: bool,
     pub key_int_max: u32,
     pub transport: TransportKind,
-    pub engine: StreamEngine,
     pub capture: CaptureEngine,
     pub audio: bool,
     pub audio_port: u16,
@@ -605,13 +589,6 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             CaptureEngine::Kms
         };
 
-        // Padrão de fábrica: GStreamer 1.0 com aceleração de hardware (VA-API / NVENC / QSV) e captura PipeWire
-        let engine = if args.iter().any(|a| a == "--engine=native" || a == "--native" || a == "--native-rust") {
-            StreamEngine::NativeRust
-        } else {
-            StreamEngine::GStreamer
-        };
-
         let scale = if args.iter().any(|a| a == "--no-scale" || a == "--scale=off" || a == "--scale=none" || a == "--scale=false") {
             ScaleMode::Off
         } else if args.iter().any(|a| a == "--scale=1600x900" || a == "--scale=900p" || a == "--scale=on" || a == "--scale=upscale") {
@@ -667,7 +644,6 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             skip_to_first,
             key_int_max,
             transport,
-            engine,
             capture,
             audio,
             audio_port,
@@ -688,19 +664,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_engine_is_gstreamer_and_kms() {
+    fn test_default_capture_is_kms() {
         let args = vec!["ext-sender".to_string(), "--direct".to_string()];
         let cfg = SenderConfig::parse(&args).unwrap().unwrap();
-        assert_eq!(cfg.engine, StreamEngine::GStreamer);
         assert_eq!(cfg.capture, CaptureEngine::Kms);
         assert_eq!(cfg.transport, TransportKind::UsbBulk);
-    }
-
-    #[test]
-    fn test_native_rust_opt_in() {
-        let args = vec!["ext-sender".to_string(), "--direct".to_string(), "--engine=native".to_string()];
-        let cfg = SenderConfig::parse(&args).unwrap().unwrap();
-        assert_eq!(cfg.engine, StreamEngine::NativeRust);
     }
 
     #[test]
