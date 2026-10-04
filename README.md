@@ -8,7 +8,8 @@
 [![Latency: Sub-Millisecond](https://img.shields.io/badge/Latency-%3C1ms_USB_Bulk-brightgreen.svg)]()
 [![OS: Linux & Windows](https://img.shields.io/badge/OS-Linux_Wayland_%26_Windows_10%2F11-blueviolet.svg)]()
 [![API: OpenAPI 3.0](https://img.shields.io/badge/API-OpenAPI_3.0_Swagger-green.svg)](http://192.168.7.2:8080/swagger)
-[![Version: v2.8.0](https://img.shields.io/badge/Release-v2.8.0_Frozen-purple.svg)](https://github.com/programandosolucoes/ext-monitor/releases/tag/v2.8.0-final)
+[![Docs: 100% Rustdoc & JSDoc](https://img.shields.io/badge/Docs-100%25_Rustdoc_%26_JSDoc-brightgreen.svg)](docs/DATASHEET.md)
+[![Version: v3.1.0](https://img.shields.io/badge/Release-v3.1.0_Frozen-purple.svg)]()
 
 A high-performance, 100% native Rust system designed to transform a modest **Raspberry Pi Zero (v1.2 / v1.3 / W / Zero 2 W)** connected via a single standard **Micro-USB cable** into a **zero-latency hardware HDMI secondary display, digital audio sink, real-time audio spectrum visualizer, and IoT media appliance** for Linux (Wayland / GNOME Mutter) and Windows 10/11 (native Miracast / `Win + K`).
 
