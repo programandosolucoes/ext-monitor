@@ -1840,20 +1840,48 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
     <div id="toast" class="toast"></div>
 
     <script>
-        // State
+        // ============================================================================
+        // JSDOC GLOBAL STATE DEFINITIONS & TYPE DECLARATIONS
+        // ============================================================================
+
+        /** @type {number} Current target framerate (FPS) */
         let currentFps = 30;
+
+        /** @type {number} Current target streaming bitrate in kilobits per second (kbps) */
         let currentBitrate = 400;
+
+        /** @type {'full' | '256' | 'gray'} Color profile mode */
         let currentColor = 'full';
+
+        /** @type {boolean} Drop duplicate frames on static screens (Economy Mode) */
         let currentDropOnly = false;
+
+        /** @type {boolean} Instant delivery of first motion frame without queue latency */
         let currentSkipToFirst = true;
+
+        /** @type {number} Periodic IDR keyframe interval in frames */
         let currentKeyIntMax = 30;
+
+        /** @type {'kms' | 'mutter'} Host capture backend engine */
         let currentCapture = 'kms';
+
+        /** @type {string} Target display monitor on host PC */
         let currentMonitor = 'HDMI-1';
+
+        /** @type {string} Target resolution / scaling profile */
         let currentScale = '720p';
+
+        /** @type {boolean} Contrast Adaptive Sharpening (CAS) filter toggle */
         let currentCas = true;
+
+        /** @type {boolean} Stream pause state (Standby mode) */
         let isPaused = false;
 
-        // Internationalization Dictionary
+        /**
+         * Multilingual internationalization dictionary for runtime language switching.
+         * Supported language codes: 'en', 'pt', 'it', 'zh'.
+         * @type {Record<string, Record<string, string>>}
+         */
         const I18N = {
             en: {
                 title: "Pi Zero Extended Monitor",
@@ -3307,8 +3335,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             updateKeyIntValue(val);
         }
 
-        // Active Extension Connection Transport and Topology
+        /** @type {'mode1_udp' | 'mode2_miracast' | 'mode3_usb_bulk'} Active display extension transport */
         let currentTransport = 'mode1_udp';
+
+        /** @type {'extend' | 'clone' | 'stop'} Active display topology arrangement */
         let currentTopology = 'extend';
 
         /**
@@ -3365,6 +3395,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }).catch(() => {});
         }
 
+        /** @type {boolean} Debounce lock preventing rapid re-entrant mode switching */
         let isModeSwitchInProgress = false;
 
         /**
@@ -3417,6 +3448,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             setTimeout(pollTelemetry, 1000);
         }
 
+        /**
+         * Map of GPU hardware rank environment configurations for gnome-network-displays launcher.
+         * @type {Record<'amd' | 'intel' | 'nvidia' | 'all', string>}
+         */
         const gpuCommands = {
             amd: 'env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX gnome-network-displays',
             intel: 'env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,qsvh264enc:MAX gnome-network-displays',
@@ -3516,6 +3551,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             updateModeAndTopologyButtons();
         }
 
+        /** @type {'extend' | 'clone' | 'ask'} Mode preference configured on host PC */
         let hostConfiguredMode = 'ask';
 
         /**
@@ -3660,7 +3696,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             if (btnM3) btnM3.classList.toggle('active', currentTransport === 'mode3_usb_bulk' && currentTopology !== 'stop');
         }
 
-        // Operating Modes State & Toggle
+        /**
+         * State tracker for operating mode background daemons.
+         * @type {{ mode1: boolean, mode2: boolean, mode3: boolean }}
+         */
         const activeModes = {
             mode1: true,
             mode2: true,
@@ -4139,6 +4178,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             setTimeout(() => t.classList.remove('show'), 2500);
         }
 
+        /** @type {boolean} Audio mute status flag */
         let isAudioMuted = false;
 
         /**
@@ -4177,6 +4217,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }).catch(() => {});
         }
 
+        /** @type {number} Current ALSA hardware sample rate in Hertz (44100, 48000, 96000, 192000) */
         let currentAudioRate = 48000;
 
         /**
@@ -4224,6 +4265,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
         }
 
+        /** @type {'network_udp' | 'uac2_gadget' | 'usb_bulk_mux'} Active audio transmission pathway */
         let currentAudioTransport = 'network_udp';
 
         /**
@@ -4327,12 +4369,26 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         }
 
         // Live Real-Time Hardware Audio Visualizer Engine (30 FPS Canvas)
+
+        /** @type {Array<number>} Real-time 24-bin normalized FFT frequency amplitudes (0.0 to 1.0) */
         let liveAudioBars = new Array(24).fill(0.0);
+
+        /** @type {Array<number>} Peak decay falloff markers for the 24 frequency bins */
         let liveAudioPeaks = new Array(24).fill(0.0);
+
+        /** @type {number} Overall audio RMS signal level in decibels (-60.0 to 0.0 dB) */
         let liveRmsDb = -60.0;
+
+        /** @type {boolean} Flag indicating active PCM audio transmission on ALSA core */
         let liveAudioActive = false;
+
+        /** @type {boolean} Flag indicating active video stream decoding */
         let liveVideoActive = false;
+
+        /** @type {Array<number>} Low-pass filtered bar values for smooth 60 FPS transitions */
         let smoothBars = new Array(24).fill(0.0);
+
+        /** @type {number} Low-pass filtered VU meter RMS level */
         let smoothRms = -60.0;
 
         /**
@@ -4347,6 +4403,14 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             if (!ctx) return;
 
             let lastDraw = 0;
+
+            /**
+             * Internal animation frame render step for the audio visualizer.
+             * Clamped to ~30 FPS; clears frame, renders 24 neon gradient frequency bars,
+             * computes white peak indicators, and draws stereo VU level channels.
+             * @param {DOMHighResTimeStamp} now - Timestamp supplied by requestAnimationFrame.
+             * @returns {void}
+             */
             function renderLoop(now) {
                 requestAnimationFrame(renderLoop);
                 if (now - lastDraw < 33) return; // ~30 FPS
@@ -4756,6 +4820,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 .catch(() => {});
         }
 
+        /** @type {'static' | 'dhcp'} Current secondary network interface addressing mode */
         let currentNetMode = 'static';
 
         /**
@@ -4824,6 +4889,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
         }
 
+        /** @type {boolean} Flag indicating whether initial network form fields have been populated */
         let netConfigLoaded = false;
 
         /**

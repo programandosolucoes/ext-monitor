@@ -421,20 +421,50 @@ pub const CAST_HTML: &str = r##"<!DOCTYPE html>
     </div>
 
     <script>
+        // ============================================================================
+        // JSDOC GLOBAL STATE DEFINITIONS & TYPE DECLARATIONS (WEB CAST)
+        // ============================================================================
+
+        /** @type {MediaStream|null} Active display media stream captured from screen or browser tab */
         let activeStream = null;
+
+        /** @type {WebSocket|null} Active binary WebSocket connection to Pi Zero (/api/stream/ws) */
         let activeWs = null;
+
+        /** @type {VideoEncoder|null} WebCodecs hardware-accelerated video encoder instance */
         let activeEncoder = null;
+
+        /** @type {number|null} Interval handle for the elapsed timer tick */
         let timerInterval = null;
+
+        /** @type {number} Total seconds elapsed in current casting session */
         let secondsElapsed = 0;
 
+        /** @type {HTMLButtonElement} Start casting action button */
         const startBtn = document.getElementById('startBtn');
+
+        /** @type {HTMLButtonElement} Stop casting action button */
         const stopBtn = document.getElementById('stopBtn');
+
+        /** @type {HTMLDivElement} Container wrapper for local video preview */
         const previewBox = document.getElementById('previewBox');
+
+        /** @type {HTMLVideoElement} Video element rendering local loopback stream */
         const previewVideo = document.getElementById('previewVideo');
+
+        /** @type {HTMLSpanElement} Real-time status indicator pill */
         const statusBadge = document.getElementById('statusBadge');
+
+        /** @type {HTMLSelectElement} Target resolution selector */
         const resSelect = document.getElementById('resSelect');
+
+        /** @type {HTMLSelectElement} Target bitrate selector */
         const bitrateSelect = document.getElementById('bitrateSelect');
 
+        /**
+         * Increments the elapsed duration timer and updates the UI stat display.
+         * @returns {void}
+         */
         function updateTimer() {
             secondsElapsed++;
             const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
@@ -442,6 +472,11 @@ pub const CAST_HTML: &str = r##"<!DOCTYPE html>
             document.getElementById('statTimer').innerText = `${mins}:${secs}`;
         }
 
+        /**
+         * Event listener that prompts for screen/tab capture, establishes WebSocket connection,
+         * initializes WebCodecs H.264 video pipeline, and streams Annex B NAL units to the receiver.
+         * @returns {Promise<void>}
+         */
         startBtn.addEventListener('click', async () => {
             try {
                 const resMode = resSelect.value;
@@ -549,6 +584,12 @@ pub const CAST_HTML: &str = r##"<!DOCTYPE html>
             }
         });
 
+        /**
+         * Fallback recorder implementation utilizing MediaRecorder when WebCodecs is unsupported.
+         * @param {MediaStream} stream - Source media stream.
+         * @param {WebSocket} ws - Target WebSocket connection.
+         * @returns {void}
+         */
         function fallbackMediaRecorder(stream, ws) {
             let mime = 'video/webm; codecs=h264';
             if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
@@ -562,10 +603,18 @@ pub const CAST_HTML: &str = r##"<!DOCTYPE html>
             recorder.start(40);
         }
 
+        /**
+         * Action listener for the Stop button.
+         */
         stopBtn.addEventListener('click', () => {
             stopCasting();
         });
 
+        /**
+         * Stops active web casting session, closes WebSocket and encoders, releases media tracks,
+         * and resets dashboard buttons and status pills.
+         * @returns {void}
+         */
         function stopCasting() {
             if (timerInterval) {
                 clearInterval(timerInterval);

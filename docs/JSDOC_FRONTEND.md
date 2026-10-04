@@ -297,15 +297,21 @@ Submits updated static or DHCP network interface configurations.
 
 ## 5. Auditability and Verification Procedure
 
-To audit frontend code compliance and verify that no syntax regressions or API contract mismatches exist:
+To audit frontend code compliance across all three embedded web subsystems and verify that no syntax regressions or API contract mismatches exist:
 
-1. **Extract and Lint Dashboard JavaScript:**
+1. **Extract and Lint All Embedded JavaScript Sources:**
    ```bash
-   # Extract embedded JavaScript from Rust source
+   # 1. Main Dashboard UI (web_ui.rs)
    sed -n '/<script>/,/<\/script>/p' receiver/src/web_ui.rs | sed '1d;$d' > /tmp/dashboard_lint.js
-
-   # Run Node.js syntax verification
    node --check /tmp/dashboard_lint.js
+
+   # 2. 1-Click Web Cast (web_cast.rs)
+   sed -n '/<script>/,/<\/script>/p' receiver/src/web_cast.rs | sed '1d;$d' > /tmp/web_cast_lint.js
+   node --check /tmp/web_cast_lint.js
+
+   # 3. Swagger UI Console (swagger.rs)
+   sed -n '/<script>/,/<\/script>/p' receiver/src/swagger.rs | sed '1d;$d' > /tmp/swagger_lint.js
+   node --check /tmp/swagger_lint.js
    ```
 
 2. **Automated Unit & Integration Test Suite:**
@@ -313,3 +319,145 @@ To audit frontend code compliance and verify that no syntax regressions or API c
    ```bash
    cargo test -p ext-receiver
    ```
+
+---
+
+## 6. 1-Click Web Cast Subsystem Architecture (`receiver/src/web_cast.rs`)
+
+**Document Sub-Reference:** `EXT-MON-JSDOC-WEBCAST-REV1`  
+**File Origin:** `receiver/src/web_cast.rs` (`pub const WEB_CAST_HTML`)  
+**URL Route:** `GET /cast`  
+**Streaming Protocol:** Raw RFC 6455 WebSocket (`/api/stream/ws`) transporting Annex B H.264 NAL units.
+
+### 6.1. Architecture & Pipeline Overview
+
+The Web Cast subsystem allows any browser without host software installation (Windows, macOS, Linux, ChromeOS, Android) to mirror a screen, window, or specific tab directly to the Pi Zero monitor over Wi-Fi or USB ethernet.
+
+```
++-----------------------------------------------------------------------------------+
+| Browser (Web Cast Client - /cast)                                                 |
+|                                                                                   |
+|  [navigator.mediaDevices.getDisplayMedia()]                                       |
+|        |                                                                          |
+|        v                                                                          |
+|  [MediaStreamTrackProcessor]                                                      |
+|        |                                                                          |
+|        v (VideoFrame)                                                             |
+|  [WebCodecs VideoEncoder] (AVC Baseline 3.1 Annex B)                              |
+|        |                                                                          |
+|        | (Raw Uint8Array NAL units, IDR every 30 frames)                          |
+|        v                                                                          |
+|  [WebSocket Client] === ws://<pi-ip>:8080/api/stream/ws ===> [Pi Zero Receiver]  |
+|                                                                    |              |
+|                                                          [V4L2 M2M Decoder]       |
+|                                                                    |              |
+|                                                          [DRM/KMS HDMI Out]       |
++-----------------------------------------------------------------------------------+
+```
+
+### 6.2. Web Cast JSDoc State and Function Reference
+
+```javascript
+/**
+ * Global Web Cast client state.
+ * @namespace WebCastState
+ */
+
+/** @type {MediaStream|null} Active display media stream captured from screen or browser tab */
+let activeStream = null;
+
+/** @type {WebSocket|null} Active binary WebSocket connection to Pi Zero (/api/stream/ws) */
+let activeWs = null;
+
+/** @type {VideoEncoder|null} WebCodecs hardware-accelerated video encoder instance */
+let activeEncoder = null;
+
+/** @type {number|null} Interval handle for the elapsed duration timer tick */
+let timerInterval = null;
+
+/** @type {number} Total seconds elapsed in current casting session */
+let secondsElapsed = 0;
+```
+
+#### Functions:
+
+##### `updateTimer()`
+- **Description:** Increments `secondsElapsed` by 1 and updates DOM element `#statTimer` with `MM:SS` formatting.
+- **Returns:** `{void}`
+
+##### `startBtn.addEventListener('click', async () => { ... })`
+- **Description:** Initiates screen capture negotiation:
+  1. Reads target resolution (`1080p30`, `720p30`, `480p30`) and target bitrate from DOM selectors.
+  2. Prompts user via `navigator.mediaDevices.getDisplayMedia()`.
+  3. Establishes binary WebSocket connection to `ws://<host>/api/stream/ws` (`ws.binaryType = 'arraybuffer'`).
+  4. Detects hardware `VideoEncoder` (WebCodecs API). Configures `avc1.42001f` with Annex B format.
+  5. Spawns asynchronous frame pump using `MediaStreamTrackProcessor.readable.getReader()`.
+  6. Dispatches periodic IDR keyframes (`keyFrame: true` every 30 frames) for rapid decoder synchronization.
+- **Returns:** `{Promise<void>}`
+
+##### `fallbackMediaRecorder(stream, ws)`
+- **Description:** Legacy fallback encoder for older browsers lacking WebCodecs support. Uses standard `MediaRecorder` with `video/webm; codecs=h264` chunks pushed over WebSocket at 40 ms timeslices.
+- **Parameters:**
+  - `{MediaStream} stream` - Source display stream.
+  - `{WebSocket} ws` - Target binary WebSocket channel.
+- **Returns:** `{void}`
+
+##### `stopCasting()`
+- **Description:** Teardown routine: clears interval timers, closes WebCodecs encoder, terminates WebSocket connection, stops all audio/video `MediaStreamTrack` instances, hides local loopback preview `#previewVideo`, and resets UI badges to standby state.
+- **Returns:** `{void}`
+
+---
+
+## 7. Swagger UI Interactive Console Architecture (`receiver/src/swagger.rs`)
+
+**Document Sub-Reference:** `EXT-MON-JSDOC-SWAGGER-REV1`  
+**File Origin:** `receiver/src/swagger.rs` (`pub const SWAGGER_HTML`)  
+**URL Route:** `GET /swagger`  
+**OpenAPI Specification:** `GET /api/openapi.json` (OpenAPI 3.0.3, generated at compile time)
+
+### 7.1. Interactive Console Specification
+
+The Swagger UI console provides live interactive API exploration directly on the Pi Zero, allowing network engineers and developers to test REST endpoints, inspect payload schemas, and view real-time responses.
+
+```javascript
+/**
+ * @file Swagger UI Interactive Console Initialization
+ * @description Bootstraps the Swagger UI interactive API documentation interface.
+ * Fetches OpenAPI 3.0.3 specification from `/api/openapi.json` and renders interactive
+ * API explorer controls into `#swagger-ui`.
+ */
+
+/**
+ * Window load lifecycle event handler.
+ * Instantiates SwaggerUIBundle with custom layout, filtering, and OpenAPI endpoint mapping.
+ * 
+ * @callback WindowOnLoadCallback
+ * @returns {void}
+ */
+window.onload = function() {
+    /**
+     * Global Swagger UI instance handle.
+     * @type {object}
+     */
+    window.ui = SwaggerUIBundle({
+        url: "/api/openapi.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+            SwaggerUIBundle.presets.apis,
+            SwaggerUIStandalonePreset
+        ],
+        plugins: [
+            SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "BaseLayout",
+        docExpansion: "list",
+        filter: true,
+        showExtensions: true,
+        showCommonExtensions: true,
+        defaultModelsExpandDepth: 1,
+        displayRequestDuration: true
+    });
+};
+```
+

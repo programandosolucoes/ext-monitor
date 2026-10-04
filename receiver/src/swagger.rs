@@ -1579,7 +1579,25 @@ pub const SWAGGER_HTML: &str = r##"<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
     <script>
+        /**
+         * @file Swagger UI Interactive Console Initialization
+         * @description Bootstraps the Swagger UI interactive API documentation interface.
+         * Fetches OpenAPI 3.0.3 specification from `/api/openapi.json` and renders interactive
+         * API explorer controls into `#swagger-ui`.
+         */
+
+        /**
+         * Window load lifecycle event handler.
+         * Instantiates SwaggerUIBundle with custom layout, filtering, and OpenAPI endpoint mapping.
+         * 
+         * @callback WindowOnLoadCallback
+         * @returns {void}
+         */
         window.onload = function() {
+            /**
+             * Global Swagger UI instance handle.
+             * @type {object}
+             */
             window.ui = SwaggerUIBundle({
                 url: "/api/openapi.json",
                 dom_id: '#swagger-ui',
