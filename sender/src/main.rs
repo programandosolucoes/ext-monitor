@@ -836,9 +836,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            // Health watchdog: Detect suspend/resume or PipeWire crash (when using PipeWire capture)
-            let uses_pipewire = cfg.capture == CaptureEngine::Mutter || kms_info.is_none();
-            if !is_paused && uses_pipewire {
+            // Health watchdog: Detect suspend/resume or PipeWire crash
+            if !is_paused && node_id > 0 {
                 if last_node_check.elapsed() >= Duration::from_millis(1500) {
                     last_node_check = Instant::now();
                     if !pipewire::is_pipewire_node_alive(node_id) {
@@ -914,7 +913,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             break;
                         }
                     };
-                    if uses_pipewire {
+                    if node_id > 0 {
                         thread::sleep(Duration::from_millis(500));
                         pipewire::link_monitor_port_to_sender(node_id, &monitor_to_record);
                     }
