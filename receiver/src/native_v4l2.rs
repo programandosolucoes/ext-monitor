@@ -91,3 +91,9 @@ impl NativeV4l2Decoder {
         println!("\x1b[1;33m[native-v4l2]\x1b[0m Hardware Decoder stopped cleanly.");
     }
 }
+
+impl Drop for NativeV4l2Decoder {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}

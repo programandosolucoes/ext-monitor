@@ -195,8 +195,8 @@ fn main() {
     while running.load(Ordering::SeqCst) {
         if !pipeline_mgr.is_paused() {
             let active_trans = web::CONFIG.lock().map(|c| c.active_transport.clone()).unwrap_or_default();
-            // In Miracast mode (Mode 2), pipeline kind is None until a client connects via RTSP; do NOT auto-switch to UDP!
-            if active_trans != "mode2_miracast" {
+            // In Miracast mode (Mode 2) or Standby, do NOT auto-restore!
+            if active_trans != "mode2_miracast" && active_trans != "standby" && !active_trans.is_empty() {
                 let is_idle = pipeline_mgr.current_kind().is_none();
                 let has_crashed = pipeline_mgr.has_exited();
 

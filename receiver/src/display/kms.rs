@@ -235,7 +235,17 @@ impl KmsPlaneSink {
             .custom_flags(libc::O_CLOEXEC)
             .open(path)?;
         let fd = file.as_raw_fd();
-        unsafe { libc::ioctl(fd, DRM_IOCTL_SET_MASTER as _, 0); }
+        let mut master_acquired = false;
+        for _ in 0..10 {
+            if unsafe { libc::ioctl(fd, DRM_IOCTL_SET_MASTER as _, 0) } == 0 {
+                master_acquired = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        if !master_acquired {
+            eprintln!("\x1b[1;33m[kms]\x1b[0m Warning: Failed to acquire DRM master on {} (potential master conflict)", path);
+        }
 
         // Enable Universal Planes so KMS exposes primary display planes
         let mut cap = DrmSetClientCap {

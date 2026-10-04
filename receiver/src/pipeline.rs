@@ -68,6 +68,7 @@ pub enum PipelineKind {
 
 /// Hardware pipeline manager
 pub struct PipelineManager {
+    op_lock: Arc<Mutex<()>>,
     child: Arc<Mutex<Option<Child>>>,
     native_decoder: Arc<Mutex<Option<NativeV4l2Decoder>>>,
     active_kind: Arc<Mutex<Option<PipelineKind>>>,
@@ -82,6 +83,7 @@ impl PipelineManager {
         let backend = PipelineBackend::detect();
         println!("\x1b[1;34m[pipeline]\x1b[0m Selected Decoder Backend: \x1b[1;32m{}\x1b[0m", backend.name());
         Self {
+            op_lock: Arc::new(Mutex::new(())),
             child: Arc::new(Mutex::new(None)),
             native_decoder: Arc::new(Mutex::new(None)),
             active_kind: Arc::new(Mutex::new(None)),
@@ -127,8 +129,8 @@ impl PipelineManager {
         *self.active_kind.lock().unwrap()
     }
 
-    /// Stops the active pipeline cleanly
-    pub fn stop(&self) {
+    /// Stops the active pipeline cleanly (internal without acquiring op_lock)
+    fn stop_internal(&self) {
         let mut child_guard = self.child.lock().unwrap();
         if let Some(mut child) = child_guard.take() {
             println!("\x1b[1;33m[pipeline]\x1b[0m Stopping active pipeline process...");
@@ -147,10 +149,17 @@ impl PipelineManager {
         self.audio.lock().unwrap().stop();
     }
 
-    /// Launches the requested hardware decode pipeline
+    /// Stops the active pipeline cleanly with op_lock synchronization
+    pub fn stop(&self) {
+        let _op_guard = self.op_lock.lock().unwrap();
+        self.stop_internal();
+    }
+
+    /// Launches the requested hardware decode pipeline with op_lock synchronization
     pub fn start(&self, kind: PipelineKind) -> Result<(), std::io::Error> {
+        let _op_guard = self.op_lock.lock().unwrap();
         self.paused.store(false, Ordering::SeqCst);
-        self.stop();
+        self.stop_internal();
 
         // Ensure DRM KMS connector is forced 'on' for headless operation
         ensure_drm_hdmi_connected();

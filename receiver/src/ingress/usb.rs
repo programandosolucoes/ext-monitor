@@ -187,7 +187,7 @@ impl UsbBulkIngress {
         });
 
         if let Ok(cfg) = crate::web::CONFIG.lock() {
-            if cfg.mode3 {
+            if cfg.mode3 && !crate::flow::ARBITER.is_level0_active() {
                 crate::display::SplashEngine::show_ready();
             }
         }

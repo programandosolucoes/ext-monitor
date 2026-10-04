@@ -155,7 +155,7 @@ impl UdpRtpIngress {
         }
 
         if let Ok(cfg) = crate::web::CONFIG.lock() {
-            if cfg.mode1 {
+            if cfg.mode1 && !crate::flow::ARBITER.is_level0_active() {
                 crate::display::SplashEngine::show_ready();
             }
         }

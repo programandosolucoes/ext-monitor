@@ -731,6 +731,7 @@ impl Drop for V4l2DecoderSession {
         unsafe {
             libc::ioctl(self.video_fd, VIDIOC_REQBUFS as _, &mut req_zero_out);
             libc::ioctl(self.video_fd, VIDIOC_REQBUFS as _, &mut req_zero_cap);
+            libc::close(self.video_fd);
         }
         println!("\x1b[1;33m[v4l2-m2m]\x1b[0m Hardware Decoder session closed cleanly.");
     }
