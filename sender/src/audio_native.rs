@@ -208,14 +208,28 @@ pub fn spawn_native_audio_subsystem(
     thread::Builder::new()
         .name("audio-native-inprocess".to_string())
         .spawn(move || {
-            // 1. Notify receiver of audio sample rate via pure Rust HTTP client
+            // 1. Ensure PulseAudio virtual sink exists
+            crate::pipeline::ensure_audio_sink_exists(audio_rate);
+
+            // 2. Remember previous default sink and set Raspberry_Pi_HDMI_Audio as default sink
+            let prev_sink = get_default_sink_name();
+            if let Some(ref sink) = prev_sink {
+                if sink != "Raspberry_Pi_HDMI_Audio" {
+                    let _ = std::process::Command::new("pactl")
+                        .args(["set-default-sink", "Raspberry_Pi_HDMI_Audio"])
+                        .output();
+                    println!("\x1b[1;32m[audio-native]\x1b[0m Áudio roteado para Raspberry_Pi_HDMI_Audio (laptop speakers silenciados)");
+                }
+            }
+
+            // 3. Notify receiver of audio sample rate via pure Rust HTTP client
             let client_ip = target_ip.clone();
             let _ = crate::http_client::post_json(
                 &format!("http://{}:8080/api/audio/rate", client_ip),
                 &format!("{{\"rate\":{}}}", audio_rate),
             );
 
-            // 2. Prepare UDP sockets for raw PCM audio and Spectrum
+            // 4. Prepare UDP sockets for raw PCM audio and Spectrum
             let audio_sock = match UdpSocket::bind("0.0.0.0:0") {
                 Ok(s) => s,
                 Err(e) => {
@@ -286,7 +300,33 @@ pub fn spawn_native_audio_subsystem(
                 thread::sleep(Duration::from_millis(200));
             }
 
+            // Restore previous default sink so laptop speakers resume playing normally only if we're still on Raspberry_Pi_HDMI_Audio
+            if let Some(ref sink) = prev_sink {
+                if let Some(cur) = get_default_sink_name() {
+                    if cur == "Raspberry_Pi_HDMI_Audio" && sink != "Raspberry_Pi_HDMI_Audio" {
+                        let _ = std::process::Command::new("pactl")
+                            .args(["set-default-sink", sink])
+                            .output();
+                        println!("\x1b[1;34m[audio-native]\x1b[0m Saída padrão de áudio restaurada para: {}", sink);
+                    }
+                }
+            }
+
             println!("\x1b[1;34m[audio-native]\x1b[0m In-process audio subsystem encerrado com sucesso.");
         })
         .expect("Failed to spawn native audio thread")
+}
+
+fn get_default_sink_name() -> Option<String> {
+    let output = std::process::Command::new("pactl")
+        .arg("get-default-sink")
+        .output()
+        .ok()?;
+    if output.status.success() {
+        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !name.is_empty() {
+            return Some(name);
+        }
+    }
+    None
 }

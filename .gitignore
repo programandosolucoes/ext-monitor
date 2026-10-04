@@ -7,5 +7,4 @@ build-appliance/
 build-buildroot/
 downloads/
 backups/
-
-
+scripts/splash/*.raw

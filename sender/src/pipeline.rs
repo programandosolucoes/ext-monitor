@@ -510,7 +510,7 @@ pub fn ensure_audio_sink_exists(rate: u32) {
                 "load-module",
                 "module-null-sink",
                 "sink_name=Raspberry_Pi_HDMI_Audio",
-                "sink_properties=device.description=Raspberry_Pi_HDMI_Audio",
+                "sink_properties=device.description=Raspberry_Pi_HDMI_Audio device.icon_name=video-display media.class=Audio/Sink",
                 &format!("rate={}", rate),
             ])
             .output();

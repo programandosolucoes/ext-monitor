@@ -470,11 +470,7 @@ impl V4l2DecoderSession {
         let presented = match self.kms.as_mut().unwrap().present(idx as usize) {
             Ok(shown) => shown,
             Err(e) => {
-                eprintln!("\x1b[1;31m[kms]\x1b[0m Plane update failed ({e}). Falling back to the framebuffer.");
-                self.kms = None;
-                while let Some(old) = self.held.pop_front() {
-                    self.requeue_capture(old);
-                }
+                eprintln!("\x1b[1;33m[kms]\x1b[0m Plane update failed ({e}). Blitting single frame via fallback.");
                 self.blit_cpu(idx, on_frame);
                 self.requeue_capture(idx);
                 return;

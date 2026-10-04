@@ -368,12 +368,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             cfg.transport = new_trans;
                         }
                         ControlAction::SetAudio(a) => {
-                            println!("\x1b[1;35m[*] Standby: Áudio simultâneo configurado para {}\x1b[0m", a);
-                            cfg.audio = a;
-                            audio_tx_running.store(false, Ordering::SeqCst);
-                            if a {
-                                audio_tx_running = Arc::new(AtomicBool::new(true));
-                                let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+                            if a != cfg.audio {
+                                println!("\x1b[1;35m[*] Standby: Áudio simultâneo configurado para {}\x1b[0m", a);
+                                cfg.audio = a;
+                                audio_tx_running.store(false, Ordering::SeqCst);
+                                if a {
+                                    audio_tx_running = Arc::new(AtomicBool::new(true));
+                                    let _ = audio_native::spawn_native_audio_subsystem(cfg.target_ip.clone(), cfg.audio_port, cfg.audio_rate, audio_tx_running.clone());
+                                }
                             }
                         }
                         _ => {}

@@ -127,7 +127,6 @@ fn blit_to_framebuffer(buffer: &[u8]) {
     const FBIOBLANK: libc::c_ulong = 0x4611;
     const FBIOPAN_DISPLAY: libc::c_ulong = 0x4606;
     const FBIOGET_VSCREENINFO: libc::c_ulong = 0x4600;
-    const FBIOPUT_VSCREENINFO: libc::c_ulong = 0x4601;
 
     #[repr(C)]
     #[derive(Default)]
@@ -166,11 +165,7 @@ fn blit_to_framebuffer(buffer: &[u8]) {
     let mut vinfo = FbVarScreeninfo::default();
     unsafe {
         let _ = libc::ioctl(fd, FBIOBLANK as _, 0 as libc::c_int);
-        if libc::ioctl(fd, FBIOGET_VSCREENINFO as _, &mut vinfo) == 0 {
-            vinfo.activate = 0; // FB_ACTIVATE_NOW
-            let _ = libc::ioctl(fd, FBIOPUT_VSCREENINFO as _, &mut vinfo);
-            let _ = libc::ioctl(fd, FBIOPAN_DISPLAY as _, &mut vinfo);
-        }
+        let _ = libc::ioctl(fd, FBIOGET_VSCREENINFO as _, &mut vinfo);
     }
 
     if let Ok(tty1) = OpenOptions::new().read(true).write(true).open("/dev/tty1") {
