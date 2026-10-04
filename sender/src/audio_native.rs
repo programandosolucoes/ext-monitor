@@ -25,6 +25,7 @@ pub const PA_SAMPLE_S16LE: c_int = 3;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
+/// Represents Pasamplespec configuration and operational state.
 pub struct PaSampleSpec {
     pub format: c_int,
     pub rate: u32,
@@ -33,6 +34,7 @@ pub struct PaSampleSpec {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
+/// Represents Pabufferattr configuration and operational state.
 pub struct PaBufferAttr {
     pub maxlength: u32,
     pub tlength: u32,
@@ -62,6 +64,7 @@ type PaSimpleReadFn = unsafe extern "C" fn(
 
 type PaSimpleFreeFn = unsafe extern "C" fn(s: *mut c_void);
 
+/// Represents Pulsesimplebindings configuration and operational state.
 struct PulseSimpleBindings {
     _lib: *mut c_void,
     simple_new: PaSimpleNewFn,
@@ -70,6 +73,7 @@ struct PulseSimpleBindings {
 }
 
 impl PulseSimpleBindings {
+    /// Executes `load` operational routine.
     fn load() -> Option<Self> {
         unsafe {
             let lib_name = CString::new("libpulse-simple.so.0").ok()?;
@@ -102,6 +106,7 @@ impl PulseSimpleBindings {
     }
 }
 
+/// Represents Nativeaudiorecorder configuration and operational state.
 pub struct NativeAudioRecorder {
     bindings: PulseSimpleBindings,
     handle: *mut c_void,
@@ -110,6 +115,7 @@ pub struct NativeAudioRecorder {
 unsafe impl Send for NativeAudioRecorder {}
 
 impl NativeAudioRecorder {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(source_name: Option<&str>, sample_rate: u32, channels: u8) -> Option<Self> {
         let bindings = PulseSimpleBindings::load()?;
 
@@ -173,6 +179,7 @@ impl NativeAudioRecorder {
         Some(Self { bindings, handle })
     }
 
+    /// Executes `read` operational routine.
     pub fn read(&mut self, buf: &mut [u8]) -> bool {
         let mut err: c_int = 0;
         let ret = unsafe {
@@ -188,6 +195,7 @@ impl NativeAudioRecorder {
 }
 
 impl Drop for NativeAudioRecorder {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         if !self.handle.is_null() {
             unsafe {
@@ -199,6 +207,7 @@ impl Drop for NativeAudioRecorder {
 
 static AUDIO_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// Retrieves the sink id.
 fn get_sink_id(sink_name: &str) -> Option<String> {
     let out = std::process::Command::new("pactl")
         .args(["list", "sinks", "short"])
@@ -214,6 +223,7 @@ fn get_sink_id(sink_name: &str) -> Option<String> {
     None
 }
 
+/// Executes `migrate_all_streams_to_sink` operational routine.
 fn migrate_all_streams_to_sink(sink_name: &str) {
     let target_id = get_sink_id(sink_name);
     let inputs = std::process::Command::new("pactl")
@@ -397,6 +407,7 @@ pub fn spawn_native_audio_subsystem(
         .expect("Failed to spawn native audio thread")
 }
 
+/// Retrieves the default sink name.
 fn get_default_sink_name() -> Option<String> {
     let output = std::process::Command::new("pactl")
         .arg("get-default-sink")

@@ -40,10 +40,12 @@ impl NetworkUdpEgress {
         Ok(sent)
     }
 
+    /// Executes `total_bytes` operational routine.
     pub fn total_bytes(&self) -> u64 {
         self.total_bytes_sent
     }
 
+    /// Executes `target` operational routine.
     pub fn target(&self) -> SocketAddr {
         self.target_addr
     }

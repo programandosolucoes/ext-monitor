@@ -11,6 +11,7 @@ use std::error::Error;
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{OwnedObjectPath, Value};
 
+/// Represents Mutterscreencastsession configuration and operational state.
 pub struct MutterScreenCastSession {
     conn: Connection,
     session_path: OwnedObjectPath,
@@ -131,6 +132,7 @@ impl MutterScreenCastSession {
 }
 
 impl Drop for MutterScreenCastSession {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         self.stop();
     }
@@ -143,6 +145,7 @@ pub struct GnomeSessionInhibitor {
 }
 
 impl GnomeSessionInhibitor {
+    /// Executes `inhibit` operational routine.
     pub fn inhibit(app_id: &str, reason: &str) -> Option<Self> {
         let conn = Connection::session().ok()?;
         // Flags: 4 = Inhibit Suspend, 8 = Inhibit Idle/ScreenSaver (4 | 8 = 12)
@@ -160,6 +163,7 @@ impl GnomeSessionInhibitor {
 }
 
 impl Drop for GnomeSessionInhibitor {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         let _ = self.conn.call_method(
             Some("org.gnome.SessionManager"),

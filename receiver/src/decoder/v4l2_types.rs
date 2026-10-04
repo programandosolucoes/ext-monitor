@@ -35,6 +35,7 @@ pub const V4L2_PIX_FMT_NV12M: u32 = 0x32314D4E;   // 'NM12'
 
 #[repr(C)]
 #[derive(Default)]
+/// Represents V4l2fmtdesc configuration and operational state.
 pub struct V4l2FmtDesc {
     pub index: u32,
     pub buf_type: u32,
@@ -46,6 +47,7 @@ pub struct V4l2FmtDesc {
 
 #[repr(C)]
 #[derive(Default, Clone, Copy)]
+/// Represents V4l2planepixformat configuration and operational state.
 pub struct V4l2PlanePixFormat {
     pub sizeimage: u32,
     pub bytesperline: u32,
@@ -53,6 +55,7 @@ pub struct V4l2PlanePixFormat {
 }
 
 #[repr(C)]
+/// Represents V4l2pixformatmplane configuration and operational state.
 pub struct V4l2PixFormatMplane {
     pub width: u32,
     pub height: u32,
@@ -69,6 +72,7 @@ pub struct V4l2PixFormatMplane {
 }
 
 #[repr(C)]
+/// Represents V4l2format configuration and operational state.
 pub struct V4l2Format {
     pub buf_type: u32,
     pub fmt: [u8; 200],
@@ -76,6 +80,7 @@ pub struct V4l2Format {
 
 #[repr(C)]
 #[derive(Default)]
+/// Represents V4l2requestbuffers configuration and operational state.
 pub struct V4l2RequestBuffers {
     pub count: u32,
     pub buf_type: u32,
@@ -87,6 +92,7 @@ pub struct V4l2RequestBuffers {
 
 #[repr(C)]
 #[derive(Default)]
+/// Represents V4l2plane configuration and operational state.
 pub struct V4l2Plane {
     pub bytesused: u32,
     pub length: u32,
@@ -122,6 +128,7 @@ pub struct V4l2Buffer {
 }
 
 impl Default for V4l2Buffer {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self {
             index: 0,
@@ -142,6 +149,7 @@ impl Default for V4l2Buffer {
 }
 
 #[repr(C)]
+/// Represents V4l2exportbuffer configuration and operational state.
 pub struct V4l2ExportBuffer {
     pub buf_type: u32,
     pub index: u32,
@@ -152,6 +160,7 @@ pub struct V4l2ExportBuffer {
 }
 
 #[repr(C)]
+/// Represents V4l2capability configuration and operational state.
 pub struct V4l2Capability {
     pub driver: [u8; 16],
     pub card: [u8; 32],

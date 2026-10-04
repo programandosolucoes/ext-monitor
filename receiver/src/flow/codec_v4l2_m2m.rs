@@ -57,6 +57,7 @@ pub enum V4l2M2mError {
 }
 
 impl std::fmt::Display for V4l2M2mError {
+    /// Formats the instance using the provided formatter for display and debugging.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             V4l2M2mError::DeviceNotFound(dev) => write!(f, "V4L2 device node not found: {}", dev),
@@ -93,6 +94,7 @@ pub struct V4l2M2mConfig {
 }
 
 impl Default for V4l2M2mConfig {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self {
             device_path: None,
@@ -106,6 +108,7 @@ impl Default for V4l2M2mConfig {
 }
 
 impl V4l2M2mConfig {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(codec: CodecKind, dimensions: VideoDimensions) -> Self {
         let capture_format = FrameFormat::NV12;
         Self {
@@ -285,22 +288,27 @@ impl V4l2M2mDecoder {
         Ok(())
     }
 
+    /// Executes `frames_decoded` operational routine.
     pub fn frames_decoded(&self) -> u64 {
         self.frames_decoded
     }
 
+    /// Executes `active_fourcc` operational routine.
     pub fn active_fourcc(&self) -> u32 {
         self.active_fourcc
     }
 
+    /// Returns `true` if streaming is active or satisfied.
     pub fn is_streaming(&self) -> bool {
         self.is_streaming
     }
 
+    /// Executes `free_output_indices_count` operational routine.
     pub fn free_output_indices_count(&self) -> usize {
         self.free_output_indices.len()
     }
 
+    /// Executes `config` operational routine.
     pub fn config(&self) -> &V4l2M2mConfig {
         &self.config
     }

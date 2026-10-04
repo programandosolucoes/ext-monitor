@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 pub struct DrmCard(pub File);
 
 impl AsFd for DrmCard {
+    /// Executes `as_fd` operational routine.
     fn as_fd(&self) -> BorrowedFd<'_> {
         self.0.as_fd()
     }
@@ -166,6 +167,7 @@ impl KmsOutputInfo {
         Ok(chosen)
     }
 
+    /// Executes `find_render_node` operational routine.
     fn find_render_node(card_path: &Path) -> PathBuf {
         let card_name = card_path.file_name().and_then(|n| n.to_str()).unwrap_or("card0");
         let sys_path = PathBuf::from(format!("/sys/class/drm/{}/device/drm", card_name));
@@ -190,6 +192,7 @@ impl KmsOutputInfo {
         }
     }
 
+    /// Executes `inspect_card` operational routine.
     fn inspect_card(path: &Path) -> Result<Vec<KmsOutputInfo>, Box<dyn std::error::Error>> {
         let file = OpenOptions::new().read(true).write(true).open(path)?;
         let card = DrmCard(file);

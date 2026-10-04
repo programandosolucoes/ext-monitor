@@ -33,6 +33,7 @@ pub enum DesktopMode {
 }
 
 impl DesktopMode {
+    /// Returns the canonical protocol string for UI telemetry and serialization.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Mode3UsbBulk => "mode3_usb_bulk",
@@ -83,6 +84,7 @@ pub enum ArbiterError {
 }
 
 impl std::fmt::Display for ArbiterError {
+    /// Formats the instance using the provided formatter for display and debugging.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Level0Preempted => write!(f, "Action denied: Level 0 Desktop Screen holds exclusive HDMI ownership"),

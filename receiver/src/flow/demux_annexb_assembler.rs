@@ -84,10 +84,12 @@ impl NalClassification {
         }
     }
 
+    /// Returns `true` if keyframe is active or satisfied.
     pub fn is_keyframe(&self) -> bool {
         matches!(self, NalClassification::H264Idr | NalClassification::HevcIdr)
     }
 
+    /// Returns `true` if parameter set is active or satisfied.
     pub fn is_parameter_set(&self) -> bool {
         matches!(
             self,
@@ -116,6 +118,7 @@ pub struct AnnexBAssembler {
 }
 
 impl Default for AnnexBAssembler {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self::new()
     }
@@ -240,6 +243,7 @@ impl AnnexBAssembler {
         }
     }
 
+    /// Executes `extract_nal_units` operational routine.
     fn extract_nal_units(&mut self, frames_out: &mut Vec<AnnexBFrame>) {
         // Drop any garbage before the first start code
         if let Some((first_offset, _)) = Self::find_start_code(&self.accumulator, 0) {
@@ -289,6 +293,7 @@ impl AnnexBAssembler {
         }
     }
 
+    /// Executes `process_nal_body` operational routine.
     fn process_nal_body(&mut self, nal_body: &[u8], frames_out: &mut Vec<AnnexBFrame>) {
         let classification = NalClassification::classify(nal_body);
 

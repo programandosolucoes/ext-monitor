@@ -40,6 +40,7 @@ static CURRENT_GNOME_LAYOUT: AtomicU8 = AtomicU8::new(0);
 // 0: Unknown, 1: 720p, 2: 900p
 static CURRENT_GNOME_SCALE: AtomicU8 = AtomicU8::new(0);
 
+/// Returns `true` if hdmi in logical monitors is active or satisfied.
 fn is_hdmi_in_logical_monitors(stdout: &str) -> bool {
     // In GetCurrentState return tuple:
     // (uint32 serial, [available_monitors], [logical_monitors], properties)

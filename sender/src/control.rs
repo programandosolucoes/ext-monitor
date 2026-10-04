@@ -10,6 +10,7 @@ use crate::config::{CaptureEngine, ColorProfile, ScaleMode, TransportKind};
 use std::net::UdpSocket;
 
 #[derive(Debug, Clone, PartialEq)]
+/// Enumerates supported options for Controlaction.
 pub enum ControlAction {
     StartStreaming,
     ChromeCastLaunch,
@@ -34,6 +35,7 @@ pub enum ControlAction {
     SetAutoConnect(bool),
 }
 
+/// Represents Controllistener configuration and operational state.
 pub struct ControlListener {
     socket: Option<UdpSocket>,
 }

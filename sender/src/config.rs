@@ -9,6 +9,7 @@ use crate::i18n::{self, Language};
 use std::process::Command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Enumerates supported options for Colorprofile.
 pub enum ColorProfile {
     TrueColor,  // Standard 24-bit color (VBR 75% avg, dynamic QP)
     Economy256, // Emulated 256-color coarse quantization (min-qp 30, max-qp 44, VBR 50%)
@@ -16,6 +17,7 @@ pub enum ColorProfile {
 }
 
 impl ColorProfile {
+    /// Executes `name` operational routine.
     pub fn name(&self) -> &'static str {
         match self {
             ColorProfile::TrueColor => "24-bit TrueColor (Full)",
@@ -26,6 +28,7 @@ impl ColorProfile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Enumerates supported options for Scalemode.
 pub enum ScaleMode {
     Native720p,    // 1:1 Pixel Mapping (1280x720) - Zero downscaling blur, recommended for 720p receiver
     Scale1600x900, // 1600x900 canvas scaled to 720p stream
@@ -33,6 +36,7 @@ pub enum ScaleMode {
 }
 
 impl ScaleMode {
+    /// Executes `name` operational routine.
     pub fn name(&self) -> &'static str {
         match self {
             ScaleMode::Native720p => "Native 720p (1:1 Direct - Anti-Blur)",
@@ -41,6 +45,7 @@ impl ScaleMode {
         }
     }
 
+    /// Parses an audio transport selector from a string slice.
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "off" | "none" | "no-scale" | "disabled" | "false" => ScaleMode::Off,
@@ -51,12 +56,14 @@ impl ScaleMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Enumerates supported options for Captureengine.
 pub enum CaptureEngine {
     Mutter, // GNOME Mutter ScreenCast via D-Bus & PipeWire
     Kms,    // Kernel DRM/KMS Direct Hardware Scanout via DMA-BUF
 }
 
 impl CaptureEngine {
+    /// Executes `name` operational routine.
     pub fn name(&self) -> &'static str {
         match self {
             CaptureEngine::Mutter => "GNOME Mutter ScreenCast (PipeWire D-Bus)",
@@ -66,6 +73,7 @@ impl CaptureEngine {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Enumerates supported options for Encoderapi.
 pub enum EncoderApi {
     Vaapi,    // AMD & Intel hardware encoding via VA-API
     Nvenc,    // NVIDIA hardware encoding via NVENC
@@ -74,6 +82,7 @@ pub enum EncoderApi {
 }
 
 impl EncoderApi {
+    /// Executes `detect` operational routine.
     pub fn detect() -> Self {
         // 1. Check for NVIDIA NVENC
         if let Ok(out) = Command::new("gst-inspect-1.0").arg("nvh264enc").output() {
@@ -96,6 +105,7 @@ impl EncoderApi {
         EncoderApi::Software
     }
 
+    /// Parses an audio transport selector from a string slice.
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "vaapi" | "va" | "amd" | "intel" => EncoderApi::Vaapi,
@@ -108,6 +118,7 @@ impl EncoderApi {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Enumerates supported options for Transportkind.
 pub enum TransportKind {
     Network { ip: String, port: u16 },
     UsbBulk,
@@ -115,6 +126,7 @@ pub enum TransportKind {
 }
 
 #[derive(Debug, Clone)]
+/// Represents Senderconfig configuration and operational state.
 pub struct SenderConfig {
     pub target_ip: String,
     pub target_port: u16,
@@ -166,6 +178,7 @@ impl SenderConfig {
             return Ok(None);
         }
 
+/// Executes `notify_daemon_and_receiver` operational routine.
 fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) {
     if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
         let _ = sock.send_to(payload.as_bytes(), "127.0.0.1:5001");

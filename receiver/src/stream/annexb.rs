@@ -12,6 +12,7 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
+/// Represents Annexbassembler configuration and operational state.
 pub struct AnnexBAssembler {
     accumulator: Vec<u8>,
     current_au: Vec<u8>,
@@ -69,6 +70,7 @@ impl AnnexBAssembler {
         self.has_slice || !self.accumulator.is_empty() || !self.current_au.is_empty()
     }
 
+    /// Executes `extract_access_units` operational routine.
     fn extract_access_units(&mut self, frames_out: &mut Vec<Vec<u8>>) {
         // Drop any junk preceding the initial start code
         if let Some((first_offset, _)) = Self::find_start_code(&self.accumulator, 0) {

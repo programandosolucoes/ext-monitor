@@ -432,6 +432,7 @@ pub fn start_cast_v2_server(running: Arc<AtomicBool>) {
         .expect("Failed to spawn cast-v2-server thread");
 }
 
+/// Executes `handle_ssl_client` operational routine.
 fn handle_ssl_client(
     stream: TcpStream,
     peer: SocketAddr,
@@ -479,6 +480,7 @@ fn handle_ssl_client(
     }
 }
 
+/// Executes `handle_cast_message` operational routine.
 fn handle_cast_message<S: Read + Write>(
     stream: &mut S,
     msg: &CastMessage,

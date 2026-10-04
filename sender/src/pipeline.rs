@@ -17,22 +17,27 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+/// Represents Streamerhandle configuration and operational state.
 pub struct StreamerHandle(Child);
 
 impl StreamerHandle {
+    /// Executes `kill` operational routine.
     pub fn kill(&mut self) -> Result<(), io::Error> {
         self.0.kill()
     }
 
+    /// Executes `wait` operational routine.
     pub fn wait(&mut self) -> Result<ExitStatus, io::Error> {
         self.0.wait()
     }
 
+    /// Executes `try_wait` operational routine.
     pub fn try_wait(&mut self) -> Result<Option<ExitStatus>, io::Error> {
         self.0.try_wait()
     }
 }
 
+/// Represents Pipelinebuilder configuration and operational state.
 pub struct PipelineBuilder {
     #[allow(dead_code)]
     pub node_id: u32,
@@ -67,6 +72,7 @@ impl PipelineBuilder {
         Ok(StreamerHandle(child))
     }
 
+    /// Executes `spawn_gstreamer` operational routine.
     fn spawn_gstreamer(&self) -> io::Result<Child> {
         let mut cmd = Command::new("gst-launch-1.0");
 
@@ -207,6 +213,7 @@ impl PipelineBuilder {
         Self::spawn_and_attach_logger(cmd, "GStreamer")
     }
 
+    /// Executes `spawn_and_attach_logger` operational routine.
     fn spawn_and_attach_logger(mut cmd: Command, tag: &'static str) -> io::Result<Child> {
         let is_debug = std::env::var("EXT_DEBUG").map(|v| v == "1").unwrap_or(false);
         if is_debug {
@@ -251,6 +258,7 @@ impl PipelineBuilder {
         Ok(child)
     }
 
+    /// Executes `append_encoder_args` operational routine.
     fn append_encoder_args(&self, cmd: &mut Command) {
         match self.encoder {
             EncoderApi::Vaapi => {
@@ -427,6 +435,7 @@ const BAND_RANGES: [(usize, usize); 24] = [
     (245, 256), // 23.0 - 24.0 kHz
 ];
 
+/// Executes `fft_512` operational routine.
 fn fft_512(real: &mut [f32; 512], imag: &mut [f32; 512]) {
     let mut j = 0;
     for i in 0..511 {
@@ -477,6 +486,7 @@ fn fft_512(real: &mut [f32; 512], imag: &mut [f32; 512]) {
 
 static SINK_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// Executes `ensure_audio_sink_exists` operational routine.
 pub fn ensure_audio_sink_exists(rate: u32) {
     let _lock = SINK_MUTEX.lock().unwrap();
 
@@ -542,6 +552,7 @@ pub fn ensure_audio_sink_exists(rate: u32) {
     }
 }
 
+/// Executes `spawn_opus_audio_streamer` operational routine.
 pub fn spawn_opus_audio_streamer(
     target_ip: String,
     audio_port: u16,
@@ -623,6 +634,7 @@ pub fn spawn_opus_audio_streamer(
         .expect("Failed to spawn audio streamer thread")
 }
 
+/// Executes `spawn_audio_spectrum_monitor` operational routine.
 pub fn spawn_audio_spectrum_monitor(
     target_ip: String,
     running: Arc<AtomicBool>,
@@ -748,6 +760,7 @@ pub fn compute_spectrum_packet(raw_buf: &[u8; 2048], packet: &mut [u8; 25]) -> (
 
 impl PipelineBuilder {
     #[allow(dead_code)]
+    /// Executes `build_sink_args` operational routine.
     pub fn build_sink_args(&self) -> Vec<String> {
         let mut args = Vec::new();
         if let Some(fd) = self.usb_pipe_fd {

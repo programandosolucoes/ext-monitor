@@ -63,6 +63,7 @@ pub struct MpegTsMuxer {
 }
 
 impl Default for MpegTsMuxer {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self::new()
     }
@@ -437,11 +438,13 @@ struct PesReader<'a> {
 
 impl<'a> PesReader<'a> {
     #[inline]
+    /// Executes `remaining` operational routine.
     fn remaining(&self) -> usize {
         (self.header.len() + self.nalus.len()).saturating_sub(self.offset)
     }
 
     #[inline]
+    /// Executes `read` operational routine.
     fn read(&mut self, buf: &mut [u8]) -> usize {
         let mut written = 0;
         while written < buf.len() && self.remaining() > 0 {

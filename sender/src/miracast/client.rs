@@ -59,6 +59,7 @@ pub struct MiracastConfig {
 }
 
 impl Default for MiracastConfig {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self {
             target_ip: DEFAULT_TARGET_IP.to_string(),
@@ -573,6 +574,7 @@ impl MiracastSession {
 }
 
 impl Drop for MiracastSession {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         self.stop();
     }

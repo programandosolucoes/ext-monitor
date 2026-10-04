@@ -23,6 +23,7 @@ pub trait HardwareEncoder: Send {
 // 1. AMD & Intel Direct VA-API Hardware Encoder (/dev/dri/renderD128)
 // -----------------------------------------------------------------------------
 #[allow(dead_code)]
+/// Represents Vaapinativeencoder configuration and operational state.
 pub struct VaapiNativeEncoder {
     width: u32,
     height: u32,
@@ -31,6 +32,7 @@ pub struct VaapiNativeEncoder {
 }
 
 impl VaapiNativeEncoder {
+    /// Executes `try_new` operational routine.
     pub fn try_new(width: u32, height: u32, fps: u32, bitrate_kbps: u32) -> Result<Self, Box<dyn std::error::Error>> {
         // Probe DRM render nodes for VA-API hardware acceleration
         let dev_paths = ["/dev/dri/renderD128", "/dev/dri/card1", "/dev/dri/card0"];
@@ -63,6 +65,7 @@ impl VaapiNativeEncoder {
 }
 
 impl HardwareEncoder for VaapiNativeEncoder {
+    /// Executes `encode_frame` operational routine.
     fn encode_frame(&mut self, data: &[u8], _is_keyframe: bool) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         // Direct VA-API hardware surface submission
         // For the immediate frame payload, emit standard NAL delimiter & slice
@@ -72,6 +75,7 @@ impl HardwareEncoder for VaapiNativeEncoder {
         Ok(stream)
     }
 
+    /// Executes `name` operational routine.
     fn name(&self) -> &'static str {
         "Direct VA-API Hardware (AMD Radeon / Intel QuickSync on /dev/dri/renderD128)"
     }
@@ -81,6 +85,7 @@ impl HardwareEncoder for VaapiNativeEncoder {
 // 2. NVIDIA Direct NVENC Hardware Encoder
 // -----------------------------------------------------------------------------
 #[allow(dead_code)]
+/// Represents Nvencnativeencoder configuration and operational state.
 pub struct NvencNativeEncoder {
     width: u32,
     height: u32,
@@ -89,6 +94,7 @@ pub struct NvencNativeEncoder {
 }
 
 impl NvencNativeEncoder {
+    /// Executes `try_new` operational routine.
     pub fn try_new(width: u32, height: u32, fps: u32, bitrate_kbps: u32) -> Result<Self, Box<dyn std::error::Error>> {
         // Check if libnvidia-encode.so.1 is present on the system
         let lib_path = "/usr/lib/x86_64-linux-gnu/libnvidia-encode.so.1";
@@ -111,12 +117,14 @@ impl NvencNativeEncoder {
 }
 
 impl HardwareEncoder for NvencNativeEncoder {
+    /// Executes `encode_frame` operational routine.
     fn encode_frame(&mut self, _data: &[u8], _is_keyframe: bool) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let mut stream = Vec::new();
         stream.extend_from_slice(&[0x00, 0x00, 0x00, 0x01, 0x09, 0x10]);
         Ok(stream)
     }
 
+    /// Executes `name` operational routine.
     fn name(&self) -> &'static str {
         "Direct NVENC Hardware (NVIDIA GeForce/RTX via libnvidia-encode)"
     }
@@ -125,6 +133,7 @@ impl HardwareEncoder for NvencNativeEncoder {
 // -----------------------------------------------------------------------------
 // 3. CPU Fallback: Pure in-process OpenH264 Encoder
 // -----------------------------------------------------------------------------
+/// Represents Openh264nativeencoder configuration and operational state.
 pub struct OpenH264NativeEncoder {
     encoder: Encoder,
     width: usize,
@@ -132,6 +141,7 @@ pub struct OpenH264NativeEncoder {
 }
 
 impl OpenH264NativeEncoder {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(width: u32, height: u32, fps: u32, bitrate_kbps: u32) -> Result<Self, Box<dyn std::error::Error>> {
         let api = openh264::OpenH264API::from_source();
         let config = EncoderConfig::new()
@@ -153,6 +163,7 @@ impl OpenH264NativeEncoder {
 }
 
 impl HardwareEncoder for OpenH264NativeEncoder {
+    /// Executes `encode_frame` operational routine.
     fn encode_frame(&mut self, data: &[u8], _is_keyframe: bool) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let expected_len = self.width * self.height * 4;
         if data.len() < expected_len {
@@ -169,6 +180,7 @@ impl HardwareEncoder for OpenH264NativeEncoder {
         Ok(out)
     }
 
+    /// Executes `name` operational routine.
     fn name(&self) -> &'static str {
         "Pure In-Process CPU Encoder (Cisco OpenH264 Zero-Dependency)"
     }
@@ -177,6 +189,7 @@ impl HardwareEncoder for OpenH264NativeEncoder {
 // -----------------------------------------------------------------------------
 // Auto-Detection Factory
 // -----------------------------------------------------------------------------
+/// Executes `create_best_encoder` operational routine.
 pub fn create_best_encoder(
     width: u32,
     height: u32,

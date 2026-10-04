@@ -13,6 +13,7 @@ use super::encoder_types::{CodecKind, EncoderConfig, GpuArchitecture};
 use std::fs;
 use std::path::Path;
 
+/// Represents Gpuencoderselector configuration and operational state.
 pub struct GpuEncoderSelector;
 
 impl GpuEncoderSelector {

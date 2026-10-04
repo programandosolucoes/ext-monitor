@@ -40,6 +40,7 @@ pub enum CodecKind {
 }
 
 impl Default for CodecKind {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         CodecKind::H264
     }
@@ -134,6 +135,7 @@ impl FrameFormat {
         }
     }
 
+    /// Executes `name` operational routine.
     pub fn name(&self) -> &'static str {
         match self {
             FrameFormat::RGB565 => "RGB565",
@@ -153,6 +155,7 @@ pub struct VideoDimensions {
 }
 
 impl VideoDimensions {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(width: u32, height: u32) -> Result<Self, &'static str> {
         if width == 0 || height == 0 {
             return Err("Width and height must be strictly greater than zero");
@@ -171,10 +174,12 @@ impl VideoDimensions {
         (aligned_w, aligned_h)
     }
 
+    /// Executes `aspect_ratio` operational routine.
     pub fn aspect_ratio(&self) -> f32 {
         self.width as f32 / self.height as f32
     }
 
+    /// Executes `total_pixels` operational routine.
     pub fn total_pixels(&self) -> u64 {
         (self.width as u64) * (self.height as u64)
     }
@@ -320,22 +325,27 @@ impl CodecCapabilities {
         }
     }
 
+    /// Returns `true` if codec supported is active or satisfied.
     pub fn is_codec_supported(&self, codec: CodecKind) -> bool {
         self.supported_codecs.contains(&codec)
     }
 
+    /// Returns `true` if hardware accelerated is active or satisfied.
     pub fn is_hardware_accelerated(&self, codec: CodecKind) -> bool {
         self.hardware_accelerated.get(&codec).copied().unwrap_or(false)
     }
 
+    /// Executes `preferred_codec` operational routine.
     pub fn preferred_codec(&self) -> CodecKind {
         self.supported_codecs.first().copied().unwrap_or(CodecKind::H264)
     }
 
+    /// Executes `max_resolution_for` operational routine.
     pub fn max_resolution_for(&self, codec: CodecKind) -> (u32, u32) {
         self.max_resolution.get(&codec).copied().unwrap_or((1280, 720))
     }
 
+    /// Executes `max_fps_for` operational routine.
     pub fn max_fps_for(&self, codec: CodecKind) -> u32 {
         self.max_fps.get(&codec).copied().unwrap_or(30)
     }
@@ -352,6 +362,7 @@ pub struct StreamNegotiation {
 }
 
 impl StreamNegotiation {
+    /// Executes `from_capabilities` operational routine.
     pub fn from_capabilities(caps: &CodecCapabilities) -> Self {
         let pref = caps.preferred_codec();
         let (max_w, max_h) = caps.max_resolution_for(pref);

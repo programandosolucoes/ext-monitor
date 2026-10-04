@@ -11,6 +11,7 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Supported interface and CLI display languages.
 pub enum Language {
     English,
     Portuguese,
@@ -37,6 +38,7 @@ impl Language {
         }
     }
 
+    /// Parses an audio transport selector from a string slice.
     pub fn from_str(code: &str) -> Self {
         match code.to_lowercase().as_str() {
             "pt" | "pt-br" | "pt_br" | "portuguese" | "portugues" => Language::Portuguese,
@@ -57,6 +59,7 @@ pub fn print_help(lang: Language) {
     }
 }
 
+/// Prints localized CLI usage help in EN.
 fn print_help_en() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-sender: GPU Offload Virtual Second Monitor Sender v0.3.0          \x1b[0m");
@@ -129,6 +132,7 @@ fn print_help_en() {
     println!("  - \x1b[1;37mWeb Control Panel:\x1b[0m Stop or tune stream in real-time at \x1b[1;34mhttp://192.168.7.2:8080\x1b[0m.\n");
 }
 
+/// Prints localized CLI usage help in PT.
 fn print_help_pt() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-sender: Transmissor de Segundo Monitor Virtual via GPU v0.3.0    \x1b[0m");
@@ -201,6 +205,7 @@ fn print_help_pt() {
     println!("  - \x1b[1;37mPainel Web Remoto:\x1b[0m Ajuste o fluxo ou encerre em tempo real em \x1b[1;34mhttp://192.168.7.2:8080\x1b[0m.\n");
 }
 
+/// Prints localized CLI usage help in IT.
 fn print_help_it() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-sender: Trasmettitore Secondo Monitor Virtuale via GPU v0.3.0     \x1b[0m");
@@ -270,6 +275,7 @@ fn print_help_it() {
     println!("  - \x1b[1;37mPannello Web:\x1b[0m Gestisci lo streaming su \x1b[1;34mhttp://192.168.7.2:8080\x1b[0m.\n");
 }
 
+/// Prints localized CLI usage help in ZH.
 fn print_help_zh() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-sender: 基于 GPU 硬件加速的虚拟第二显示器发送端 v0.3.0           \x1b[0m");

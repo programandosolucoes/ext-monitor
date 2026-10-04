@@ -17,9 +17,11 @@ mod kms;
 
 use kms::KmsOutputInfo;
 
+/// Represents Card configuration and operational state.
 struct Card(std::fs::File);
 
 impl AsFd for Card {
+    /// Executes `as_fd` operational routine.
     fn as_fd(&self) -> BorrowedFd<'_> {
         self.0.as_fd()
     }
@@ -28,6 +30,7 @@ impl AsFd for Card {
 impl Device for Card {}
 impl ControlDevice for Card {}
 
+/// Application entrypoint initializing the runtime environment and dispatching execution.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\x1b[1;36m========================================================================\x1b[0m");
     println!("\x1b[1;36m  ext-kms-probe: Scanner de Diagnóstico de Hardware DRM/KMS Linux       \x1b[0m");

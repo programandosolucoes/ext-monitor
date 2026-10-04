@@ -50,6 +50,7 @@ pub enum IngressError {
 }
 
 impl fmt::Display for IngressError {
+    /// Formats the instance using the provided formatter for display and debugging.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             IngressError::Io(err) => write!(f, "USB Ingress I/O error: {}", err),
@@ -72,6 +73,7 @@ impl fmt::Display for IngressError {
 impl std::error::Error for IngressError {}
 
 impl From<io::Error> for IngressError {
+    /// Converts an underlying error type into this unified error representation.
     fn from(err: io::Error) -> Self {
         IngressError::Io(err)
     }
@@ -269,6 +271,7 @@ impl UsbBulkIngress {
 }
 
 impl Drop for UsbBulkIngress {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         if self.owns_fd {
             if let Some(fd) = self.fd.take() {

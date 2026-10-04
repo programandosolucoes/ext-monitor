@@ -38,6 +38,7 @@ pub enum ScanoutError {
 }
 
 impl std::fmt::Display for ScanoutError {
+    /// Formats the instance using the provided formatter for display and debugging.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ScanoutError::DrmDeviceNotFound(dev) => write!(f, "DRM device node not found: {}", dev),
@@ -157,24 +158,29 @@ impl DrmKmsScanout {
         }
     }
 
+    /// Sets or updates the card fd.
     pub fn set_card_fd(&mut self, fd: RawFd) {
         self.card_fd = Some(fd);
     }
 
+    /// Executes `plane_id` operational routine.
     pub fn plane_id(&self) -> u32 {
         self.plane_id
     }
 
+    /// Executes `crtc_id` operational routine.
     pub fn crtc_id(&self) -> u32 {
         self.crtc_id
     }
 
+    /// Executes `total_presented` operational routine.
     pub fn total_presented(&self) -> u64 {
         self.total_presented
     }
 }
 
 impl KmsScanoutPresenter for DrmKmsScanout {
+    /// Executes `present_dmabuf` operational routine.
     fn present_dmabuf(
         &mut self,
         fd: RawFd,
@@ -204,6 +210,7 @@ impl KmsScanoutPresenter for DrmKmsScanout {
         Ok(())
     }
 
+    /// Executes `release_oldest_held` operational routine.
     fn release_oldest_held(&mut self) -> Option<RawFd> {
         if self.held.len() > self.max_held {
             self.held.pop_front().map(|b| b.fd)
@@ -212,14 +219,17 @@ impl KmsScanoutPresenter for DrmKmsScanout {
         }
     }
 
+    /// Executes `held_count` operational routine.
     fn held_count(&self) -> usize {
         self.held.len()
     }
 
+    /// Executes `crtc_dimensions` operational routine.
     fn crtc_dimensions(&self) -> (u32, u32) {
         (self.crtc_width, self.crtc_height)
     }
 
+    /// Executes `cleanup` operational routine.
     fn cleanup(&mut self) {
         self.held.clear();
     }
@@ -235,6 +245,7 @@ pub struct MockScanoutPresenter {
 }
 
 impl MockScanoutPresenter {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(crtc_width: u32, crtc_height: u32) -> Self {
         Self {
             crtc_width,
@@ -245,12 +256,14 @@ impl MockScanoutPresenter {
         }
     }
 
+    /// Executes `presented_history` operational routine.
     pub fn presented_history(&self) -> &[(RawFd, u32, u32, FrameFormat)] {
         &self.presented_history
     }
 }
 
 impl KmsScanoutPresenter for MockScanoutPresenter {
+    /// Executes `present_dmabuf` operational routine.
     fn present_dmabuf(
         &mut self,
         fd: RawFd,
@@ -268,6 +281,7 @@ impl KmsScanoutPresenter for MockScanoutPresenter {
         Ok(())
     }
 
+    /// Executes `release_oldest_held` operational routine.
     fn release_oldest_held(&mut self) -> Option<RawFd> {
         if self.held.len() > self.max_held {
             self.held.pop_front()
@@ -276,14 +290,17 @@ impl KmsScanoutPresenter for MockScanoutPresenter {
         }
     }
 
+    /// Executes `held_count` operational routine.
     fn held_count(&self) -> usize {
         self.held.len()
     }
 
+    /// Executes `crtc_dimensions` operational routine.
     fn crtc_dimensions(&self) -> (u32, u32) {
         (self.crtc_width, self.crtc_height)
     }
 
+    /// Executes `cleanup` operational routine.
     fn cleanup(&mut self) {
         self.held.clear();
     }

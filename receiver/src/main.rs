@@ -49,6 +49,7 @@ use std::time::Duration;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
+/// Application entrypoint initializing the runtime environment and dispatching execution.
 fn main() {
     let args: Vec<String> = env::args().collect();
 

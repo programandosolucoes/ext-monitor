@@ -10,6 +10,7 @@ use std::fs;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
+/// Represents Monitorinfo configuration and operational state.
 pub struct MonitorInfo {
     pub connected: bool,
     pub name: String,

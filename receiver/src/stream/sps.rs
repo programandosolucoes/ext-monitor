@@ -7,16 +7,19 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
+/// Represents Bitreader configuration and operational state.
 struct BitReader<'a> {
     data: &'a [u8],
     bit_pos: usize,
 }
 
 impl<'a> BitReader<'a> {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     fn new(data: &'a [u8]) -> Self {
         Self { data, bit_pos: 0 }
     }
 
+    /// Executes `read_bit` operational routine.
     fn read_bit(&mut self) -> Option<u32> {
         let byte_pos = self.bit_pos / 8;
         if byte_pos >= self.data.len() {
@@ -27,6 +30,7 @@ impl<'a> BitReader<'a> {
         Some(((self.data[byte_pos] >> bit_idx) & 1) as u32)
     }
 
+    /// Executes `read_bits` operational routine.
     fn read_bits(&mut self, n: usize) -> Option<u32> {
         let mut val = 0u32;
         for _ in 0..n {
@@ -35,6 +39,7 @@ impl<'a> BitReader<'a> {
         Some(val)
     }
 
+    /// Executes `read_ue` operational routine.
     fn read_ue(&mut self) -> Option<u32> {
         let mut zeros = 0usize;
         while self.read_bit()? == 0 {
@@ -50,6 +55,7 @@ impl<'a> BitReader<'a> {
         Some((1u32 << zeros) - 1 + info)
     }
 
+    /// Executes `read_se` operational routine.
     fn read_se(&mut self) -> Option<i32> {
         let code = self.read_ue()?;
         if code == 0 {

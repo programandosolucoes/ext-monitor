@@ -23,6 +23,7 @@ static LAST_LAUNCH_MILLIS: AtomicU64 = AtomicU64::new(0);
 pub static ACTIVE_MIRACAST_SESSION: Mutex<Option<MiracastSession>> = Mutex::new(None);
 
 #[derive(Debug, Clone)]
+/// Represents Gpuvendorinfo configuration and operational state.
 pub struct GpuVendorInfo {
     pub vendor_name: &'static str,
     pub encoder_name: &'static str,

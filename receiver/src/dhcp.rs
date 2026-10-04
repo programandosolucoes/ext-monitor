@@ -31,6 +31,7 @@ const DHCP_REQUEST: u8 = 3;
 const DHCP_ACK: u8 = 5;
 
 #[derive(Clone, Debug)]
+/// Represents Dhcplease configuration and operational state.
 pub struct DhcpLease {
     pub mac: String,
     pub ip: String,
@@ -103,6 +104,7 @@ pub fn start_dhcp_server(running: Arc<AtomicBool>) {
     });
 }
 
+/// Executes `bind_to_device` operational routine.
 fn bind_to_device(socket: &UdpSocket, iface_name: &str) -> std::io::Result<()> {
     let mut iface_bytes = iface_name.as_bytes().to_vec();
     iface_bytes.push(0);
@@ -122,6 +124,7 @@ fn bind_to_device(socket: &UdpSocket, iface_name: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Executes `handle_dhcp_packet` operational routine.
 fn handle_dhcp_packet(socket: &UdpSocket, buf: &[u8], len: usize) {
     if len < 240 {
         return;

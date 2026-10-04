@@ -27,6 +27,7 @@ type Window = c_ulong;
 type GC = *mut c_void;
 
 #[repr(C)]
+/// Represents Xsetwindowattributes configuration and operational state.
 struct XSetWindowAttributes {
     background_pixmap: c_ulong,
     background_pixel: c_ulong,
@@ -93,6 +94,7 @@ type XShapeCombineRectanglesFn = unsafe extern "C" fn(
     c_int,
 ) -> c_int;
 
+/// Represents X11bindings configuration and operational state.
 struct X11Bindings {
     _lib_x11: *mut c_void,
     _lib_xext: *mut c_void,
@@ -113,6 +115,7 @@ struct X11Bindings {
 }
 
 impl X11Bindings {
+    /// Executes `load` operational routine.
     fn load() -> Option<Self> {
         unsafe {
             let lib_x11_name = CString::new("libX11.so.6").ok()?;
@@ -191,12 +194,14 @@ pub struct DamagePacer {
 }
 
 impl DamagePacer {
+    /// Starts the background UDP audio receiver thread and ALSA ring-buffer playback loop.
     pub fn start(target_x: i32, target_y: i32) -> Self {
         let running = Arc::new(AtomicBool::new(true));
         let handle = spawn_damage_pacer(running.clone(), target_x, target_y);
         Self { running, handle }
     }
 
+    /// Signals the background audio thread to terminate and waits for join.
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
         if let Some(h) = self.handle.take() {
@@ -206,6 +211,7 @@ impl DamagePacer {
 }
 
 impl Drop for DamagePacer {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         self.stop();
     }

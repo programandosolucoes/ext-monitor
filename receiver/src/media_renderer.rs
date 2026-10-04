@@ -28,6 +28,7 @@ pub const fn rgb565(r: u8, g: u8, b: u8) -> u16 {
 }
 
 #[derive(Debug, Clone)]
+/// Represents Mediatrackinfo configuration and operational state.
 pub struct MediaTrackInfo {
     pub title: String,
     pub artist: String,
@@ -40,6 +41,7 @@ pub struct MediaTrackInfo {
 
 static GLOBAL_MEDIA_TRACK: OnceLock<Arc<Mutex<MediaTrackInfo>>> = OnceLock::new();
 
+/// Retrieves the media state.
 pub fn get_media_state() -> Arc<Mutex<MediaTrackInfo>> {
     GLOBAL_MEDIA_TRACK
         .get_or_init(|| {
@@ -309,6 +311,7 @@ pub fn get_dial_dd_xml(host_ip: &str, http_port: u16) -> String {
 }
 
 #[derive(Debug, Clone)]
+/// Represents Audiospectrumstate configuration and operational state.
 pub struct AudioSpectrumState {
     pub bands: [f32; 24],
     pub peaks: [f32; 24],
@@ -319,6 +322,7 @@ pub struct AudioSpectrumState {
 
 static GLOBAL_SPECTRUM: OnceLock<Arc<Mutex<AudioSpectrumState>>> = OnceLock::new();
 
+/// Retrieves the audio spectrum.
 pub fn get_audio_spectrum() -> Arc<Mutex<AudioSpectrumState>> {
     GLOBAL_SPECTRUM
         .get_or_init(|| {
@@ -333,6 +337,7 @@ pub fn get_audio_spectrum() -> Arc<Mutex<AudioSpectrumState>> {
         .clone()
 }
 
+/// Executes `update_audio_spectrum` operational routine.
 pub fn update_audio_spectrum(bands: &[f32; 24], rms_db: f32) {
     let has_signal = rms_db > -55.0 || bands.iter().any(|&b| b > 0.02);
     let spec_arc = get_audio_spectrum();
@@ -418,6 +423,7 @@ pub fn start_audio_telemetry_listener(running: Arc<AtomicBool>) {
 // Visualizer Engine on /dev/fb0 (30 FPS Dynamic Animated Spectrum & Metadata)
 // -----------------------------------------------------------------------------
 
+/// Represents Visualizerengine configuration and operational state.
 pub struct VisualizerEngine;
 
 impl VisualizerEngine {

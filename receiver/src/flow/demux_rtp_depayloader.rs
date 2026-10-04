@@ -46,6 +46,7 @@ pub enum DemuxError {
 }
 
 impl fmt::Display for DemuxError {
+    /// Formats the instance using the provided formatter for display and debugging.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DemuxError::PacketTooShort { length, minimum } => {
@@ -167,6 +168,7 @@ pub struct RtpDepayloader {
 }
 
 impl Default for RtpDepayloader {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self::new()
     }

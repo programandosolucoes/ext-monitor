@@ -38,12 +38,14 @@ const SNDRV_PCM_FORMAT_IEC958_SUBFRAME_LE: u32 = 18;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
+/// ALSA hardware parameter bitmask structure representing supported audio formats and access types.
 struct SndMask {
     bits: [u32; 8],
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
+/// ALSA hardware parameter interval structure specifying allowable ranges for sample rates and channels.
 struct SndInterval {
     min: u32,
     max: u32,
@@ -51,6 +53,7 @@ struct SndInterval {
 }
 
 #[repr(C)]
+/// Kernel `snd_pcm_hw_params` structure passed to `SNDRV_PCM_IOCTL_HW_PARAMS` for hardware device configuration.
 struct SndPcmHwParams {
     flags: u32,
     masks: [SndMask; 3],       // ACCESS (0), FORMAT (1), SUBFORMAT (2)
@@ -68,6 +71,7 @@ struct SndPcmHwParams {
 }
 
 #[repr(C)]
+/// Kernel `snd_pcm_sw_params` structure passed to `SNDRV_PCM_IOCTL_SW_PARAMS` configuring playback thresholds.
 struct SndPcmSwParams {
     tstamp_mode: u32,
     period_step: u32,
@@ -85,12 +89,14 @@ struct SndPcmSwParams {
 }
 
 #[repr(C)]
+/// Kernel `snd_xferi` structure passed to `SNDRV_PCM_IOCTL_WRITEI_FRAMES` for interleaved PCM frame delivery.
 struct SndXferi {
     result: libc::c_long,
     buf: *const libc::c_void,
     frames: libc::c_ulong,
 }
 
+/// Initializes an ALSA hardware parameters structure with open-ended wildcard masks and ranges.
 fn param_init(p: &mut SndPcmHwParams) {
     unsafe {
         std::ptr::write_bytes(p, 0, 1);
@@ -107,6 +113,7 @@ fn param_init(p: &mut SndPcmHwParams) {
     }
 }
 
+/// Sets a single bit inside an ALSA hardware parameters mask (e.g., access or format).
 fn set_mask(p: &mut SndPcmHwParams, param: usize, bit: u32) {
     if param < p.masks.len() {
         let m = &mut p.masks[param];
@@ -116,6 +123,7 @@ fn set_mask(p: &mut SndPcmHwParams, param: usize, bit: u32) {
     }
 }
 
+/// Locks an ALSA hardware parameter interval to an exact integer value.
 fn set_int(p: &mut SndPcmHwParams, param: usize, val: u32) {
     if param >= SNDRV_PCM_HW_PARAM_FIRST_INTERVAL {
         let idx = param - SNDRV_PCM_HW_PARAM_FIRST_INTERVAL;
@@ -128,6 +136,7 @@ fn set_int(p: &mut SndPcmHwParams, param: usize, val: u32) {
     }
 }
 
+/// Sets the minimum allowable value for an ALSA hardware parameter interval.
 fn set_min(p: &mut SndPcmHwParams, param: usize, val: u32) {
     if param >= SNDRV_PCM_HW_PARAM_FIRST_INTERVAL {
         let idx = param - SNDRV_PCM_HW_PARAM_FIRST_INTERVAL;
@@ -138,6 +147,7 @@ fn set_min(p: &mut SndPcmHwParams, param: usize, val: u32) {
     }
 }
 
+/// Translates an audio sampling frequency into the standard IEC958 / S/PDIF channel status sample rate byte.
 fn get_iec958_rate_code(rate: u32) -> u8 {
     match rate {
         32000 => 0x03,
@@ -159,6 +169,7 @@ struct AlsaHdmiDevice {
 }
 
 impl AlsaHdmiDevice {
+    /// Executes `open` operational routine.
     fn open(rate: u32) -> Result<Self, std::io::Error> {
         let file = OpenOptions::new()
             .read(true)
@@ -200,6 +211,7 @@ impl AlsaHdmiDevice {
         Ok(Self { _file: file, fd, rate })
     }
 
+    /// Writes interleaved 32-bit IEC958 frames directly to the ALSA playback device.
     fn write_frames(&mut self, frames: &[u32], frame_count: usize) -> Result<(), std::io::Error> {
         let mut xfer = SndXferi {
             result: 0,
@@ -226,16 +238,19 @@ impl AlsaHdmiDevice {
         Ok(())
     }
 
+    /// Blocks until all queued audio samples in the ALSA ring buffer have been completely played out.
     fn drain(&mut self) {
         unsafe { libc::ioctl(self.fd, SNDRV_PCM_IOCTL_DRAIN as _) };
     }
 
+    /// Discards all pending audio frames in the ALSA buffer and stops playback immediately.
     fn drop_playback(&mut self) {
         unsafe { libc::ioctl(self.fd, SNDRV_PCM_IOCTL_DROP as _) };
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Audio transmission mechanism configured on the receiver.
 pub enum AudioTransport {
     NetworkUdp,
     UsbAudioClass,
@@ -243,6 +258,7 @@ pub enum AudioTransport {
 }
 
 impl AudioTransport {
+    /// Returns the canonical protocol string for UI telemetry and serialization.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::NetworkUdp => "network_udp",
@@ -251,6 +267,7 @@ impl AudioTransport {
         }
     }
 
+    /// Parses an audio transport selector from a string slice.
     pub fn from_str(s: &str) -> Self {
         match s {
             "uac2" | "uac2_gadget" | "usb_audio" | "2" => Self::UsbAudioClass,
@@ -259,6 +276,7 @@ impl AudioTransport {
         }
     }
 
+    /// Converts an atomic integer identifier into an `AudioTransport` variant.
     pub fn from_u8(v: u8) -> Self {
         match v {
             1 => Self::UsbAudioClass,
@@ -267,6 +285,7 @@ impl AudioTransport {
         }
     }
 
+    /// Returns the numeric atomic identifier for lock-free cross-thread state.
     pub fn to_u8(&self) -> u8 {
         match self {
             Self::NetworkUdp => 0,
@@ -277,6 +296,7 @@ impl AudioTransport {
 }
 
 #[derive(Debug, Clone)]
+/// Comprehensive runtime status of the ALSA audio subsystem.
 pub struct AudioStatus {
     pub enabled: bool,
     pub active: bool,
@@ -288,6 +308,7 @@ pub struct AudioStatus {
 }
 
 impl AudioStatus {
+    /// Serializes status into a compact JSON payload for REST API consumers.
     pub fn to_json(&self) -> String {
         format!(
             "{{\"enabled\":{},\"active\":{},\"volume\":{},\"muted\":{},\"port\":{},\"rate\":{},\"transport\":\"{}\"}}",
@@ -296,6 +317,7 @@ impl AudioStatus {
     }
 }
 
+/// Multi-threaded ALSA audio receiver daemon binding ingress UDP audio packets to hardware PCM out.
 pub struct AudioReceiver {
     thread_handle: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,
@@ -309,6 +331,7 @@ pub struct AudioReceiver {
 }
 
 impl AudioReceiver {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(port: u16) -> Self {
         Self {
             thread_handle: None,
@@ -323,15 +346,18 @@ impl AudioReceiver {
         }
     }
 
+    /// Sets the target ALSA clock frequency in Hertz (e.g. 48000, 96000, or 192000).
     pub fn set_rate(&mut self, r: u32) {
         println!("\x1b[1;36m[audio-native]\x1b[0m Audio target sample rate configured: {} Hz", r);
         self.rate.store(r, Ordering::SeqCst);
     }
 
+    /// Returns the currently active audio sample rate in Hertz.
     pub fn rate(&self) -> u32 {
         self.rate.load(Ordering::Relaxed)
     }
 
+    /// Starts the background UDP audio receiver thread and ALSA ring-buffer playback loop.
     pub fn start(&mut self) -> Result<(), std::io::Error> {
         if !self.enabled {
             return Ok(());
@@ -530,6 +556,7 @@ impl AudioReceiver {
         Ok(())
     }
 
+    /// Signals the background audio thread to terminate and waits for join.
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
         if let Some(handle) = self.thread_handle.take() {
@@ -539,14 +566,17 @@ impl AudioReceiver {
         self.active.store(false, Ordering::SeqCst);
     }
 
+    /// Adjusts software attenuation volume (clamped between 0 and 100).
     pub fn set_volume(&mut self, vol: u32) {
         self.volume.store(vol.min(100), Ordering::SeqCst);
     }
 
+    /// Toggles the audio output mute state.
     pub fn set_muted(&mut self, muted: bool) {
         self.muted.store(muted, Ordering::SeqCst);
     }
 
+    /// Enables or disables audio processing and playback.
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         if enabled {
@@ -556,11 +586,13 @@ impl AudioReceiver {
         }
     }
 
+    /// Updates the active audio transport mode.
     pub fn set_transport(&mut self, t: AudioTransport) {
         println!("\x1b[1;36m[audio-native]\x1b[0m Audio transport architecture switched: {:?}", t);
         self.transport.store(t.to_u8(), Ordering::SeqCst);
     }
 
+    /// Queries and returns an atomic snapshot of current audio status.
     pub fn status(&mut self) -> AudioStatus {
         let t_val = self.transport.load(Ordering::Relaxed);
         let transport_str = AudioTransport::from_u8(t_val).as_str();

@@ -10,11 +10,13 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Represents Pidlock configuration and operational state.
 pub struct PidLock {
     path: PathBuf,
 }
 
 impl Drop for PidLock {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }

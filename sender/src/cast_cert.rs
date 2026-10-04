@@ -17,6 +17,7 @@ use std::sync::Mutex;
 static CERT_MUTEX: Mutex<()> = Mutex::new(());
 
 #[allow(dead_code)]
+/// Represents Castcertpaths configuration and operational state.
 pub struct CastCertPaths {
     pub ca_cert: PathBuf,
     pub ca_key: PathBuf,

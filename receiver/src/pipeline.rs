@@ -33,11 +33,13 @@ pub enum PipelineBackend {
 }
 
 impl PipelineBackend {
+    /// Executes `detect` operational routine.
     pub fn detect() -> Self {
         // 100% Pure Rust Native Linux V4L2 M2M Kernel Decoder is ALWAYS DEFAULT
         PipelineBackend::NativeV4L2
     }
 
+    /// Parses an audio transport selector from a string slice.
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "gst" | "gstreamer" => PipelineBackend::GStreamer,
@@ -46,6 +48,7 @@ impl PipelineBackend {
         }
     }
 
+    /// Executes `name` operational routine.
     pub fn name(&self) -> &'static str {
         match self {
             PipelineBackend::NativeV4L2 => "100% Native Linux V4L2 M2M (Pure Rust - DEFAULT)",
@@ -362,31 +365,38 @@ impl PipelineManager {
         }
     }
 
+    /// Executes `audio_status` operational routine.
     pub fn audio_status(&self) -> AudioStatus {
         self.audio.lock().unwrap().status()
     }
 
+    /// Sets or updates the audio volume.
     pub fn set_audio_volume(&self, vol: u32) {
         self.audio.lock().unwrap().set_volume(vol);
     }
 
+    /// Sets or updates the audio muted.
     pub fn set_audio_muted(&self, muted: bool) {
         self.audio.lock().unwrap().set_muted(muted);
     }
 
     #[allow(dead_code)]
+    /// Sets or updates the audio enabled.
     pub fn set_audio_enabled(&self, enabled: bool) {
         self.audio.lock().unwrap().set_enabled(enabled);
     }
 
+    /// Sets or updates the audio rate.
     pub fn set_audio_rate(&self, rate: u32) {
         self.audio.lock().unwrap().set_rate(rate);
     }
 
+    /// Sets or updates the audio transport.
     pub fn set_audio_transport(&self, transport: crate::audio::AudioTransport) {
         self.audio.lock().unwrap().set_transport(transport);
     }
 
+    /// Executes `start_audio` operational routine.
     pub fn start_audio(&self) {
         let _ = self.audio.lock().unwrap().start();
     }

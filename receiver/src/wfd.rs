@@ -33,7 +33,7 @@ pub const WFD_RTP_PORT: u16 = 5002;
 /// - 00: Preferred Display Mode
 /// - 01: H.264 Profile (01 = Constrained Baseline Profile for zero-latency, no B-frames)
 /// - 02: H.264 Level (Level 3.1 for 720p60, forbids 1080p)
-/// - 00000069: CEA Resolutions Bitmap (1280x720p60 [0x40], 1280x720p30 [0x20], 720x576p50 [0x08], 640x480p60 [0x01])
+/// - 00000069: CEA Resolutions Bitmap (1280x720p60 `[0x40]`, 1280x720p30 `[0x20]`, 720x576p50 `[0x08]`, 640x480p60 `[0x01]`)
 /// - 00000000: VESA Resolutions Bitmap (zero 1080p modes)
 /// - 00000000: HH Resolutions Bitmap
 /// - 00: Standard atomic full-frame mode (no slice tearing)
@@ -305,6 +305,7 @@ struct WfdSession {
 }
 
 impl WfdSession {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     fn new(
         stream: TcpStream,
         client_ip: String,
@@ -326,6 +327,7 @@ impl WfdSession {
         }
     }
 
+    /// Executes `send_response` operational routine.
     fn send_response(
         &mut self,
         cseq: &str,
@@ -351,6 +353,7 @@ impl WfdSession {
         Ok(())
     }
 
+    /// Executes `send_request` operational routine.
     fn send_request(
         &mut self,
         method: &str,
@@ -378,6 +381,7 @@ impl WfdSession {
         Ok(())
     }
 
+    /// Executes `run` operational routine.
     fn run(&mut self, running: Arc<AtomicBool>) {
         let mut buffer = Vec::with_capacity(8192);
         let mut temp = [0u8; 2048];
@@ -434,6 +438,7 @@ impl WfdSession {
         }
     }
 
+    /// Executes `handle_message` operational routine.
     fn handle_message(
         &mut self,
         method: &str,

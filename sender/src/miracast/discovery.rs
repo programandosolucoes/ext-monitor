@@ -40,6 +40,7 @@ pub struct DiscoveredSink {
 }
 
 impl DiscoveredSink {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(name: impl Into<String>, ip: IpAddr, port: u16, protocol: &'static str) -> Self {
         Self {
             name: name.into(),
@@ -57,6 +58,7 @@ impl DiscoveredSink {
 }
 
 impl std::fmt::Display for DiscoveredSink {
+    /// Formats the instance using the provided formatter for display and debugging.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

@@ -12,6 +12,7 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
+/// Represents Tsdemuxer configuration and operational state.
 pub struct TsDemuxer {
     video_pid: Option<u16>,
     current_au: Vec<u8>,
@@ -20,6 +21,7 @@ pub struct TsDemuxer {
 }
 
 impl TsDemuxer {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new() -> Self {
         Self {
             video_pid: None,
@@ -74,6 +76,7 @@ impl TsDemuxer {
         }
     }
 
+    /// Executes `parse_ts_packet` operational routine.
     fn parse_ts_packet(&mut self, pkt: &[u8], frames_out: &mut Vec<Vec<u8>>) {
         let tei = (pkt[1] & 0x80) != 0;
         if tei {
@@ -165,6 +168,7 @@ impl TsDemuxer {
         }
     }
 
+    /// Flushes pending decoded frames retained inside hardware pipeline buffers.
     pub fn flush(&mut self, frames_out: &mut Vec<Vec<u8>>) {
         if !self.frame_corrupted && !self.current_au.is_empty() {
             let completed = std::mem::take(&mut self.current_au);

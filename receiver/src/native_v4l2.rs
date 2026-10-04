@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
+/// Represents Nativev4l2decoder configuration and operational state.
 pub struct NativeV4l2Decoder {
     running: Arc<AtomicBool>,
     worker_handle: Option<JoinHandle<()>>,
@@ -101,6 +102,7 @@ impl NativeV4l2Decoder {
 }
 
 impl Drop for NativeV4l2Decoder {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         self.stop();
     }

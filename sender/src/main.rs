@@ -43,11 +43,13 @@ use screencast::MutterScreenCastSession;
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
+/// Represents Usbtransporthandle configuration and operational state.
 struct UsbTransportHandle {
     write_fd: RawFd,
     stop_flag: Arc<AtomicBool>,
 }
 
+/// Returns `true` if pi zero usb present is active or satisfied.
 fn is_pi_zero_usb_present() -> bool {
     if let Ok(entries) = std::fs::read_dir("/sys/bus/usb/devices") {
         for entry in entries.flatten() {
@@ -67,6 +69,7 @@ fn is_pi_zero_usb_present() -> bool {
     false
 }
 
+/// Executes `open_usb_pipe_transport` operational routine.
 fn open_usb_pipe_transport(
     running: Arc<AtomicBool>,
     writer_alive: Arc<AtomicBool>,
@@ -108,6 +111,7 @@ fn open_usb_pipe_transport(
     }
 }
 
+/// Executes `close_usb_transport` operational routine.
 fn close_usb_transport(
     transport: &mut Option<UsbTransportHandle>,
     writer_alive: &Arc<AtomicBool>,
@@ -139,6 +143,7 @@ pub fn notify_receiver_stop(target_ip: &str) {
     let _ = crate::http_client::post_empty(&url);
 }
 
+/// Application entrypoint initializing the runtime environment and dispatching execution.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
@@ -1038,6 +1043,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Executes `setup_signal_handler` operational routine.
 fn setup_signal_handler(running: Arc<AtomicBool>) {
     let r = running.clone();
     unsafe {

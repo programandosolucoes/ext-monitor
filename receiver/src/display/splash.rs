@@ -21,6 +21,7 @@ const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 720;
 const FB_SIZE: usize = (WIDTH * HEIGHT * 2) as usize; // 1,843,200 bytes
 
+/// Represents Splashengine configuration and operational state.
 pub struct SplashEngine;
 
 impl SplashEngine {
@@ -130,6 +131,7 @@ fn blit_to_framebuffer(buffer: &[u8]) {
 
     #[repr(C)]
     #[derive(Default)]
+    /// Represents Fbvarscreeninfo configuration and operational state.
     struct FbVarScreeninfo {
         xres: u32,
         yres: u32,

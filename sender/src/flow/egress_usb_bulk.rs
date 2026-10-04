@@ -45,6 +45,7 @@ pub struct UsbBulkEgress {
 }
 
 impl Default for UsbBulkEgress {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self {
             endpoint_out: USB_DEFAULT_ENDPOINT_OUT,
@@ -55,6 +56,7 @@ impl Default for UsbBulkEgress {
 }
 
 impl UsbBulkEgress {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(endpoint_out: u8, timeout: Duration) -> Self {
         Self {
             endpoint_out,
@@ -97,6 +99,7 @@ impl UsbBulkEgress {
         Ok(total_written)
     }
 
+    /// Executes `total_bytes` operational routine.
     pub fn total_bytes(&self) -> u64 {
         self.total_bytes_written
     }

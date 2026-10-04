@@ -881,6 +881,7 @@ impl WfdClient {
 }
 
 impl Drop for WfdClient {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         let _ = self.teardown();
     }

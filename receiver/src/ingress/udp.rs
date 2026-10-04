@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+/// Executes `bind_reusable_udp` operational routine.
 fn bind_reusable_udp(port: u16) -> io::Result<UdpSocket> {
     unsafe {
         let fd = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
@@ -55,6 +56,7 @@ fn bind_reusable_udp(port: u16) -> io::Result<UdpSocket> {
     }
 }
 
+/// Represents Udprtpingress configuration and operational state.
 pub struct UdpRtpIngress;
 
 impl UdpRtpIngress {

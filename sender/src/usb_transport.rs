@@ -154,11 +154,13 @@ pub fn spawn_usb_bulk_writer(
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         writer_alive.store(true, Ordering::SeqCst);
+        /// Represents Guard configuration and operational state.
         struct Guard {
             alive: Arc<AtomicBool>,
             fd: RawFd,
         }
         impl Drop for Guard {
+            /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
             fn drop(&mut self) {
                 self.alive.store(false, Ordering::SeqCst);
                 unsafe { libc::close(self.fd); }

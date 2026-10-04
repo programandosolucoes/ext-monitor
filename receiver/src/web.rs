@@ -26,6 +26,7 @@ use std::time::Duration;
 
 pub const HTTP_PORT: u16 = 8080;
 
+/// Represents Configstate configuration and operational state.
 pub struct ConfigState {
     pub fps: u32,
     pub bitrate: u32,
@@ -124,6 +125,7 @@ pub fn start_web_server(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Enumerates supported options for Modeswitchresult.
 pub enum ModeSwitchResult {
     EnterStandby,
     SwitchTransport(String),
@@ -131,6 +133,7 @@ pub enum ModeSwitchResult {
     NoChange,
 }
 
+/// Executes `evaluate_mode_switch` operational routine.
 pub fn evaluate_mode_switch(
     body: &str,
     current_active_transport: &str,
@@ -201,6 +204,7 @@ pub fn evaluate_mode_switch(
     }
 }
 
+/// Executes `transition_to_standby_or_visualizer` operational routine.
 pub fn transition_to_standby_or_visualizer(pipeline_mgr: Arc<PipelineManager>) {
     let pipe = pipeline_mgr.clone();
     thread::spawn(move || {
@@ -221,6 +225,7 @@ pub fn transition_to_standby_or_visualizer(pipeline_mgr: Arc<PipelineManager>) {
     });
 }
 
+/// Executes `handle_http_client` operational routine.
 fn handle_http_client(
     mut stream: TcpStream,
     pipeline_mgr: Arc<PipelineManager>,
@@ -1208,6 +1213,7 @@ fn handle_http_client(
     }
 }
 
+/// Executes `send_response` operational routine.
 fn send_response(stream: &mut TcpStream, status: &str, content_type: &str, body: &[u8]) {
     let header = format!(
         "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-cache, no-store, must-revalidate, max-age=0\r\nPragma: no-cache\r\nExpires: 0\r\n\r\n",
@@ -1220,6 +1226,7 @@ fn send_response(stream: &mut TcpStream, status: &str, content_type: &str, body:
     let _ = stream.flush();
 }
 
+/// Executes `send_dial_response` operational routine.
 fn send_dial_response(stream: &mut TcpStream, status: &str, content_type: &str, body: &[u8], app_url: &str) {
     let header = format!(
         "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nApplication-URL: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Expose-Headers: Location, Application-URL\r\nCache-Control: no-cache, no-store, must-revalidate, max-age=0\r\nPragma: no-cache\r\nExpires: 0\r\n\r\n",
@@ -1511,6 +1518,7 @@ fn read_network_conf() -> (String, String, String, String, String, String) {
     (iface, mode, ip, netmask, gateway, dns)
 }
 
+/// Retrieves the network status json.
 fn get_network_status_json() -> String {
     let (usb0_ipv4, usb0_ipv6) = get_interface_addrs("usb0");
     let (eth0_ipv4, eth0_ipv6) = get_interface_addrs("eth0");
@@ -1555,6 +1563,7 @@ fn get_network_status_json() -> String {
     )
 }
 
+/// Retrieves the interface addrs.
 fn get_interface_addrs(iface: &str) -> (Option<String>, Option<String>) {
     let output = match std::process::Command::new("ifconfig").arg(iface).output() {
         Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
@@ -1587,6 +1596,7 @@ fn get_interface_addrs(iface: &str) -> (Option<String>, Option<String>) {
     (ipv4, ipv6)
 }
 
+/// Executes `extract_json_str` operational routine.
 fn extract_json_str<'a>(json: &'a str, key: &str) -> Option<&'a str> {
     let pattern = format!("\"{}\"", key);
     let idx = json.find(&pattern)?;
@@ -1601,6 +1611,7 @@ fn extract_json_str<'a>(json: &'a str, key: &str) -> Option<&'a str> {
     }
 }
 
+/// Executes `extract_json_u32` operational routine.
 fn extract_json_u32(json: &str, key: &str) -> Option<u32> {
     let pattern = format!("\"{}\"", key);
     let idx = json.find(&pattern)?;
@@ -1611,6 +1622,7 @@ fn extract_json_u32(json: &str, key: &str) -> Option<u32> {
     num_str.parse().ok()
 }
 
+/// Executes `extract_json_u64` operational routine.
 fn extract_json_u64(json: &str, key: &str) -> Option<u64> {
     let pattern = format!("\"{}\"", key);
     let idx = json.find(&pattern)?;
@@ -1621,6 +1633,7 @@ fn extract_json_u64(json: &str, key: &str) -> Option<u64> {
     num_str.parse().ok()
 }
 
+/// Executes `extract_json_f32` operational routine.
 fn extract_json_f32(json: &str, key: &str) -> Option<f32> {
     let pattern = format!("\"{}\"", key);
     let idx = json.find(&pattern)?;
@@ -1631,6 +1644,7 @@ fn extract_json_f32(json: &str, key: &str) -> Option<f32> {
     num_str.parse().ok()
 }
 
+/// Executes `extract_json_bool` operational routine.
 fn extract_json_bool(json: &str, key: &str) -> Option<bool> {
     let pattern = format!("\"{}\"", key);
     let idx = json.find(&pattern)?;
@@ -1646,6 +1660,7 @@ fn extract_json_bool(json: &str, key: &str) -> Option<bool> {
     }
 }
 
+/// Executes `apply_network_config` operational routine.
 fn apply_network_config(payload: &str) {
     println!("\x1b[1;34m[web-server]\x1b[0m Applying network config: {}", payload);
     let iface = extract_json_str(payload, "interface")
@@ -1743,6 +1758,7 @@ fn apply_network_config(payload: &str) {
 const CONNECT_SCRIPT: &str = include_str!("../../scripts/connect.sh");
 const UDEV_RULES: &str = include_str!("../../scripts/99-ext-monitor.rules");
 
+/// Executes `serve_file_or_fallback` operational routine.
 fn serve_file_or_fallback(stream: &mut TcpStream, path: &str, content_type: &str, is_head: bool) {
     if let Ok(mut f) = fs::File::open(path) {
         let mut buf = Vec::new();

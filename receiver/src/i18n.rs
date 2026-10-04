@@ -11,6 +11,7 @@
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Supported interface and CLI display languages.
 pub enum Language {
     English,
     Portuguese,
@@ -37,6 +38,7 @@ impl Language {
         }
     }
 
+    /// Parses an audio transport selector from a string slice.
     pub fn from_str(code: &str) -> Self {
         match code.to_lowercase().as_str() {
             "pt" | "pt-br" | "pt_br" | "portuguese" | "portugues" => Language::Portuguese,
@@ -57,6 +59,7 @@ pub fn print_help(lang: Language) {
     }
 }
 
+/// Prints localized CLI usage help in EN.
 fn print_help_en() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-receiver: Raspberry Pi Zero GPU Hardware Display Receiver v0.2.0  \x1b[0m");
@@ -117,6 +120,7 @@ fn print_help_en() {
     println!("  - \x1b[1;37mVia Terminal Signals:\x1b[0m Press \x1b[1;31mCtrl + C\x1b[0m or run \x1b[1;31mpkill -f ext-receiver\x1b[0m.\n");
 }
 
+/// Prints localized CLI usage help in PT.
 fn print_help_pt() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-receiver: Receptor de Display por Hardware GPU Pi Zero v0.2.0    \x1b[0m");
@@ -176,6 +180,7 @@ fn print_help_pt() {
     println!("  - \x1b[1;37mVia Terminal:\x1b[0m Pressione \x1b[1;31mCtrl + C\x1b[0m ou execute \x1b[1;31mpkill -f ext-receiver\x1b[0m.\n");
 }
 
+/// Prints localized CLI usage help in IT.
 fn print_help_it() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-receiver: Ricevitore Display Hardware GPU Pi Zero v0.2.0         \x1b[0m");
@@ -235,6 +240,7 @@ fn print_help_it() {
     println!("  - \x1b[1;37mTramite Terminale:\x1b[0m Premi \x1b[1;31mCtrl + C\x1b[0m oppure esegui \x1b[1;31mpkill -f ext-receiver\x1b[0m.\n");
 }
 
+/// Prints localized CLI usage help in ZH.
 fn print_help_zh() {
     println!("\x1b[1;32m========================================================================\x1b[0m");
     println!("\x1b[1;32m  ext-receiver: 树莓派 Zero GPU 硬件显示接收器 v0.2.0                  \x1b[0m");

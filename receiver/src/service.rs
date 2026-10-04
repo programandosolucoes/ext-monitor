@@ -10,16 +10,19 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Represents Pidlock configuration and operational state.
 pub struct PidLock {
     path: PathBuf,
 }
 
 impl Drop for PidLock {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }
 }
 
+/// Retrieves the pid file.
 pub fn get_pid_file() -> PathBuf {
     if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
         PathBuf::from(runtime_dir).join("ext-monitor-receiver.pid")
@@ -29,6 +32,7 @@ pub fn get_pid_file() -> PathBuf {
     }
 }
 
+/// Retrieves the service file.
 pub fn get_service_file() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(|h| {
         PathBuf::from(h)
@@ -39,6 +43,7 @@ pub fn get_service_file() -> Option<PathBuf> {
     })
 }
 
+/// Retrieves the running pid.
 pub fn get_running_pid() -> Option<u32> {
     let pid_file = get_pid_file();
     if !pid_file.exists() {
@@ -65,6 +70,7 @@ pub fn get_running_pid() -> Option<u32> {
     None
 }
 
+/// Executes `acquire_lock` operational routine.
 pub fn acquire_lock() -> Result<PidLock, String> {
     if let Some(existing_pid) = get_running_pid() {
         let my_pid = std::process::id();
@@ -82,10 +88,12 @@ pub fn acquire_lock() -> Result<PidLock, String> {
     Ok(PidLock { path: pid_file })
 }
 
+/// Returns `true` if service installed is active or satisfied.
 pub fn is_service_installed() -> bool {
     get_service_file().map(|p| p.exists()).unwrap_or(false)
 }
 
+/// Executes `install_service` operational routine.
 pub fn install_service() -> Result<PathBuf, String> {
     let service_file = get_service_file().ok_or("Variável $HOME não definida.")?;
     let parent = service_file.parent().ok_or("Caminho inválido para systemd user.")?;
@@ -127,6 +135,7 @@ WantedBy=default.target
     Ok(service_file)
 }
 
+/// Executes `start_service` operational routine.
 pub fn start_service() -> Result<(), String> {
     if !is_service_installed() {
         println!("\x1b[1;34m[*] Serviço local de usuário não encontrado. Instalando automaticamente...\x1b[0m");
@@ -148,6 +157,7 @@ pub fn start_service() -> Result<(), String> {
     }
 }
 
+/// Executes `stop_all` operational routine.
 pub fn stop_all() -> Result<(), String> {
     let _ = Command::new("systemctl").args(["--user", "stop", "ext-monitor-receiver.service"]).output();
 

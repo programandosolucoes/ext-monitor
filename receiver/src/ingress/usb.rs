@@ -18,12 +18,14 @@ use std::thread;
 use std::time::Duration;
 
 #[allow(dead_code)]
+/// Enumerates supported options for Ingressframingmode.
 enum IngressFramingMode {
     AutoDetect,
     Rfc4571,
     AnnexB,
 }
 
+/// Represents Usbbulkingress configuration and operational state.
 pub struct UsbBulkIngress;
 
 impl UsbBulkIngress {

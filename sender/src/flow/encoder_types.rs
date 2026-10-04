@@ -21,12 +21,14 @@ pub enum CodecKind {
 }
 
 impl Default for CodecKind {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         CodecKind::H264
     }
 }
 
 impl CodecKind {
+    /// Executes `mime_type` operational routine.
     pub fn mime_type(&self) -> &'static str {
         match self {
             CodecKind::H264 => "video/x-h264",
@@ -35,6 +37,7 @@ impl CodecKind {
         }
     }
 
+    /// Executes `rtp_payload_type` operational routine.
     pub fn rtp_payload_type(&self) -> u8 {
         match self {
             CodecKind::H264 => 96,
@@ -71,6 +74,7 @@ pub struct EncoderConfig {
 }
 
 impl Default for EncoderConfig {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self {
             codec: CodecKind::H264,
@@ -86,6 +90,7 @@ impl Default for EncoderConfig {
 }
 
 impl EncoderConfig {
+    /// Executes `validate` operational routine.
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.width == 0 || self.height == 0 {
             return Err("Resolution dimensions must be non-zero");

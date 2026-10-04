@@ -14,12 +14,14 @@
 //! License: MIT
 //! Author: Carlos Alberto <carlosalberto4ti@gmail.com>
 
+/// Represents Rtpdepayloader configuration and operational state.
 pub struct RtpDepayloader {
     fu_accumulator: Vec<u8>,
     current_au: Vec<u8>,
 }
 
 impl RtpDepayloader {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new() -> Self {
         Self {
             fu_accumulator: Vec::with_capacity(65536),
@@ -114,6 +116,7 @@ pub struct Rfc4571Assembler {
 }
 
 impl Rfc4571Assembler {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new() -> Self {
         Self {
             buffer: Vec::with_capacity(128 * 1024),
@@ -151,6 +154,7 @@ impl Rfc4571Assembler {
     }
 
     #[allow(dead_code)]
+    /// Executes `clear` operational routine.
     pub fn clear(&mut self) {
         self.buffer.clear();
     }

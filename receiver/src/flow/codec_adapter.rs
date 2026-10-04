@@ -57,6 +57,7 @@ pub enum DecoderError {
 }
 
 impl std::fmt::Display for DecoderError {
+    /// Formats the instance using the provided formatter for display and debugging.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DecoderError::DeviceError(msg) => write!(f, "Decoder device error: {}", msg),
@@ -74,6 +75,7 @@ impl std::fmt::Display for DecoderError {
 impl std::error::Error for DecoderError {}
 
 impl From<V4l2M2mError> for DecoderError {
+    /// Converts an underlying error type into this unified error representation.
     fn from(err: V4l2M2mError) -> Self {
         DecoderError::DeviceError(err.to_string())
     }
@@ -114,6 +116,7 @@ pub struct V4l2VideoDecoder {
 }
 
 impl V4l2VideoDecoder {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(
         codec: CodecKind,
         dimensions: VideoDimensions,
@@ -140,18 +143,22 @@ impl V4l2VideoDecoder {
 }
 
 impl VideoDecoder for V4l2VideoDecoder {
+    /// Returns the video compression standard implemented by this decoder.
     fn codec(&self) -> CodecKind {
         self.codec
     }
 
+    /// Returns the frame resolution, stride, and dimensional bounds.
     fn dimensions(&self) -> VideoDimensions {
         self.dimensions
     }
 
+    /// Returns the pixel memory layout format.
     fn format(&self) -> FrameFormat {
         self.format
     }
 
+    /// Submits an encoded NAL packet with presentation timestamp and returns a decoded frame if available.
     fn decode(&mut self, packet: &[u8], pts: u64) -> Result<Option<DecodedFrame>, DecoderError> {
         self.stats.frames_received += 1;
         match self.inner.decode_packet(packet, pts) {
@@ -181,15 +188,18 @@ impl VideoDecoder for V4l2VideoDecoder {
         }
     }
 
+    /// Flushes pending decoded frames retained inside hardware pipeline buffers.
     fn flush(&mut self) -> Result<Vec<DecodedFrame>, DecoderError> {
         Ok(Vec::new())
     }
 
+    /// Flushes internal queues and resynchronizes decoding state for new stream sequence.
     fn reset(&mut self) -> Result<(), DecoderError> {
         self.stats.consecutive_errors = 0;
         Ok(())
     }
 
+    /// Returns an atomic snapshot of decoder performance and dropped frame statistics.
     fn stats(&self) -> DecoderStats {
         self.stats.clone()
     }
@@ -205,6 +215,7 @@ pub struct MockVideoDecoder {
 }
 
 impl MockVideoDecoder {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(codec: CodecKind, dimensions: VideoDimensions, format: FrameFormat) -> Self {
         Self {
             codec,
@@ -215,24 +226,29 @@ impl MockVideoDecoder {
         }
     }
 
+    /// Enables or disables error simulation for testing and resilience verification.
     pub fn set_simulate_errors(&mut self, sim: bool) {
         self.simulate_errors = sim;
     }
 }
 
 impl VideoDecoder for MockVideoDecoder {
+    /// Returns the video compression standard implemented by this decoder.
     fn codec(&self) -> CodecKind {
         self.codec
     }
 
+    /// Returns the frame resolution, stride, and dimensional bounds.
     fn dimensions(&self) -> VideoDimensions {
         self.dimensions
     }
 
+    /// Returns the pixel memory layout format.
     fn format(&self) -> FrameFormat {
         self.format
     }
 
+    /// Submits an encoded NAL packet with presentation timestamp and returns a decoded frame if available.
     fn decode(&mut self, packet: &[u8], pts: u64) -> Result<Option<DecodedFrame>, DecoderError> {
         self.stats.frames_received += 1;
         if self.simulate_errors {
@@ -268,15 +284,18 @@ impl VideoDecoder for MockVideoDecoder {
         }))
     }
 
+    /// Flushes pending decoded frames retained inside hardware pipeline buffers.
     fn flush(&mut self) -> Result<Vec<DecodedFrame>, DecoderError> {
         Ok(Vec::new())
     }
 
+    /// Flushes internal queues and resynchronizes decoding state for new stream sequence.
     fn reset(&mut self) -> Result<(), DecoderError> {
         self.stats.consecutive_errors = 0;
         Ok(())
     }
 
+    /// Returns an atomic snapshot of decoder performance and dropped frame statistics.
     fn stats(&self) -> DecoderStats {
         self.stats.clone()
     }
@@ -298,6 +317,7 @@ pub struct FallbackDecoder {
 }
 
 impl FallbackDecoder {
+    /// Constructs and initializes a new `new` instance with default or provided parameters.
     pub fn new(
         primary: Box<dyn VideoDecoder>,
         fallback_codec: CodecKind,
@@ -316,6 +336,7 @@ impl FallbackDecoder {
         }
     }
 
+    /// Returns `true` if fallback decoder path is currently engaged due to hardware error.
     pub fn is_fallback_active(&self) -> bool {
         self.fallback_active
     }
@@ -343,18 +364,22 @@ impl FallbackDecoder {
 }
 
 impl VideoDecoder for FallbackDecoder {
+    /// Returns the video compression standard implemented by this decoder.
     fn codec(&self) -> CodecKind {
         self.active_decoder.codec()
     }
 
+    /// Returns the frame resolution, stride, and dimensional bounds.
     fn dimensions(&self) -> VideoDimensions {
         self.active_decoder.dimensions()
     }
 
+    /// Returns the pixel memory layout format.
     fn format(&self) -> FrameFormat {
         self.active_decoder.format()
     }
 
+    /// Submits an encoded NAL packet with presentation timestamp and returns a decoded frame if available.
     fn decode(&mut self, packet: &[u8], pts: u64) -> Result<Option<DecodedFrame>, DecoderError> {
         let res = self.active_decoder.decode(packet, pts);
         match res {
@@ -373,14 +398,17 @@ impl VideoDecoder for FallbackDecoder {
         }
     }
 
+    /// Flushes pending decoded frames retained inside hardware pipeline buffers.
     fn flush(&mut self) -> Result<Vec<DecodedFrame>, DecoderError> {
         self.active_decoder.flush()
     }
 
+    /// Flushes internal queues and resynchronizes decoding state for new stream sequence.
     fn reset(&mut self) -> Result<(), DecoderError> {
         self.active_decoder.reset()
     }
 
+    /// Returns an atomic snapshot of decoder performance and dropped frame statistics.
     fn stats(&self) -> DecoderStats {
         self.active_decoder.stats()
     }

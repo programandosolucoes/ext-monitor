@@ -46,6 +46,7 @@ extern "C" fn handle_signal(_: libc::c_int) {
     RUNNING.store(false, Ordering::SeqCst);
 }
 
+/// Executes `setup_signals` operational routine.
 fn setup_signals() {
     unsafe {
         libc::signal(libc::SIGINT, handle_signal as *const () as usize);
@@ -79,6 +80,7 @@ pub struct CliArgs {
 }
 
 impl Default for CliArgs {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self {
             ip: None,
@@ -290,6 +292,7 @@ pub fn print_help() {
     println!("    -h, --help              Print help information");
 }
 
+/// Application entrypoint initializing the runtime environment and dispatching execution.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
     let cli = match CliArgs::parse_from(args) {
@@ -455,6 +458,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Executes `spawn_miracast_audio_streamer` operational routine.
 fn spawn_miracast_audio_streamer(target_ip: &str) -> Option<(Option<std::process::Child>, Option<String>)> {
     // 0. Detect and save current default sink name (fallback to physical speaker if already set to Raspberry)
     let prev_sink = std::process::Command::new("pactl")
@@ -566,6 +570,7 @@ fn spawn_miracast_audio_streamer(target_ip: &str) -> Option<(Option<std::process
     Some((child, prev_sink))
 }
 
+/// Executes `ensure_gnome_extended_display` operational routine.
 fn ensure_gnome_extended_display() {
     let status_path = "/sys/class/drm/card1-HDMI-A-1/status";
     let is_connected = std::fs::read_to_string(status_path)
@@ -625,6 +630,7 @@ fn ensure_gnome_extended_display() {
     }
 }
 
+/// Executes `collapse_gnome_extended_display` operational routine.
 fn collapse_gnome_extended_display() {
     let check = std::process::Command::new("gdbus")
         .args([

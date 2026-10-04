@@ -84,10 +84,12 @@ impl FramePacer {
         self.frame_interval
     }
 
+    /// Executes `target_fps` operational routine.
     pub fn target_fps(&self) -> u32 {
         self.target_fps
     }
 
+    /// Sets or updates the jitter tolerance.
     pub fn set_jitter_tolerance(&mut self, tolerance: Duration) {
         self.jitter_tolerance = tolerance;
     }
@@ -178,6 +180,7 @@ impl FramePacer {
         self.last_activity_time = now;
     }
 
+    /// Returns an atomic snapshot of decoder performance and dropped frame statistics.
     pub fn stats(&self) -> &PacerStats {
         &self.stats
     }

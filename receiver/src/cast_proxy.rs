@@ -56,6 +56,7 @@ pub fn start_cast_forwarder(running: Arc<AtomicBool>, target_host: &'static str,
         .expect("Failed to spawn cast-proxy thread");
 }
 
+/// Executes `handle_cast_connection` operational routine.
 fn handle_cast_connection(
     mut client: TcpStream,
     peer: SocketAddr,

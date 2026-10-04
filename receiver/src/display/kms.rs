@@ -33,6 +33,7 @@ const DRM_IOCTL_SET_CLIENT_CAP: libc::c_ulong = 0x4010_640d;
 const DRM_CLIENT_CAP_UNIVERSAL_PLANES: u64 = 2;
 
 #[repr(C)]
+/// DRM kernel ioctl parameter structure for enabling client capabilities (e.g. universal planes).
 struct DrmSetClientCap {
     capability: u64,
     value: u64,
@@ -43,6 +44,7 @@ const NV12: u32 = 0x3231_564e;
 const YU12: u32 = 0x3231_5559;
 
 #[repr(C)]
+/// DRM kernel ioctl structure querying hardware card resources (connectors, CRTCs, encoders).
 struct DrmModeCardRes {
     fb_id_ptr: u64,
     crtc_id_ptr: u64,
@@ -60,6 +62,7 @@ struct DrmModeCardRes {
 
 #[derive(Clone, Copy)]
 #[repr(C)]
+/// DRM mode timing structure describing display resolution, pixel clock, and refresh rate.
 struct DrmModeModeinfo {
     clock: u32,
     hdisplay: u16,
@@ -79,6 +82,7 @@ struct DrmModeModeinfo {
 }
 
 #[repr(C)]
+/// DRM CRTC configuration structure describing scanout controller state and active framebuffer.
 struct DrmModeCrtc {
     set_connectors_ptr: u64,
     count_connectors: u32,
@@ -92,6 +96,7 @@ struct DrmModeCrtc {
 }
 
 #[repr(C)]
+/// DRM encoder query structure mapping CRTC controllers to physical output connectors.
 struct DrmModeGetEncoder {
     encoder_id: u32,
     encoder_type: u32,
@@ -101,6 +106,7 @@ struct DrmModeGetEncoder {
 }
 
 #[repr(C)]
+/// DRM connector query structure describing physical display ports and detected EDID modes.
 struct DrmModeGetConnector {
     encoders_ptr: u64,
     modes_ptr: u64,
@@ -121,12 +127,14 @@ struct DrmModeGetConnector {
 }
 
 #[repr(C)]
+/// DRM plane resource query structure enumerating overlay and primary hardware planes.
 struct DrmModeGetPlaneRes {
     plane_id_ptr: u64,
     count_planes: u32,
 }
 
 #[repr(C)]
+/// DRM plane description querying supported FourCC formats and active CRTC binding.
 struct DrmModeGetPlane {
     plane_id: u32,
     crtc_id: u32,
@@ -138,6 +146,7 @@ struct DrmModeGetPlane {
 }
 
 #[repr(C)]
+/// DRM framebuffer creation command supporting planar strides, offsets, and modifiers.
 struct DrmModeFbCmd2 {
     fb_id: u32,
     width: u32,
@@ -151,6 +160,7 @@ struct DrmModeFbCmd2 {
 }
 
 #[repr(C)]
+/// DRM plane positioning command linking framebuffer to CRTC coordinate destination window.
 struct DrmModeSetPlane {
     plane_id: u32,
     crtc_id: u32,
@@ -167,6 +177,7 @@ struct DrmModeSetPlane {
 }
 
 #[repr(C)]
+/// DRM Prime buffer sharing ioctl struct converting GEM handles to DMA-BUF file descriptors.
 struct DrmPrimeHandle {
     handle: u32,
     flags: u32,
@@ -174,16 +185,19 @@ struct DrmPrimeHandle {
 }
 
 #[repr(C)]
+/// DRM GEM handle release ioctl struct.
 struct DrmGemClose {
     handle: u32,
     pad: u32,
 }
 
+/// Cached DMA-BUF import state mapping V4L2 exported buffer to DRM framebuffer ID.
 struct Imported {
     fb_id: u32,
     handle: u32,
 }
 
+/// Direct DRM/KMS hardware plane sink presenting video frames to display scanout plane.
 pub struct KmsPlaneSink {
     _file: std::fs::File,
     fd: RawFd,
@@ -228,6 +242,7 @@ impl KmsPlaneSink {
         Err(last)
     }
 
+    /// Opens DRM card device node, verifies client capabilities, and initializes plane sink.
     fn open_card(path: &str, fourcc: u32, width: u32, height: u32, stride: u32, buffer_height: u32) -> io::Result<Self> {
         let file = OpenOptions::new()
             .read(true)
@@ -382,6 +397,7 @@ impl KmsPlaneSink {
 }
 
 impl Drop for KmsPlaneSink {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         let mut clear = DrmModeSetPlane {
             plane_id: self.plane_id,
@@ -410,6 +426,7 @@ impl Drop for KmsPlaneSink {
     }
 }
 
+/// Enumerated KMS display controllers, connectors, and CRTC identifiers.
 struct CardResources {
     #[allow(dead_code)]
     fbs: Vec<u32>,
@@ -418,6 +435,7 @@ struct CardResources {
     encoders: Vec<u32>,
 }
 
+/// Queries kernel DRM subsystem for all available CRTCs, encoders, and connectors.
 fn get_card_resources(fd: RawFd) -> io::Result<CardResources> {
     let mut res = unsafe { std::mem::zeroed::<DrmModeCardRes>() };
     if unsafe { libc::ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES as _, &mut res) } != 0 {
@@ -437,6 +455,7 @@ fn get_card_resources(fd: RawFd) -> io::Result<CardResources> {
     Ok(CardResources { fbs, crtcs, connectors, encoders })
 }
 
+/// Finds first physically connected DRM video connector and its associated encoder.
 fn find_connector(fd: RawFd) -> io::Result<(u32, u32)> {
     let card = get_card_resources(fd)?;
     let mut fallback = None;
@@ -479,6 +498,7 @@ fn find_connector(fd: RawFd) -> io::Result<(u32, u32)> {
     fallback.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "connector"))
 }
 
+/// Finds the active or compatible CRTC controller driving the given DRM encoder.
 fn find_crtc(fd: RawFd, encoder_id: u32) -> io::Result<u32> {
     let mut enc = DrmModeGetEncoder {
         encoder_id,
@@ -505,6 +525,7 @@ fn find_crtc(fd: RawFd, encoder_id: u32) -> io::Result<u32> {
     Err(io::Error::new(io::ErrorKind::NotFound, "crtc"))
 }
 
+/// Queries the native scanout resolution of the designated CRTC display controller.
 fn crtc_size(fd: RawFd, crtc_id: u32, fallback_w: u32, fallback_h: u32) -> (u32, u32) {
     let mut crtc = unsafe { std::mem::zeroed::<DrmModeCrtc>() };
     crtc.crtc_id = crtc_id;
@@ -518,6 +539,7 @@ fn crtc_size(fd: RawFd, crtc_id: u32, fallback_w: u32, fallback_h: u32) -> (u32,
     (fallback_w, fallback_h)
 }
 
+/// Finds a compatible hardware overlay or primary plane supporting the given FourCC pixel format.
 fn find_plane(fd: RawFd, crtc_id: u32, fourcc: u32) -> io::Result<u32> {
     let crtc_index = crtc_bit(fd, crtc_id)?;
     let mut res = DrmModeGetPlaneRes { plane_id_ptr: 0, count_planes: 0 };
@@ -565,11 +587,13 @@ fn find_plane(fd: RawFd, crtc_id: u32, fourcc: u32) -> io::Result<u32> {
     Err(io::Error::new(io::ErrorKind::NotFound, "plane"))
 }
 
+/// Translates a 32-bit DRM FourCC identifier into a human-readable 4-character string.
 fn fourcc_name(f: u32) -> String {
     let b = f.to_le_bytes();
     String::from_utf8_lossy(&b).chars().map(|c| if c.is_ascii_graphic() { c } else { '.' }).collect()
 }
 
+/// Returns the bitmask index of the given CRTC controller.
 fn crtc_bit(fd: RawFd, crtc_id: u32) -> io::Result<u32> {
     let card = get_card_resources(fd)?;
     card.crtcs

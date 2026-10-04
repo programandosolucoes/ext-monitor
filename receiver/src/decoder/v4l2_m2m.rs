@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 pub static SCREENSHOT_REQUESTED: AtomicBool = AtomicBool::new(false);
 pub static LATEST_SCREENSHOT_FRAME: Mutex<Option<(Vec<u8>, u32, u32)>> = Mutex::new(None);
 
+/// Represents V4l2decodersession configuration and operational state.
 pub struct V4l2DecoderSession {
     _video_file: File,
     video_fd: RawFd,
@@ -367,6 +368,7 @@ impl V4l2DecoderSession {
     }
 
     #[allow(dead_code)]
+    /// Executes `queue_encoded_access_unit` operational routine.
     pub fn queue_encoded_access_unit(&mut self, au: &[u8]) -> bool {
         if au.is_empty() || self.out_ptrs.is_empty() {
             return false;
@@ -393,6 +395,7 @@ impl V4l2DecoderSession {
         self.submit_to_buffer(idx, au)
     }
 
+    /// Executes `submit_to_buffer` operational routine.
     fn submit_to_buffer(&mut self, idx: u32, au: &[u8]) -> bool {
         let uidx = idx as usize;
         let max_len = self.out_lens[uidx];
@@ -462,6 +465,7 @@ impl V4l2DecoderSession {
         self.show_on_plane(latest);
     }
 
+    /// Executes `show_on_plane` operational routine.
     fn show_on_plane(&mut self, idx: u32) {
         let presented = match self.kms.present(idx as usize) {
             Ok(shown) => shown,
@@ -510,6 +514,7 @@ impl V4l2DecoderSession {
         self.note_displayed();
     }
 
+    /// Executes `note_displayed` operational routine.
     fn note_displayed(&mut self) {
         self.frames_decoded += 1;
         if self.frames_decoded % 120 == 1 {
@@ -520,6 +525,7 @@ impl V4l2DecoderSession {
         }
     }
 
+    /// Executes `requeue_capture` operational routine.
     fn requeue_capture(&self, idx: u32) {
         let mut plane = V4l2Plane::default();
         let mut buf = V4l2Buffer {
@@ -577,6 +583,7 @@ impl V4l2DecoderSession {
         }
     }
 
+    /// Executes `contains_keyframe` operational routine.
     fn contains_keyframe(data: &[u8]) -> bool {
         let mut i = 0;
         while i + 4 < data.len() {
@@ -601,6 +608,7 @@ impl V4l2DecoderSession {
     }
 }
 
+/// Executes `attach_kms_plane` operational routine.
 fn attach_kms_plane(
     video_fd: RawFd,
     count: u32,
@@ -647,6 +655,7 @@ fn attach_kms_plane(
 }
 
 impl Drop for V4l2DecoderSession {
+    /// Custom destructor releasing allocated kernel resources, file descriptors, and hardware handles.
     fn drop(&mut self) {
         let mut out_type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         let mut cap_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;

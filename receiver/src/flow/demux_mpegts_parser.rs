@@ -58,6 +58,7 @@ pub struct MpegTsParser {
 }
 
 impl Default for MpegTsParser {
+    /// Returns default configuration parameters.
     fn default() -> Self {
         Self::new()
     }
@@ -241,6 +242,7 @@ impl MpegTsParser {
         }
     }
 
+    /// Executes `process_video_payload` operational routine.
     fn process_video_payload(
         &mut self,
         payload: &[u8],
@@ -302,6 +304,7 @@ impl MpegTsParser {
         completed
     }
 
+    /// Executes `parse_pat` operational routine.
     fn parse_pat(&mut self, payload: &[u8], pusi: bool) {
         let mut offset = 0;
         if pusi {
@@ -338,6 +341,7 @@ impl MpegTsParser {
         }
     }
 
+    /// Executes `parse_pmt` operational routine.
     fn parse_pmt(&mut self, payload: &[u8], pusi: bool) {
         let mut offset = 0;
         if pusi {
