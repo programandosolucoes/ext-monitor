@@ -3119,7 +3119,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }
         };
 
-        // Tab Switching
+        /**
+         * Switches the active dashboard tab and highlights the corresponding navigation button.
+         * @param {string} tabId - Target tab identifier ('monitor', 'config', 'downloads', 'sdcard', 'manual').
+         * @returns {void}
+         */
         function switchTab(tabId) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -3132,14 +3136,23 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }
         }
 
-        // Translation Lookup Helper
+        /**
+         * Looks up a localized string from the I18N dictionary for the active language.
+         * Falls back to English dictionary and raw key if missing.
+         * @param {string} key - Dictionary string token.
+         * @returns {string} Localized text string.
+         */
         function t(key) {
             const lang = localStorage.getItem('ext_monitor_lang') || 'en';
             const dict = I18N[lang] || I18N.en;
             return (dict && dict[key]) || (I18N.en && I18N.en[key]) || key;
         }
 
-        // Language Switcher (Supports HTML formatting)
+        /**
+         * Updates the active UI language across all data-i18n elements and persists preference.
+         * @param {string} lang - Two-letter language code ('en', 'pt', 'it', 'zh').
+         * @returns {void}
+         */
         function setLanguage(lang) {
             if (!I18N[lang]) lang = 'en';
             localStorage.setItem('ext_monitor_lang', lang);
@@ -3178,7 +3191,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             pollTelemetry();
         }
 
-        // Bitrate & FPS Controls
+        /**
+         * Updates the UI bitrate label and active toggle button.
+         * @param {number|string} val - Target bitrate in kilobits per second.
+         * @returns {void}
+         */
         function updateBitrateValue(val) {
             currentBitrate = parseInt(val, 10);
             localStorage.setItem('ext_bitrate', currentBitrate);
@@ -3188,6 +3205,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
         }
 
+        /**
+         * Sets target streaming bitrate, updating both slider input and state.
+         * @param {number|string} kbps - Bitrate in kbps (e.g., 4000).
+         * @returns {void}
+         */
         function setBitrate(kbps) {
             currentBitrate = parseInt(kbps, 10);
             localStorage.setItem('ext_bitrate', currentBitrate);
@@ -3196,6 +3218,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             updateBitrateValue(kbps);
         }
 
+        /**
+         * Sets target stream framerate (FPS) and persists preference.
+         * @param {number} fps - Framerate integer (15, 30, 60).
+         * @returns {void}
+         */
         function setFps(fps) {
             currentFps = fps;
             localStorage.setItem('ext_fps', fps);
@@ -3205,6 +3232,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
         }
 
+        /**
+         * Sets the video encoding color/quantizer profile.
+         * @param {string} profile - Profile name ('full', '256', 'gray').
+         * @returns {void}
+         */
         function setColor(profile) {
             currentColor = profile;
             localStorage.setItem('ext_color', profile);
@@ -3216,6 +3248,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
         }
 
+        /**
+         * Configures continuous transmission vs economy static-frame dropping mode.
+         * @param {boolean} val - True to drop static frames, false for continuous 60 FPS scanout.
+         * @returns {void}
+         */
         function setDropOnly(val) {
             currentDropOnly = val;
             localStorage.setItem('ext_drop_only', val);
@@ -3227,6 +3264,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             if (btnF) btnF.classList.toggle('active', !val);
         }
 
+        /**
+         * Configures low-latency queue bypass on initial cursor motion.
+         * @param {boolean} val - True to deliver first motion frame immediately.
+         * @returns {void}
+         */
         function setSkipToFirst(val) {
             currentSkipToFirst = val;
             localStorage.setItem('ext_skip_to_first', val);
@@ -3238,6 +3280,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             if (btnF) btnF.classList.toggle('active', !val);
         }
 
+        /**
+         * Updates the UI representation of the maximum keyframe interval.
+         * @param {number|string} val - Maximum frame distance between IDR I-Frames.
+         * @returns {void}
+         */
         function updateKeyIntValue(val) {
             currentKeyIntMax = parseInt(val, 10);
             localStorage.setItem('ext_key_int_max', currentKeyIntMax);
@@ -3249,6 +3296,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
         }
 
+        /**
+         * Sets periodic IDR keyframe interval and updates slider.
+         * @param {number|string} val - Distance in frames.
+         * @returns {void}
+         */
         function setKeyInt(val) {
             const slider = document.getElementById('keyIntSlider');
             if (slider) slider.value = val;
@@ -3259,11 +3311,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         let currentTransport = 'mode1_udp';
         let currentTopology = 'extend';
 
+        /**
+         * Checks whether the user has enabled simultaneous audio streaming to the HDMI TV.
+         * @returns {boolean} True if simultaneous audio toggle is active.
+         */
         function isSimultaneousAudioEnabled() {
             const toggle = document.getElementById('toggleSimultaneousAudio');
             return toggle ? toggle.checked : false;
         }
 
+        /**
+         * Updates UI elements and badges reflecting simultaneous audio status.
+         * @param {boolean} checked - Current state of simultaneous audio toggle.
+         * @returns {void}
+         */
         function updateAudioFlagUI(checked) {
             const badgeFlag = document.getElementById('badgeAudioModeFlag');
             if (badgeFlag) {
@@ -3286,6 +3347,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             updateModeAndTopologyButtons();
         }
 
+        /**
+         * Event handler invoked when user toggles the simultaneous audio checkbox.
+         * Persists preference, notifies host via UDP 5001, and updates receiver state.
+         * @param {boolean} checked - Toggle state.
+         * @returns {void}
+         */
         function onSimultaneousAudioToggle(checked) {
             localStorage.setItem('ext_simultaneous_audio', checked ? 'true' : 'false');
             updateAudioFlagUI(checked);
@@ -3300,6 +3367,13 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         let isModeSwitchInProgress = false;
 
+        /**
+         * Activates a specific transport mode with extension or mirror topology.
+         * Enforces debounce to prevent pipeline thrashing.
+         * @param {string} transport - Physical transport ('mode1_udp', 'mode2_miracast', 'mode3_usb_bulk').
+         * @param {string} topology - Display arrangement ('extend', 'clone', 'standby').
+         * @returns {void}
+         */
         function activateModeWithTopology(transport, topology) {
             if (isModeSwitchInProgress) {
                 return;
@@ -3350,6 +3424,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             all: 'env GST_PLUGIN_FEATURE_RANK=vaapih264enc:MAX,vah264enc:MAX,nvh264enc:MAX,qsvh264enc:MAX gnome-network-displays'
         };
 
+        /**
+         * Updates the GPU command box preview with the chosen GPU vendor rank string.
+         * @param {string} vendor - Vendor identifier ('amd', 'intel', 'nvidia', 'all').
+         * @returns {void}
+         */
         function selectGpuCmd(vendor) {
             const preview = document.getElementById('gpuLaunchCmdPreview');
             if (preview && gpuCommands[vendor]) {
@@ -3363,6 +3442,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             if (activeBtn) activeBtn.classList.add('active');
         }
 
+        /**
+         * Copies the GPU launch command text to the system clipboard.
+         * @returns {void}
+         */
         function copyGpuLaunchCommand() {
             const preview = document.getElementById('gpuLaunchCmdPreview');
             if (preview) {
@@ -3379,11 +3462,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }
         }
 
+        /**
+         * Sets active transport while retaining the current display topology.
+         * @param {string} transport - Transport identifier.
+         * @returns {void}
+         */
         function setActiveTransport(transport) {
             activateModeWithTopology(transport, currentTopology);
         }
 
-        // Display Extension Actions: Extend (HDMI-1), Clone (eDP-1), or Stop / Standby
+        /**
+         * Sets the display topology action: 'extend' (HDMI-1), 'clone' (eDP-1), or 'stop' (Standby).
+         * @param {string} action - Action name.
+         * @returns {void}
+         */
         function setExtensionAction(action) {
             if (isModeSwitchInProgress) {
                 return;
@@ -3426,6 +3518,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         let hostConfiguredMode = 'ask';
 
+        /**
+         * Sets host operating mode or prompts the user on the laptop.
+         * @param {string} mode - Mode identifier ('extend', 'clone', 'ask').
+         * @returns {void}
+         */
         function setHostMode(mode) {
             hostConfiguredMode = mode;
             if (mode === 'ask') {
@@ -3438,6 +3535,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             setExtensionAction(mode);
         }
 
+        /**
+         * Refreshes visual states, glow colors, and active borders on all transport and topology buttons.
+         * @returns {void}
+         */
         function updateModeAndTopologyButtons() {
             const shortKey = currentTransport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
 
@@ -3566,6 +3667,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             mode3: true
         };
 
+        /**
+         * Updates UI elements for an operating mode daemon (Mode 1, Mode 2, Mode 3).
+         * @param {string} modeKey - Mode identifier ('mode1', 'mode2', 'mode3').
+         * @param {boolean} enabled - Whether daemon is enabled.
+         * @returns {void}
+         */
         function setModeToggleUI(modeKey, enabled) {
             activeModes[modeKey] = enabled;
             const toggle = document.getElementById('toggle' + modeKey.charAt(0).toUpperCase() + modeKey.slice(1));
@@ -3596,6 +3703,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }
         }
 
+        /**
+         * Enables or disables a background listener daemon on the receiver.
+         * @param {string} modeKey - Mode key ('mode1', 'mode2', 'mode3').
+         * @param {boolean} enabled - Target enablement state.
+         * @returns {void}
+         */
         function toggleMode(modeKey, enabled) {
             setModeToggleUI(modeKey, enabled);
             localStorage.setItem('ext_' + modeKey, enabled);
@@ -3626,6 +3739,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }).catch(() => {});
         }
 
+        /**
+         * Sets screen capture backend on host: 'kms' (direct DRM capture) or 'mutter' (PipeWire screencast).
+         * @param {string} cap - Backend identifier ('kms' or 'mutter').
+         * @returns {void}
+         */
         function setCapture(cap) {
             currentCapture = cap;
             document.querySelectorAll('#captureGrid .btn-toggle').forEach(b => {
@@ -3635,6 +3753,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             localStorage.setItem('ext_capture', cap);
         }
 
+        /**
+         * Sets the target monitor output on the host PC (e.g. 'HDMI-1').
+         * @param {string} mon - Monitor name.
+         * @returns {void}
+         */
         function setMonitor(mon) {
             currentMonitor = mon;
             document.querySelectorAll('#monitorGrid .btn-toggle').forEach(b => {
@@ -3644,6 +3767,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             localStorage.setItem('ext_monitor', mon);
         }
 
+        /**
+         * Toggles the VideoCore IV Hardware Video Scaler (HVS) upscaling capability.
+         * @param {boolean} enabled - True to enable HVS upscale options.
+         * @returns {void}
+         */
         function toggleSiliconScaler(enabled) {
             const grp = document.getElementById('optgroupUpscale');
             const badge = document.getElementById('badgeSiliconStatus');
@@ -3661,10 +3789,20 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             showToast(enabled ? '✓ Silicon Hardware Scaler (HVS) Enabled' : '✕ Silicon Scaler Disabled (Native 1:1 Only)');
         }
 
+        /**
+         * Event handler for the resolution select dropdown.
+         * @param {string} val - Chosen resolution value.
+         * @returns {void}
+         */
         function onResolutionSelectChange(val) {
             setScale(val);
         }
 
+        /**
+         * Configures scaling mode and dispatches hot-apply command to host streamer.
+         * @param {string} scale - Scaling target ('720p', '1024x768', '800x600', '1600x900', '1920x1080', 'off').
+         * @returns {void}
+         */
         function setScale(scale) {
             currentScale = scale;
             const sel = document.getElementById('resSelect');
@@ -3686,6 +3824,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             showToast('⚡ Resolution / Scale: ' + (labels[scale] || scale));
         }
 
+        /**
+         * Toggles Contrast Adaptive Sharpening (CAS) filter on the host video encoder.
+         * @param {boolean} enabled - True to enable CAS sharpening.
+         * @returns {void}
+         */
         function setCas(enabled) {
             currentCas = enabled;
             document.querySelectorAll('#casGrid .btn-toggle').forEach(b => {
@@ -3697,7 +3840,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             showToast('✨ CAS Sharpening: ' + (enabled ? 'ON' : 'OFF'));
         }
 
-        // Hot-Apply Configuration
+        /**
+         * Commits and applies all pending encoding configuration settings to the host streamer via UDP 5001.
+         * @returns {void}
+         */
         function applyConfiguration() {
             localStorage.setItem('ext_color', currentColor);
             localStorage.setItem('ext_fps', currentFps);
@@ -3731,7 +3877,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             .catch(() => showToast('✓ Sent to host streamer'));
         }
 
-        // HUD Trigger
+        /**
+         * Displays or hides the on-screen display (HUD) overlay on the HDMI television.
+         * @param {boolean} show - True to show HUD for 60 seconds, false to hide immediately.
+         * @returns {void}
+         */
         function triggerHud(show) {
             const action = show ? 'trigger_hud' : 'hide_hud';
             fetch('/api/config', {
@@ -3743,7 +3893,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             .catch(() => showToast('HUD command sent'));
         }
 
-        // Host PC Remote Control
+        /**
+         * Dispatches a remote control RPC payload to the host PC agent via /api/host/control (UDP 5001).
+         * @param {Object} payload - Control instruction payload.
+         * @returns {void}
+         */
         function sendHostControl(payload) {
             fetch('/api/host/control', {
                 method: 'POST',
@@ -3755,6 +3909,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             .catch(() => showToast('✓ Command transmitted'));
         }
 
+        /**
+         * Enables or disables host audio transmission to the receiver.
+         * @param {boolean} enabled - True to stream audio, false to mute/stop.
+         * @returns {void}
+         */
         function setHostAudio(enabled) {
             const btnOn = document.getElementById('btnHostAudioOn');
             const btnOff = document.getElementById('btnHostAudioOff');
@@ -3765,6 +3924,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             sendHostControl({ audio: enabled });
         }
 
+        /**
+         * Makes the Raspberry Pi Bluetooth adapter discoverable for A2DP audio pairing.
+         * @returns {void}
+         */
         function triggerBtPairing() {
             showToast('📡 Enabling Bluetooth A2DP pairing for 60s...');
             fetch('/api/bluetooth/discoverable', { method: 'POST' })
@@ -3773,7 +3936,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 .catch(() => showToast('Bluetooth command sent'));
         }
 
-        // IoT Media & HDMI Visualizer Control
+        /**
+         * Enables or disables the Level 2 HDMI Audio Visualizer on the TV screen.
+         * @param {boolean} enabled - Visualizer toggle state.
+         * @returns {void}
+         */
         function toggleVisualizer(enabled) {
             fetch('/api/media/visualizer', {
                 method: 'POST',
@@ -3792,7 +3959,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             });
         }
 
-        // Trigger real hardware audio chime / test pulse
+        /**
+         * Triggers a real hardware audio tone test pulse on the HDMI output pipeline.
+         * @returns {void}
+         */
         function testRealAudioSignal() {
             showToast(t('toastTestAudio'));
             fetch('/api/media/test_sound', { method: 'POST' })
@@ -3804,7 +3974,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 .catch(() => showToast('Audio pulse transmitted'));
         }
 
-        // Direct Video URL Cast (Play on TV)
+        /**
+         * Submits a direct media URL to be played on the TV via the IoT media renderer.
+         * @returns {void}
+         */
         function castMediaUrl() {
             const input = document.getElementById('castMediaUrlInput');
             const url = input ? input.value.trim() : '';
@@ -3826,7 +3999,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             .catch(() => showToast('Cast URL command transmitted'));
         }
 
-        // Stream Pause / Resume
+        /**
+         * Toggles the video decoder stream between paused (standby) and active states.
+         * @returns {void}
+         */
         function togglePauseStream() {
             isPaused = !isPaused;
             const endpoint = isPaused ? '/api/stream/stop' : '/api/stream/start';
@@ -3842,15 +4018,26 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 });
         }
 
-        // Reboot Modal
+        /**
+         * Opens the modal confirmation dialog for rebooting the appliance.
+         * @returns {void}
+         */
         function confirmReboot() {
             document.getElementById('rebootModal').classList.add('active');
         }
 
+        /**
+         * Closes the reboot confirmation modal.
+         * @returns {void}
+         */
         function closeRebootModal() {
             document.getElementById('rebootModal').classList.remove('active');
         }
 
+        /**
+         * Executes an appliance hardware reboot via /api/system/reboot.
+         * @returns {void}
+         */
         function executeReboot() {
             closeRebootModal();
             showToast('Rebooting Raspberry Pi Zero...');
@@ -3862,7 +4049,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 });
         }
 
-        // SD Card Mount / Unmount
+        /**
+         * Mounts or unmounts the physical micro-SD card boot partition (/mnt/boot) for firmware upgrades.
+         * @param {boolean} mount - True to mount, false to unmount.
+         * @returns {void}
+         */
         function mountSdCard(mount) {
             const endpoint = mount ? '/api/sdcard/mount' : '/api/sdcard/unmount';
             fetch(endpoint, { method: 'POST' })
@@ -3881,7 +4072,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                 });
         }
 
-        // Copy Helper (HTTP-Safe Clipboard with textarea execCommand fallback)
+        /**
+         * Copies text from a specified DOM element to the system clipboard with executive fallback.
+         * @param {string} id - Element ID containing text to copy.
+         * @returns {void}
+         */
         function copyCommand(id) {
             const el = document.getElementById(id);
             if (!el) return;
@@ -3932,7 +4127,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }
         }
 
-        // Toast Helper
+        /**
+         * Displays a temporary notification toast at the bottom of the screen.
+         * @param {string} msg - Message to display.
+         * @returns {void}
+         */
         function showToast(msg) {
             const t = document.getElementById('toast');
             t.textContent = msg;
@@ -3941,6 +4140,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         }
 
         let isAudioMuted = false;
+
+        /**
+         * Sends volume adjustment to the receiver ALSA hardware mixer.
+         * @param {number|string} val - Volume percentage (0 to 100).
+         * @returns {void}
+         */
         function updateAudioVolume(val) {
             document.getElementById('valAudioVolume').textContent = val + '%';
             fetch('/api/audio/volume', {
@@ -3952,6 +4157,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }).catch(() => {});
         }
 
+        /**
+         * Toggles hardware HDMI audio mute state via /api/audio/mute.
+         * @returns {void}
+         */
         function toggleAudioMute() {
             isAudioMuted = !isAudioMuted;
             fetch('/api/audio/mute', {
@@ -3970,6 +4179,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         let currentAudioRate = 48000;
 
+        /**
+         * Sets ALSA hardware sample rate clock on receiver and notifies host sender via UDP 5001.
+         * @param {number} rate - Clock frequency in Hertz (e.g. 48000, 96000, 192000).
+         * @returns {void}
+         */
         function setAudioRate(rate) {
             currentAudioRate = rate;
             localStorage.setItem('ext_audio_rate', rate);
@@ -3991,6 +4205,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             sendHostControl({ audio_rate: rate });
         }
 
+        /**
+         * Updates UI elements and button toggle highlights in the Audio DAC Panel.
+         * @param {number} rate - Sample frequency in Hertz.
+         * @returns {void}
+         */
         function updateAudioRateUI(rate) {
             const lbl = document.getElementById('valAudioRate');
             let desc = `${rate} Hz`;
@@ -4007,6 +4226,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         let currentAudioTransport = 'network_udp';
 
+        /**
+         * Changes the physical audio transport pathway.
+         * @param {string} transport - Transport identifier ('network_udp', 'uac2_gadget', 'usb_bulk_mux').
+         * @returns {void}
+         */
         function setAudioTransport(transport) {
             currentAudioTransport = transport;
             localStorage.setItem('ext_audio_transport', transport);
@@ -4025,12 +4249,22 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             .catch(() => showToast(`Audio transport set to ${transport}`));
         }
 
+        /**
+         * Returns human-readable label for an audio transport mode.
+         * @param {string} transport - Transport identifier.
+         * @returns {string} Human-readable name.
+         */
         function formatTransportName(transport) {
             if (transport === 'uac2_gadget') return 'Mode 2: USB Audio Class (UAC2)';
             if (transport === 'usb_bulk_mux') return 'Mode 3: USB Bulk Mux (Offline)';
             return 'Mode 1: UDP Network (Port 5004)';
         }
 
+        /**
+         * Updates UI elements and description text for active audio transport.
+         * @param {string} transport - Active transport identifier.
+         * @returns {void}
+         */
         function updateAudioTransportUI(transport) {
             const btnUdp = document.getElementById('btnAudioTransUdp');
             const btnUac2 = document.getElementById('btnAudioTransUac2');
@@ -4063,7 +4297,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }
         }
 
-        // Highlight Active Streaming Card
+        /**
+         * Highlights the active mode card in Tab 1 and resets inactive cards.
+         * @param {string|null} activeId - ID of active card ('cardMode1', 'cardMode2', 'cardMode3' or null).
+         * @returns {void}
+         */
         function highlightActiveCard(activeId) {
             ['cardMode1', 'cardMode2', 'cardMode3'].forEach(id => {
                 const card = document.getElementById(id);
@@ -4097,6 +4335,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         let smoothBars = new Array(24).fill(0.0);
         let smoothRms = -60.0;
 
+        /**
+         * Initializes and starts the 30 FPS HTML5 Canvas audio spectrum and VU meter visualizer.
+         * Runs physics-smoothed bar blitting and peak decays with sub-pixel rendering.
+         * @returns {void}
+         */
         function initAudioVisualizerCanvas() {
             const canvas = document.getElementById('audioVisualizerCanvas');
             if (!canvas) return;
@@ -4222,7 +4465,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             requestAnimationFrame(renderLoop);
         }
 
-        // Telemetry Poller
+        /**
+         * Periodically polls system status, temperatures, CPU load, RAM, and hardware telemetry from /api/status.
+         * @returns {void}
+         */
         function pollTelemetry() {
             fetch('/api/status')
                 .then(r => r.json())
@@ -4385,6 +4631,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             pollMediaStatus();
         }
 
+        /**
+         * Dynamically renders display connector cards and EDID mode information in Tab 1.
+         * Employs cache key diffing to avoid DOM thrashing or visual flicker.
+         * @param {Array<Object>} displays - Array of display metadata objects.
+         * @returns {void}
+         */
         function renderDisplays(displays) {
             const container = document.getElementById('displaysSectionContainer');
             if (!container || !displays || displays.length === 0) return;
@@ -4439,6 +4691,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             container.innerHTML = html;
         }
 
+        /**
+         * Polls IoT media player status, track metadata, and real-time audio FFT telemetry from /api/media/status.
+         * Feeds the 24-bin FFT spectrum and RMS VU level arrays into the canvas engine.
+         * @returns {void}
+         */
         function pollMediaStatus() {
             fetch('/api/media/status')
                 .then(r => r.json())
@@ -4501,6 +4758,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         let currentNetMode = 'static';
 
+        /**
+         * Switches the network configuration form between Static IP and DHCP modes.
+         * @param {string} mode - Mode ('static' or 'dhcp').
+         * @returns {void}
+         */
         function setNetModeUI(mode) {
             currentNetMode = mode;
             const btnStatic = document.getElementById('btnNetStatic');
@@ -4516,6 +4778,10 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }
         }
 
+        /**
+         * Saves network configuration to /boot/network.conf and applies changes immediately.
+         * @returns {void}
+         */
         function saveAndApplyNetworkConfig() {
             const iface = document.getElementById('netSelectIface')?.value || 'eth0';
             const ip = document.getElementById('netInputIp')?.value.trim() || '192.168.1.50';
@@ -4559,6 +4825,11 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         }
 
         let netConfigLoaded = false;
+
+        /**
+         * Polls network interface IP addresses, cable detection status, and active configuration from /api/network.
+         * @returns {void}
+         */
         function pollNetworkStatus() {
             fetch('/api/network')
                 .then(r => r.json())
