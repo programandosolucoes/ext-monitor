@@ -30,11 +30,9 @@ pub fn run_build(opts: &BuildOptions) -> Result<(), String> {
     fs::create_dir_all(&initramfs_dir.join("usr/local/bin")).map_err(|e| e.to_string())?;
     fs::create_dir_all(&boot_dir).map_err(|e| e.to_string())?;
 
-    // 1. Generate Splashes in Rust if requested
+    // 1. Generate Splashes in 100% Pure Rust if requested
     if opts.generate_splashes {
-        let etc_dir = initramfs_dir.join("etc");
-        let _ = crate::splash::generate_loading_splash(&etc_dir);
-        let _ = crate::splash::generate_ready_splash(&etc_dir);
+        let _ = crate::splash::generate_all_splashes(&opts.project_root);
     }
 
     // 2. Compile ext-receiver for ARMv6

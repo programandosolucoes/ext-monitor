@@ -129,13 +129,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "splash" => {
-            let out_dir = project_root.join("build-appliance/initramfs/etc");
-            let _ = splash::generate_loading_splash(&out_dir);
-            let _ = splash::generate_ready_splash(&out_dir);
-            let artifacts_dir = project_root.join("receiver/splash");
-            if artifacts_dir.exists() {
-                let _ = splash::generate_loading_splash(&artifacts_dir);
-                let _ = splash::generate_ready_splash(&artifacts_dir);
+            if let Err(e) = splash::generate_all_splashes(&project_root) {
+                eprintln!("\x1b[1;31m[!] Erro ao gerar splash: {}\x1b[0m", e);
+                std::process::exit(1);
             }
             println!("\x1b[1;32m[✔] Todas as telas de splash foram geradas em Rust nativo!\x1b[0m");
         }
