@@ -199,17 +199,42 @@ impl Drop for NativeAudioRecorder {
 
 static AUDIO_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+fn get_sink_id(sink_name: &str) -> Option<String> {
+    let out = std::process::Command::new("pactl")
+        .args(["list", "sinks", "short"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 && parts[1] == sink_name {
+            return Some(parts[0].to_string());
+        }
+    }
+    None
+}
+
 fn migrate_all_streams_to_sink(sink_name: &str) {
+    let target_id = get_sink_id(sink_name);
     let inputs = std::process::Command::new("pactl")
         .args(["list", "sink-inputs", "short"])
         .output();
     if let Ok(out) = inputs {
         let text = String::from_utf8_lossy(&out.stdout);
         for line in text.lines() {
-            if let Some(stream_id) = line.split_whitespace().next() {
-                let _ = std::process::Command::new("pactl")
-                    .args(["move-sink-input", stream_id, sink_name])
-                    .output();
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let stream_id = parts[0];
+                let current_sink_id = parts[1];
+                let is_already_target = match target_id {
+                    Some(ref tid) => current_sink_id == tid || current_sink_id == sink_name,
+                    None => current_sink_id == sink_name,
+                };
+                if !is_already_target {
+                    let _ = std::process::Command::new("pactl")
+                        .args(["move-sink-input", stream_id, sink_name])
+                        .output();
+                }
             }
         }
     }
@@ -234,6 +259,13 @@ pub fn spawn_native_audio_subsystem(
             let prev_sink = get_default_sink_name();
             let prev_physical_sink = prev_sink.filter(|s| s != "Raspberry_Pi_HDMI_Audio");
 
+            if let Some(ref phys) = prev_physical_sink {
+                // Mute laptop physical speaker to prevent audio leaking/jumping between laptop and TV
+                let _ = std::process::Command::new("pactl")
+                    .args(["set-sink-mute", phys, "1"])
+                    .output();
+            }
+
             let _ = std::process::Command::new("pactl")
                 .args(["set-default-sink", "Raspberry_Pi_HDMI_Audio"])
                 .output();
@@ -243,8 +275,25 @@ pub fn spawn_native_audio_subsystem(
             let _ = std::process::Command::new("pactl")
                 .args(["set-sink-volume", "Raspberry_Pi_HDMI_Audio", "100%"])
                 .output();
+
+            // Also pin default in WirePlumber to guarantee new streams route to Pi sink
+            if let Ok(out) = std::process::Command::new("wpctl").arg("status").output() {
+                let txt = String::from_utf8_lossy(&out.stdout);
+                for line in txt.lines() {
+                    if line.contains("Raspberry_Pi_HDMI_Audio") && line.contains("[vol:") {
+                        for part in line.split_whitespace() {
+                            if part.ends_with('.') && part.trim_end_matches('.').chars().all(|c| c.is_ascii_digit()) {
+                                let node_id = part.trim_end_matches('.');
+                                let _ = std::process::Command::new("wpctl").args(["set-default", node_id]).output();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             migrate_all_streams_to_sink("Raspberry_Pi_HDMI_Audio");
-            println!("\x1b[1;32m[audio-native]\x1b[0m Áudio roteado para Raspberry_Pi_HDMI_Audio (streams migrados, volume 100%, desmutado)");
+            println!("\x1b[1;32m[audio-native]\x1b[0m Áudio roteado para Raspberry_Pi_HDMI_Audio (streams migrados, volume 100%, laptop speaker mutado)");
 
             // 3. Notify receiver of audio sample rate via pure Rust HTTP client
             let client_ip = target_ip.clone();
@@ -259,7 +308,7 @@ pub fn spawn_native_audio_subsystem(
                 .name("audio-stream-migrator".to_string())
                 .spawn(move || {
                     while bg_running.load(Ordering::Relaxed) {
-                        thread::sleep(Duration::from_secs(4));
+                        thread::sleep(Duration::from_secs(1));
                         if bg_running.load(Ordering::Relaxed) {
                             migrate_all_streams_to_sink("Raspberry_Pi_HDMI_Audio");
                         }
@@ -331,10 +380,13 @@ pub fn spawn_native_audio_subsystem(
             if current_gen == my_gen {
                 if let Some(ref sink) = prev_physical_sink {
                     let _ = std::process::Command::new("pactl")
+                        .args(["set-sink-mute", sink, "0"])
+                        .output();
+                    let _ = std::process::Command::new("pactl")
                         .args(["set-default-sink", sink])
                         .output();
                     migrate_all_streams_to_sink(sink);
-                    println!("\x1b[1;34m[audio-native]\x1b[0m Saída padrão de áudio e streams restaurados para: {}", sink);
+                    println!("\x1b[1;34m[audio-native]\x1b[0m Saída padrão de áudio desmutada e streams restaurados para: {}", sink);
                 }
             } else {
                 println!("\x1b[1;33m[audio-native]\x1b[0m Gen {} finalizada; gen {} já ativa (ignoring default sink rollback)", my_gen, current_gen);

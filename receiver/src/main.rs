@@ -160,6 +160,8 @@ fn main() {
     media_renderer::VisualizerEngine::start(running.clone(), pipeline_mgr.clone());
     media_renderer::start_audio_telemetry_listener(running.clone());
     pipeline_mgr.start_audio();
+    let initial_rate = pipeline_mgr.audio_status().rate;
+    web::forward_config_to_sender(&format!("{{\"audio_rate\":{}}}", initial_rate));
 
     if let Ok(mut cfg) = web::CONFIG.lock() {
         cfg.mode3 = is_usb_bulk_mode;

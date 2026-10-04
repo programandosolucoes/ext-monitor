@@ -641,7 +641,7 @@ pub fn spawn_audio_spectrum_monitor(
             let mut packet = [0u8; 25];
 
             while running.load(Ordering::Relaxed) {
-                ensure_audio_sink_exists(96000);
+                ensure_audio_sink_exists(48000);
 
                 let mut child = match Command::new("parec")
                     .env("PULSE_SOURCE", "Raspberry_Pi_HDMI_Audio.monitor")

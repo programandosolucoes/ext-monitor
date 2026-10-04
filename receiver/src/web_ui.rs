@@ -990,12 +990,12 @@ pub const DASHBOARD_HTML: &str = r##"<!DOCTYPE html>
                             <span class="tip-icon">?</span>
                             <span class="tip-box" data-i18n="tipAudioProfile">Select and force-load the hardware sample rate clock directly into the Pi Zero BCM2835 ALSA sound core. Supports true IEC958 subframe audio up to 192kHz 24-bit Hi-Res.</span>
                         </span>
-                        <span class="control-value" id="valAudioRate">96 kHz (Hi-Res Studio - Default)</span>
+                        <span class="control-value" id="valAudioRate">48 kHz (Cinema Standard - Default)</span>
                     </div>
                     <div class="btn-grid" id="audioRateGrid">
-                        <button class="btn-toggle active" id="btnRate96k" onclick="setAudioRate(96000)" data-rate="96000">🎵 Hi-Res Studio (96 kHz / 24-bit)</button>
+                        <button class="btn-toggle active" id="btnRate48k" onclick="setAudioRate(48000)" data-rate="48000">🎬 Cinema Standard (48 kHz / 16-bit)</button>
+                        <button class="btn-toggle" id="btnRate96k" onclick="setAudioRate(96000)" data-rate="96000">🎵 Hi-Res Studio (96 kHz / 24-bit)</button>
                         <button class="btn-toggle" id="btnRate192k" onclick="setAudioRate(192000)" data-rate="192000">🚀 Ultra Hi-Res (192 kHz / 24-bit)</button>
-                        <button class="btn-toggle" id="btnRate48k" onclick="setAudioRate(48000)" data-rate="48000">🎬 Cinema Standard (48 kHz / 16-bit)</button>
                         <button class="btn-toggle" id="btnRate44k" onclick="setAudioRate(44100)" data-rate="44100">💿 CD Fidelity (44.1 kHz / 16-bit)</button>
                     </div>
                 </div>
@@ -3968,7 +3968,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             }).catch(() => {});
         }
 
-        let currentAudioRate = 96000;
+        let currentAudioRate = 48000;
 
         function setAudioRate(rate) {
             currentAudioRate = rate;
@@ -3994,9 +3994,9 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         function updateAudioRateUI(rate) {
             const lbl = document.getElementById('valAudioRate');
             let desc = `${rate} Hz`;
-            if (rate === 96000) desc = '96 kHz (Hi-Res Studio - Default)';
+            if (rate === 48000) desc = '48 kHz (Cinema Standard - Default)';
+            else if (rate === 96000) desc = '96 kHz (Hi-Res Studio)';
             else if (rate === 192000) desc = '192 kHz (Ultra Hi-Res)';
-            else if (rate === 48000) desc = '48 kHz (Cinema Standard)';
             else if (rate === 44100) desc = '44.1 kHz (CD Fidelity)';
             if (lbl) lbl.textContent = desc;
 
@@ -4243,7 +4243,7 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
                             btn.textContent = a.muted ? '🔇 ' + t('unmute') : '🔊 ' + t('mute');
                             btn.className = a.muted ? 'btn-danger' : 'btn-primary';
                         }
-                        if (a.rate && typeof currentAudioRate !== 'undefined' && a.rate !== currentAudioRate) {
+                        if (a.rate) {
                             currentAudioRate = a.rate;
                             updateAudioRateUI(a.rate);
                         }
@@ -4617,8 +4617,6 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
         const savedBitrate = localStorage.getItem('ext_bitrate');
         if (savedBitrate) setBitrate(parseInt(savedBitrate, 10));
 
-        const savedRate = localStorage.getItem('ext_audio_rate');
-        if (savedRate) updateAudioRateUI(parseInt(savedRate, 10));
 
         const savedTransport = localStorage.getItem('ext_audio_transport');
         if (savedTransport) updateAudioTransportUI(savedTransport);

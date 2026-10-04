@@ -316,7 +316,7 @@ impl AudioReceiver {
             active: Arc::new(AtomicBool::new(false)),
             volume: Arc::new(AtomicU32::new(100)),
             muted: Arc::new(AtomicBool::new(false)),
-            rate: Arc::new(AtomicU32::new(96000)),
+            rate: Arc::new(AtomicU32::new(48000)),
             transport: Arc::new(std::sync::atomic::AtomicU8::new(0)),
             port,
             enabled: true,
@@ -426,10 +426,10 @@ impl AudioReceiver {
 
                             let status_bytes: [u8; 24] = [
                                 0x04, // Consumer mode, PCM audio, No emphasis, NOT COPYRIGHT (IEC958_AES0_CON_NOT_COPYRIGHT = 0x04)
-                                0x82, // Category: PCM Coder (0x02) | Original generation (0x80) (IEC958_AES1_CON_ORIGINAL | PCM_CODER)
-                                0x00, // Source / channel unspecified
+                                0x00, // Category: IEC958_AES1_CON_GENERAL (0x00) - Universal consumer device compatibility
+                                0x00, // Source / channel unspecified (IEC958_AES2_CON_SOURCE_UNSPEC | CHANNEL_UNSPEC)
                                 rate_code, // Sampling frequency (IEC 60958-3: 0x02=48k, 0x0A=96k)
-                                0x02, // 16-bit word length (IEC958_AES4_CON_WORDLEN_20_16)
+                                0x00, // IEC958_AES4_CON_WORDLEN_NOTID (0x00) - Unconditional acceptance by TV DSP, prevents wordlen mismatch mute!
                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                             ];
 
@@ -628,7 +628,7 @@ mod tests {
     fn test_audio_status_json_and_state_mutations() {
         let mut rx = AudioReceiver::new(5004);
         assert_eq!(rx.enabled, true);
-        assert_eq!(rx.rate(), 96000);
+        assert_eq!(rx.rate(), 48000);
 
         rx.set_rate(192000);
         assert_eq!(rx.rate(), 192000);

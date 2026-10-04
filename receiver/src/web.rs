@@ -368,6 +368,7 @@ fn handle_http_client(
                 let body = &req_str[idx + 4..];
                 if let Some(rate) = extract_json_u32(body, "rate") {
                     pipeline_mgr.set_audio_rate(rate);
+                    forward_config_to_sender(&format!("{{\"audio_rate\":{}}}", rate));
                     let audio_st = pipeline_mgr.audio_status();
                     send_response(&mut stream, "200 OK", "application/json", audio_st.to_json().as_bytes());
                     return;
@@ -1451,7 +1452,7 @@ fn get_system_telemetry_json(
 }
 
 /// Forward JSON configuration to ext-sender on UDP port 5001
-fn forward_config_to_sender(payload: &str) {
+pub fn forward_config_to_sender(payload: &str) {
     let data = payload.as_bytes().to_vec();
     thread::spawn(move || {
         if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
