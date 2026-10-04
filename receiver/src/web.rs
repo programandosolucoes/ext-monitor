@@ -190,11 +190,18 @@ pub fn evaluate_mode_switch(
         });
 
     if let Some(transport) = inferred_transport {
-        (mode1, mode2, mode3, ModeSwitchResult::SwitchTransport(transport))
+        // Enforce strict mutual exclusivity across hardware display modes
+        let (m1, m2, m3) = match transport.as_str() {
+            "mode3_usb_bulk" | "usb_bulk" | "mode3" => (false, false, true),
+            "mode2_miracast" | "miracast" | "mode2" => (false, true, false),
+            "mode1_udp" | "network" | "udp" | "mode1" => (true, false, false),
+            _ => (mode1, mode2, mode3),
+        };
+        (m1, m2, m3, ModeSwitchResult::SwitchTransport(transport))
     } else if let Some(false) = m3_change {
-        (mode1, mode2, mode3, ModeSwitchResult::DisableListener("mode3".to_string()))
+        (mode1, mode2, false, ModeSwitchResult::DisableListener("mode3".to_string()))
     } else if let Some(false) = m1_change {
-        (mode1, mode2, mode3, ModeSwitchResult::DisableListener("mode1".to_string()))
+        (false, mode2, mode3, ModeSwitchResult::DisableListener("mode1".to_string()))
     } else {
         (mode1, mode2, mode3, ModeSwitchResult::NoChange)
     }
@@ -1770,12 +1777,12 @@ mod tests {
         let (m1, _m2, m3, res) = evaluate_mode_switch(
             r#"{"active_transport":"mode1_udp"}"#,
             "mode3_usb_bulk",
-            true,
+            false,
             false,
             true,
         );
         assert_eq!(m1, true);
-        assert_eq!(m3, true);
+        assert_eq!(m3, false);
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode1_udp".to_string()));
     }
 
@@ -1786,7 +1793,7 @@ mod tests {
             "mode1_udp",
             true,
             false,
-            true,
+            false,
         );
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode3_usb_bulk".to_string()));
     }
@@ -1797,7 +1804,7 @@ mod tests {
             r#"{"active_transport":"mode2_miracast"}"#,
             "mode1_udp",
             true,
-            true,
+            false,
             false,
         );
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode2_miracast".to_string()));
@@ -1805,8 +1812,8 @@ mod tests {
 
     #[test]
     fn test_evaluate_mode_toggle_transfers_active_stream() {
-        // Turning on mode3 switches active transport to mode3_usb_bulk
-        let (_m1, _m2, m3, res) = evaluate_mode_switch(
+        // Turning on mode3 switches active transport to mode3_usb_bulk and deactivates others
+        let (m1, _m2, m3, res) = evaluate_mode_switch(
             r#"{"mode3":true}"#,
             "mode1_udp",
             true,
@@ -1814,10 +1821,11 @@ mod tests {
             false,
         );
         assert_eq!(m3, true);
+        assert_eq!(m1, false);
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode3_usb_bulk".to_string()));
 
-        // Turning on mode1 switches active transport to mode1_udp
-        let (m1, _m2, _m3, res) = evaluate_mode_switch(
+        // Turning on mode1 switches active transport to mode1_udp and deactivates others
+        let (m1, _m2, m3, res) = evaluate_mode_switch(
             r#"{"mode1":true}"#,
             "mode3_usb_bulk",
             false,
@@ -1825,6 +1833,7 @@ mod tests {
             true,
         );
         assert_eq!(m1, true);
+        assert_eq!(m3, false);
         assert_eq!(res, ModeSwitchResult::SwitchTransport("mode1_udp".to_string()));
     }
 
