@@ -3308,19 +3308,8 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
             const targetMode = (topology && topology !== 'miracast') ? topology : ((currentTopology === 'clone') ? 'clone' : 'extend');
             const withAudio = isSimultaneousAudioEnabled();
 
-            // Idempotence Guard: If this exact mode and topology is already running, prevent freeze
-            const valState = document.getElementById('valState');
-            const isStandby = valState && valState.textContent.includes('STANDBY');
-            const isAlreadyActive = (currentTransport === transport && currentTopology === targetMode);
-
-            if (isAlreadyActive && !isStandby) {
-                const shortKey = transport.replace('_udp', '').replace('_miracast', '').replace('_usb_bulk', '');
-                showToast('ℹ️ ' + shortKey.toUpperCase() + ' já está ativo e transmitindo em tempo real.');
-                return;
-            }
-
             isModeSwitchInProgress = true;
-            setTimeout(() => { isModeSwitchInProgress = false; }, 1000);
+            setTimeout(() => { isModeSwitchInProgress = false; }, 800);
 
             currentTransport = transport;
             currentTopology = targetMode;
@@ -3396,10 +3385,12 @@ mpv --no-cache --untimed --no-correct-pts --fps=60 --profile=low-latency --hwdec
 
         // Display Extension Actions: Extend (HDMI-1), Clone (eDP-1), or Stop / Standby
         function setExtensionAction(action) {
-            if (action === currentTopology) {
-                showToast('ℹ️ ' + (action === 'stop' ? 'Standby' : (action === 'clone' ? 'Clonar' : 'Estender')) + ' já ativo.');
+            if (isModeSwitchInProgress) {
                 return;
             }
+
+            isModeSwitchInProgress = true;
+            setTimeout(() => { isModeSwitchInProgress = false; }, 800);
 
             currentTopology = action;
             const activeTrans = currentTransport.includes('usb') ? 'usb_bulk' : 'network';

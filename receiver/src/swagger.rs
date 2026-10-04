@@ -1561,7 +1561,7 @@ pub const SWAGGER_HTML: &str = r##"<!DOCTYPE html>
     <header class="header-bar">
         <div class="header-title">
             <span>📺 Pi Zero Extended Monitor</span>
-            <span class="badge" style="background: linear-gradient(135deg, #00e5ff, #7ee787); color: #0b0f17; font-weight: bold;">v2.3.0 OAS 3.0</span>
+            <span class="badge" style="background: linear-gradient(135deg, #00e5ff, #7ee787); color: #0b0f17; font-weight: bold;">v2.9.0 OAS 3.0</span>
             <span style="font-size: 0.85rem; color: #94a3b8; font-weight: 400;">Interactive REST API Explorer</span>
         </div>
         <nav class="header-nav">

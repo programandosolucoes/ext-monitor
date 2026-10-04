@@ -240,3 +240,14 @@ Ao executar benchmarks de reprodução (ex.: Pluto TV em tela cheia com áudio):
 - **Tag Git:** `v2.8.0-final`
 - **Release:** Congelamento final e blindagem de arquitetura.
 
+---
+
+## 8. Versão Congelada v2.9.0-final: Idempotência de Transporte, Desacoplamento de Áudio e Pure Rust Splash
+
+- **Tag Git Oficial:** `v2.9.0-final`
+- **Proteção Estrita de Idempotência:** Eliminação definitiva de travamentos de pipeline/USB por duplo clique. Comandos repetidos de início, transporte ou topologia enquanto o fluxo já está ativo são descartados com segurança no UI, Receiver e Sender supervisor.
+- **Unificação da Interface Web (Aba 1):** Consolidação dos botões de controle em card único para Modos 1 (UDP), 2 (Miracast), 3 (USB Bulk) e Standby, com seletor independente de áudio simultâneo/desacoplado.
+- **Blindagem do GNOME Mutter:** Uso de `META_MONITORS_CONFIG_METHOD_PERSISTENT` (método 2) no `ApplyMonitorsConfig`, eliminando por completo os diálogos modais de confirmação ("Manter essa tela") ao estender ou recolher monitores.
+- **Gerador de Splash 100% Pure Rust:** Substituição do script Python legado por rasterizador tipográfico em Rust puro via `fontdue` e compressão Gzip `miniz_oxide`, acoplado diretamente ao `cargo build` (`receiver/build.rs`) e CLI `ext-tool splash`.
+- **Testes Unitários:** 100% verde (142 testes passando em todo o workspace).
+

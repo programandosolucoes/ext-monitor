@@ -125,6 +125,7 @@ StandardOutput=journal
 StandardError=journal
 Environment=RUST_LOG=info
 Environment=WAYLAND_DISPLAY=wayland-0
+Environment=DISPLAY=:0
 Environment=XDG_RUNTIME_DIR=%t
 
 [Install]

@@ -489,9 +489,7 @@ O projeto dispõe de 33 scripts especializados para automação, deploy, telemet
 | **`setup-usb-bulk.sh`** | Configura os descritores de endpoint USB FunctionFS para o modo Bulk de 480 Mbps. | `./scripts/setup-usb-bulk.sh` |
 | **`appliance-init.sh`** | Script raiz de inicialização do appliance no boot (montagem de `/proc`, `/sys`, drivers e rede). | `Executado pelo initramfs` |
 | **`show-splash.sh`** | Renderiza imediatamente uma imagem raw no framebuffer `/dev/fb0` do Pi Zero. | `sudo ./scripts/show-splash.sh /etc/splash_ready.raw.gz` |
-| **`show-welcome-window.py`** | Janela gráfica de notificação pop-up informando que o monitor estendido está ativo e pronto. | `python3 scripts/show-welcome-window.py` |
-| **`generate_splash.py`** | Gera e compila as imagens de splash quadrilíngue nos formatos PNG e RAW compactado RGB565. | `python3 scripts/generate_splash.py` |
-| **`generate_demo_gif.py`** | Captura e gera animações GIF de demonstração de baixa taxa para documentação. | `python3 scripts/generate_demo_gif.py` |
+| **`ext-tool splash`** | Gerador 100% Pure Rust de imagens de splash quadrilíngue (PNG e RAW compactado RGB565 via fontdue/miniz_oxide). | `cargo run -p ext-tool -- splash` |
 | **`deploy-receiver.sh`** | Atualiza remotamente o binário `ext-receiver` no Raspberry Pi via scp/curl sem retirar o cartão SD. | `./scripts/deploy-receiver.sh 192.168.7.2` |
 | **`99-ext-monitor.rules`** | Regra udev do Host que detecta o Vendor `0x1d50` Product `0x614d`, configura permissões e fila `txqueuelen 100`. | `/etc/udev/rules.d/99-ext-monitor.rules` |
 | **`ext-monitor-autoconnect.service`** | Serviço systemd acionado na inserção do cabo USB para conexão do display. | `systemctl enable ext-monitor-autoconnect` |

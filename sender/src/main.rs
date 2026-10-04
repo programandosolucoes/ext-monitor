@@ -301,19 +301,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // 4.1 Wayland Damage Pacer (Blueprint 28):
-    // Forces GNOME Mutter to maintain a continuous 60 FPS frame clock on HDMI-1 by invalidating a 1x1 transparent pixel.
+    // Forces GNOME Mutter to maintain a continuous 60 FPS frame clock on active screen by invalidating a 1x1 transparent pixel.
     // Eliminates quiescence/sleep state when mouse is stationary or outside the screen.
     let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("XDG_SESSION_TYPE").map(|v| v == "wayland").unwrap_or(false);
-    let _pacer_handle = if is_wayland || cfg.enable_damage_pacer {
-        let (pacer_x, pacer_y) = (1920 + 1280 - 2, 720 - 2);
-        damage_pacer::spawn_damage_pacer(running.clone(), pacer_x, pacer_y)
-    } else {
-        None
-    };
+    let mut pacer: Option<damage_pacer::DamagePacer> = None;
 
     // 5. Main Supervisor Loop (Reconnects on Suspend/Resume or System Event)
     while running.load(Ordering::SeqCst) {
         if is_paused {
+            if let Some(mut p) = pacer.take() {
+                p.stop();
+            }
             // Idle Standby Loop: poll UDP control listener without starting screencast session or pipelines
             while running.load(Ordering::SeqCst) && is_paused {
                 let actions = ctrl_listener.poll_actions();
@@ -507,6 +505,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None
         };
 
+        if (is_wayland || cfg.enable_damage_pacer) && !is_paused && child.is_some() {
+            if let Some(mut old_pacer) = pacer.take() {
+                old_pacer.stop();
+            }
+            let (pacer_x, pacer_y) = if monitor_to_record == "eDP-1" {
+                (1920 - 2, 1080 - 2)
+            } else {
+                let w = if cfg.scale == crate::config::ScaleMode::Scale1600x900 { 1600 } else { 1280 };
+                let h = if cfg.scale == crate::config::ScaleMode::Scale1600x900 { 900 } else { 720 };
+                (1920 + w - 2, h - 2)
+            };
+            pacer = Some(damage_pacer::DamagePacer::start(pacer_x, pacer_y));
+        }
+
         let mut last_node_check = Instant::now();
         let mut last_usb_reconnect = Instant::now();
         let mut last_telemetry_check = Instant::now();
@@ -588,6 +600,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     ControlAction::StopStreaming => {
                         println!("\x1b[1;33m[*] Web Command: Parar Transmissão / Standby recebido! Encerrando transmissores e recolhendo display...\x1b[0m");
+                        if let Some(mut p) = pacer.take() {
+                            p.stop();
+                        }
                         crate::miracast_launcher::stop_miracast_client();
                         if let Some(mut c) = child.take() {
                             let _ = c.kill();
@@ -857,6 +872,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if switch_engine_or_monitor {
                 println!("\x1b[1;33m[*] Reiniciando supervisor para nova engine/monitor...\x1b[0m");
+                if let Some(mut p) = pacer.take() {
+                    p.stop();
+                }
                 if let Some(mut c) = child.take() {
                     let _ = c.kill();
                     let _ = c.wait();
@@ -897,6 +915,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if uses_pipewire {
                         thread::sleep(Duration::from_millis(500));
                         pipewire::link_monitor_port_to_sender(node_id, &monitor_to_record);
+                    }
+
+                    if (is_wayland || cfg.enable_damage_pacer) && child.is_some() && pacer.is_none() {
+                        let (pacer_x, pacer_y) = if monitor_to_record == "eDP-1" {
+                            (1920 - 2, 1080 - 2)
+                        } else {
+                            let w = if cfg.scale == crate::config::ScaleMode::Scale1600x900 { 1600 } else { 1280 };
+                            let h = if cfg.scale == crate::config::ScaleMode::Scale1600x900 { 900 } else { 720 };
+                            (1920 + w - 2, h - 2)
+                        };
+                        pacer = Some(damage_pacer::DamagePacer::start(pacer_x, pacer_y));
                     }
                     println!("\x1b[1;32m[+] Configuration hot-applied successfully.\x1b[0m");
                 }

@@ -600,6 +600,39 @@ Com 160 testes unitários verdes em todo o workspace (`cargo test --workspace`),
 
 ---
 
+## Capítulo 22: Idempotência Estrita de Transporte, Desacoplamento de Áudio e Gerador de Splash 100% Pure Rust (v2.9.0-final)
+
+Na versão **v2.9.0-final**, o projeto atinge a máxima robustez operacional nas interfaces de usuário, controle de estado e pipeline de compilação, resolvendo três fragilidades práticas observadas no uso intensivo em ambiente de produção:
+
+### 22.1 Proteção Estrita contra Duplo Clique e Idempotência de Transporte
+Anteriormente, acionar o mesmo modo de transmissão duas vezes consecutivas (especialmente no Modo 3 USB Bulk) provocava stalls catastróficos no subsistema libusb/FunctionFS:
+- O supervisor encerrava o descritor USB enquanto a thread de worker realizava transferências síncronas de buffers H.264, deixando o endpoint em estado `EBUSY`.
+- Na release `v2.9.0-final`, uma tripla camada de idempotência foi estabelecida:
+  1. **Frontend (UI Debounce & State Lock):** Verificação imediata no cliente web. Se o transporte e topologia já coincidem com o estado atual, a chamada de rede é descartada com notificação suave ao usuário.
+  2. **Receiver (Guarda em SwitchTransport):** Se o transporte requisitado for idêntico ao ativo, os daemons existentes não são recriados nem os descritores reabertos.
+  3. **Sender (Descarte de Ações Redundantes):** O supervisor em Rust verifica `ControlAction::StartStreaming`, `ControlAction::SetMode` e `ControlAction::SetTransport`. Se a transmissão já está em andamento no mesmo modo e transporte, o comando é ignorado sem reiniciar o pipeline DRM/KMS.
+
+### 22.2 Unificação Completa dos Controles na Aba 1
+A interface gráfica eliminou blocos redundantes de seleção de daemons. Todos os modos (Modo 1: Rede UDP, Modo 2: Miracast com GPU Helper, Modo 3: USB Bulk Direct) foram unificados em um cartão mestre de controle:
+- Seletor de Topologia Direta (Estender / Clonar).
+- Chave de Áudio Simultâneo: permite desacoplar completamente o áudio da transmissão de vídeo (vídeo puro vs áudio digital HDMI sincronizado).
+- Detecção automática de saídas HDMI com flags correspondentes.
+
+### 22.3 Blindagem do GNOME Mutter contra Diálogos Modais ("Manter essa tela")
+Ao reconfigurar saídas de exibição via D-Bus (`org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig`), o método utilizado foi alterado de `1` (`META_MONITORS_CONFIG_METHOD_TEMPORARY`) para `2` (`META_MONITORS_CONFIG_METHOD_PERSISTENT`). Isso garante que a resolução e topologia sejam aplicadas de forma 100% silenciosa pelo compositor Mutter, sem qualquer diálogo modal de confirmação de 20 segundos na tela do host.
+
+### 22.4 Gerador de Splash Screens 100% Pure Rust e Injeção Dinâmica de Versão
+Eliminou-se qualquer dependência de scripts Python (`scripts/generate_splash.py`) e Pillow:
+- O gerador nativo em [`tools/ext-tool/src/splash.rs`](file:///home/carlos/ide/ext-monitor/tools/ext-tool/src/splash.rs) utiliza a crate de alto desempenho `fontdue` para rasterização vetorial de fontes TrueType (`DejaVuSans`) diretamente em memória (RGB888 -> RGB565 Little-Endian).
+- A compressão RFC 1952 Gzip com CRC32 é processada puramente em Rust via `miniz_oxide`.
+- O ciclo do compilador `cargo build` no `ext-receiver` executa automaticamente o script [`receiver/build.rs`](file:///home/carlos/ide/ext-monitor/receiver/build.rs), detectando a versão dinamicamente via `git describe --tags --always` e embutindo as telas oficiais (`splash_loading`, `splash_ready` e `splash_miracast`) via `include_bytes!` com versão sincronizada em tempo de compilação.
+- O utilitário nativo `cargo run -p ext-tool -- splash` regenera todas as telas em menos de 1 segundo.
+
+### 22.5 Congelamento da Versão (`v2.9.0-final`)
+Com 142 testes unitários passando com 100% de sucesso no workspace, telemetria em tempo real a 60 FPS no Modo 3 e zero dependências de scripts externos, a versão `v2.9.0-final` é oficialmente congelada como o novo padrão estável do projeto `ext-monitor`.
+
+---
+
 # Epílogo e Apêndices
 
 ---

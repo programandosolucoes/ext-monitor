@@ -184,6 +184,33 @@ impl X11Bindings {
     }
 }
 
+/// Manages the lifecycle of the in-process pure Rust Damage Pacer.
+pub struct DamagePacer {
+    running: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl DamagePacer {
+    pub fn start(target_x: i32, target_y: i32) -> Self {
+        let running = Arc::new(AtomicBool::new(true));
+        let handle = spawn_damage_pacer(running.clone(), target_x, target_y);
+        Self { running, handle }
+    }
+
+    pub fn stop(&mut self) {
+        self.running.store(false, Ordering::SeqCst);
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+impl Drop for DamagePacer {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 /// Spawns an in-process, pure Rust Damage Pacer background thread.
 /// Returns a join handle or None if X11/Xwayland is unavailable.
 pub fn spawn_damage_pacer(
@@ -196,7 +223,9 @@ pub fn spawn_damage_pacer(
     let handle = thread::Builder::new()
         .name("wayland-damage-pacer-rust".to_string())
         .spawn(move || unsafe {
-            let display = (x11.open_display)(ptr::null());
+            let display_env = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string());
+            let c_display = CString::new(display_env.as_str()).ok();
+            let display = (x11.open_display)(c_display.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null()));
             if display.is_null() {
                 eprintln!("\x1b[1;33m[pacer-rust]\x1b[0m Cannot open X11 display for damage pacer.");
                 return;
