@@ -605,12 +605,11 @@ fn notify_daemon_and_receiver(payload: &str, pi_api_path: Option<(&str, &str)>) 
             CaptureEngine::Kms
         };
 
-        // Padrão de fábrica: 100% Native Rust In-Process GPU Pipeline (Zero processos externos)
-        // GStreamer só é ativado se explicitamente solicitado via CLI (--engine=gstreamer, --gstreamer ou --gst)
-        let engine = if args.iter().any(|a| a == "--engine=gstreamer" || a == "--gstreamer" || a == "--gst") {
-            StreamEngine::GStreamer
-        } else {
+        // Padrão de fábrica: GStreamer 1.0 com aceleração de hardware (VA-API / NVENC / QSV) e captura PipeWire
+        let engine = if args.iter().any(|a| a == "--engine=native" || a == "--native" || a == "--native-rust") {
             StreamEngine::NativeRust
+        } else {
+            StreamEngine::GStreamer
         };
 
         let scale = if args.iter().any(|a| a == "--no-scale" || a == "--scale=off" || a == "--scale=none" || a == "--scale=false") {
@@ -689,19 +688,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_engine_is_native_rust_and_kms() {
+    fn test_default_engine_is_gstreamer_and_kms() {
         let args = vec!["ext-sender".to_string(), "--direct".to_string()];
         let cfg = SenderConfig::parse(&args).unwrap().unwrap();
-        assert_eq!(cfg.engine, StreamEngine::NativeRust);
+        assert_eq!(cfg.engine, StreamEngine::GStreamer);
         assert_eq!(cfg.capture, CaptureEngine::Kms);
         assert_eq!(cfg.transport, TransportKind::UsbBulk);
     }
 
     #[test]
-    fn test_gstreamer_opt_in() {
-        let args = vec!["ext-sender".to_string(), "--direct".to_string(), "--engine=gstreamer".to_string()];
+    fn test_native_rust_opt_in() {
+        let args = vec!["ext-sender".to_string(), "--direct".to_string(), "--engine=native".to_string()];
         let cfg = SenderConfig::parse(&args).unwrap().unwrap();
-        assert_eq!(cfg.engine, StreamEngine::GStreamer);
+        assert_eq!(cfg.engine, StreamEngine::NativeRust);
     }
 
     #[test]
